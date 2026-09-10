@@ -12,4 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Hard-pin Nitro to the Vercel preset for builds outside Lovable Cloud.
+  // NITRO_PRESET env var on Vercel also triggers this automatically, but explicit
+  // config here ensures local `npm run build` and CI also target Vercel correctly.
+  nitro: { preset: "vercel" },
 });
+
