@@ -12,9 +12,15 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   head: () => ({
     meta: [
       { title: "Project detail — Brickweld" },
-      { name: "description", content: "Budget, spend, attendance, materials and contractor activity for a project." },
+      {
+        name: "description",
+        content: "Budget, spend, attendance, materials and contractor activity for a project.",
+      },
       { property: "og:title", content: "Project detail — Brickweld" },
-      { property: "og:description", content: "Full financial and site picture for a single construction project." },
+      {
+        property: "og:description",
+        content: "Full financial and site picture for a single construction project.",
+      },
     ],
   }),
   component: ProjectDetail,
@@ -38,26 +44,40 @@ function ProjectDetail() {
     details: string | null;
   }>("projects", { filters: [{ col: "id", op: "eq", value: projectId }] });
 
-  const budgets = useRows<{ id: string; category: string; budget_amount: number; notes: string | null }>(
-    "project_budgets",
-    { filters: f },
-  );
-  const expenses = useRows<{ id: string; expense_date: string; category: string; amount: number; description: string | null }>(
-    "expenses",
-    { filters: f, order: { col: "expense_date" } },
-  );
-  const attendance = useRows<{ id: string; attendance_date: string; kind: string; status: string; calculated_wage: number; workforce_count: number | null }>(
-    "attendance",
-    { filters: f, order: { col: "attendance_date" }, limit: 200 },
-  );
-  const receipts = useRows<{ id: string; receipt_number: string; receipt_date: string; total_amount: number }>(
-    "material_receipts",
-    { filters: f, order: { col: "receipt_date" } },
-  );
-  const bills = useRows<{ id: string; bill_number: string; bill_date: string; net_amount: number; status: string }>(
-    "contractor_bills",
-    { filters: f, order: { col: "bill_date" } },
-  );
+  const budgets = useRows<{
+    id: string;
+    category: string;
+    budget_amount: number;
+    notes: string | null;
+  }>("project_budgets", { filters: f });
+  const expenses = useRows<{
+    id: string;
+    expense_date: string;
+    category: string;
+    amount: number;
+    description: string | null;
+  }>("expenses", { filters: f, order: { col: "expense_date" } });
+  const attendance = useRows<{
+    id: string;
+    attendance_date: string;
+    kind: string;
+    status: string;
+    calculated_wage: number;
+    workforce_count: number | null;
+  }>("attendance", { filters: f, order: { col: "attendance_date" }, limit: 200 });
+  const receipts = useRows<{
+    id: string;
+    receipt_number: string;
+    receipt_date: string;
+    total_amount: number;
+  }>("material_receipts", { filters: f, order: { col: "receipt_date" } });
+  const bills = useRows<{
+    id: string;
+    bill_number: string;
+    bill_date: string;
+    net_amount: number;
+    status: string;
+  }>("contractor_bills", { filters: f, order: { col: "bill_date" } });
 
   const p = project.data?.[0];
   const labour = sum(attendance.data ?? [], (a) => a.calculated_wage);
@@ -93,7 +113,10 @@ function ProjectDetail() {
           tone={profit >= 0 ? "success" : "destructive"}
           hint={value ? `${((profit / value) * 100).toFixed(1)}% margin` : "No contract value"}
         />
-        <StatCard label="Budget allotted" value={currency(sum(budgets.data ?? [], (b) => b.budget_amount))} />
+        <StatCard
+          label="Budget allotted"
+          value={currency(sum(budgets.data ?? [], (b) => b.budget_amount))}
+        />
       </div>
 
       <Card className="mt-4">
@@ -157,7 +180,12 @@ function ProjectDetail() {
             exportName="project-budget"
             columns={[
               { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-              { header: "Budget", cell: (r) => currency(r.budget_amount), value: (r) => r.budget_amount, className: "text-right" },
+              {
+                header: "Budget",
+                cell: (r) => currency(r.budget_amount),
+                value: (r) => r.budget_amount,
+                className: "text-right",
+              },
               { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
             ]}
           />
@@ -169,10 +197,23 @@ function ProjectDetail() {
             loading={expenses.isLoading}
             exportName="project-expenses"
             columns={[
-              { header: "Date", cell: (r) => dateFmt(r.expense_date), value: (r) => r.expense_date },
+              {
+                header: "Date",
+                cell: (r) => dateFmt(r.expense_date),
+                value: (r) => r.expense_date,
+              },
               { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-              { header: "Description", cell: (r) => r.description ?? "—", value: (r) => r.description },
-              { header: "Amount", cell: (r) => currency(r.amount), value: (r) => r.amount, className: "text-right" },
+              {
+                header: "Description",
+                cell: (r) => r.description ?? "—",
+                value: (r) => r.description,
+              },
+              {
+                header: "Amount",
+                cell: (r) => currency(r.amount),
+                value: (r) => r.amount,
+                className: "text-right",
+              },
             ]}
           />
         </TabsContent>
@@ -183,11 +224,28 @@ function ProjectDetail() {
             loading={attendance.isLoading}
             exportName="project-attendance"
             columns={[
-              { header: "Date", cell: (r) => dateFmt(r.attendance_date), value: (r) => r.attendance_date },
+              {
+                header: "Date",
+                cell: (r) => dateFmt(r.attendance_date),
+                value: (r) => r.attendance_date,
+              },
               { header: "Kind", cell: (r) => r.kind, value: (r) => r.kind },
-              { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
-              { header: "Headcount", cell: (r) => r.workforce_count ?? 1, value: (r) => r.workforce_count ?? 1 },
-              { header: "Wage", cell: (r) => currency(r.calculated_wage), value: (r) => r.calculated_wage, className: "text-right" },
+              {
+                header: "Status",
+                cell: (r) => <StatusBadge status={r.status} />,
+                value: (r) => r.status,
+              },
+              {
+                header: "Headcount",
+                cell: (r) => r.workforce_count ?? 1,
+                value: (r) => r.workforce_count ?? 1,
+              },
+              {
+                header: "Wage",
+                cell: (r) => currency(r.calculated_wage),
+                value: (r) => r.calculated_wage,
+                className: "text-right",
+              },
             ]}
           />
         </TabsContent>
@@ -199,8 +257,17 @@ function ProjectDetail() {
             exportName="project-material-receipts"
             columns={[
               { header: "Receipt", cell: (r) => r.receipt_number, value: (r) => r.receipt_number },
-              { header: "Date", cell: (r) => dateFmt(r.receipt_date), value: (r) => r.receipt_date },
-              { header: "Amount", cell: (r) => currency(r.total_amount), value: (r) => r.total_amount, className: "text-right" },
+              {
+                header: "Date",
+                cell: (r) => dateFmt(r.receipt_date),
+                value: (r) => r.receipt_date,
+              },
+              {
+                header: "Amount",
+                cell: (r) => currency(r.total_amount),
+                value: (r) => r.total_amount,
+                className: "text-right",
+              },
             ]}
           />
         </TabsContent>
@@ -213,8 +280,17 @@ function ProjectDetail() {
             columns={[
               { header: "Bill", cell: (r) => r.bill_number, value: (r) => r.bill_number },
               { header: "Date", cell: (r) => dateFmt(r.bill_date), value: (r) => r.bill_date },
-              { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
-              { header: "Net", cell: (r) => currency(r.net_amount), value: (r) => r.net_amount, className: "text-right" },
+              {
+                header: "Status",
+                cell: (r) => <StatusBadge status={r.status} />,
+                value: (r) => r.status,
+              },
+              {
+                header: "Net",
+                cell: (r) => currency(r.net_amount),
+                value: (r) => r.net_amount,
+                className: "text-right",
+              },
             ]}
           />
         </TabsContent>

@@ -65,7 +65,9 @@ function Brand() {
       <img src="/logo.png" className="size-9 rounded-md object-contain" alt="Brickweld" />
       <div className="leading-tight">
         <p className="font-display text-base font-semibold text-sidebar-foreground">Brickweld</p>
-        <p className="text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Civil - Interior - Fabrication</p>
+        <p className="text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+          Civil - Interior - Fabrication
+        </p>
       </div>
     </div>
   );

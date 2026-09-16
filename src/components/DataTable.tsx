@@ -1,7 +1,13 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Download, Search } from "lucide-react";
+import { ChevronDown, Download, FileSpreadsheet, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -12,11 +18,12 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { downloadCsv } from "@/lib/csv";
+import { exportToExcel } from "@/lib/excel";
 
 export type Column<T> = {
   header: string;
   cell: (row: T) => ReactNode;
-  /** Plain value used for search and CSV export. */
+  /** Plain value used for search, Excel and CSV export. */
   value?: (row: T) => string | number | null | undefined;
   className?: string;
 };
@@ -27,26 +34,71 @@ export function DataTable<T extends { id?: string }>({
   loading,
   searchable = true,
   exportName,
+  exportTitle,
+  exportDescription,
+  appliedFilters,
   empty = "No records yet.",
   onRowClick,
 }: {
   rows: T[];
   columns: Column<T>[];
-  loading?: boolean;
-  searchable?: boolean;
-  exportName?: string;
-  empty?: string;
-  onRowClick?: (row: T) => void;
+  loading?: boolean | undefined;
+  searchable?: boolean | undefined;
+  exportName?: string | undefined;
+  exportTitle?: string | undefined;
+  exportDescription?: string | undefined;
+  appliedFilters?: Record<string, string | number | null | undefined> | undefined;
+  empty?: string | undefined;
+  onRowClick?: ((row: T) => void) | undefined;
 }) {
   const [q, setQ] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const filtered = useMemo(() => {
     if (!q.trim()) return rows;
     const needle = q.toLowerCase();
     return rows.filter((r) =>
-      columns.some((c) => String(c.value?.(r) ?? "").toLowerCase().includes(needle)),
+      columns.some((c) =>
+        String(c.value?.(r) ?? "")
+          .toLowerCase()
+          .includes(needle),
+      ),
     );
   }, [rows, columns, q]);
+
+  const handleExportExcel = async () => {
+    if (!exportName) return;
+    try {
+      setExporting(true);
+      await exportToExcel({
+        filename: exportName,
+        title:
+          exportTitle ?? exportName.replace(/[-_]/g, " ").replace(/^./, (s) => s.toUpperCase()),
+        description: exportDescription,
+        filters: appliedFilters,
+        rows: filtered,
+        columns: columns
+          .filter((c) => c.header && c.value)
+          .map((c) => ({
+            header: c.header,
+            value: (r: T) => c.value?.(r) ?? "",
+          })),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    if (!exportName) return;
+    downloadCsv(
+      exportName,
+      filtered,
+      columns
+        .filter((c) => c.header && c.value)
+        .map((c) => ({ header: c.header, value: (r: T) => c.value?.(r) ?? "" })),
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -64,19 +116,25 @@ export function DataTable<T extends { id?: string }>({
             </div>
           )}
           {exportName && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                downloadCsv(
-                  exportName,
-                  filtered,
-                  columns.map((c) => ({ header: c.header, value: (r: T) => c.value?.(r) ?? "" })),
-                )
-              }
-            >
-              <Download className="mr-2 size-4" /> Export CSV
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={exporting}>
+                  <Download className="mr-2 size-4" />
+                  {exporting ? "Exporting…" : "Export"}
+                  <ChevronDown className="ml-1 size-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                  <FileSpreadsheet className="mr-2 size-4 text-emerald-600" />
+                  <span>Excel (.xlsx)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCsv} className="cursor-pointer">
+                  <Download className="mr-2 size-4 text-muted-foreground" />
+                  <span>CSV (.csv)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <span className="ml-auto text-xs text-muted-foreground">{filtered.length} records</span>
         </div>
@@ -106,7 +164,10 @@ export function DataTable<T extends { id?: string }>({
               ))
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="py-10 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={columns.length}
+                  className="py-10 text-center text-muted-foreground"
+                >
                   {empty}
                 </TableCell>
               </TableRow>

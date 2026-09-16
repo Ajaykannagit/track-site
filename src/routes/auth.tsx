@@ -93,7 +93,9 @@ function AuthPage() {
             profitability — with role-based access for MD, supervisors and accounts.
           </p>
         </div>
-        <p className="text-xs text-sidebar-foreground/50">Secure role-based access · Audit logged</p>
+        <p className="text-xs text-sidebar-foreground/50">
+          Secure role-based access · Audit logged
+        </p>
       </div>
 
       <div className="flex items-center justify-center p-6">

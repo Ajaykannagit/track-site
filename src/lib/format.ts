@@ -8,10 +8,12 @@ export const currency = (n: number | null | undefined) =>
 export const num = (n: number | null | undefined, digits = 2) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: digits }).format(Number(n ?? 0));
 
-export const pct = (n: number | null | undefined) => `${(Number(n ?? 0)).toFixed(1)}%`;
+export const pct = (n: number | null | undefined) => `${Number(n ?? 0).toFixed(1)}%`;
 
 export const dateFmt = (d: string | null | undefined) =>
-  d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  d
+    ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 export const dateTimeFmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";

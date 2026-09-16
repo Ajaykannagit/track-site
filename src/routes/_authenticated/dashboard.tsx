@@ -27,7 +27,10 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
         content: "Live view of project value, site spend, pending approvals and cash position.",
       },
       { property: "og:title", content: "Dashboard — Brickweld" },
-      { property: "og:description", content: "Project value, spend, approvals and cash at a glance." },
+      {
+        property: "og:description",
+        content: "Project value, spend, approvals and cash at a glance.",
+      },
     ],
   }),
   component: Dashboard,
@@ -45,22 +48,39 @@ type Project = {
 function Dashboard() {
   const from = monthStart(-5);
   const projects = useRows<Project>("projects", { order: { col: "created_at" } });
-  const expenses = useRows<{ amount: number; expense_date: string; category: string; project_id: string | null }>(
-    "expenses",
-    { select: "amount,expense_date,category,project_id", filters: [{ col: "expense_date", op: "gte", value: from }] },
-  );
+  const expenses = useRows<{
+    amount: number;
+    expense_date: string;
+    category: string;
+    project_id: string | null;
+  }>("expenses", {
+    select: "amount,expense_date,category,project_id",
+    filters: [{ col: "expense_date", op: "gte", value: from }],
+  });
   const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance", {
     select: "calculated_wage,attendance_date",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
   });
-  const bills = useRows<{ net_amount: number; status: string; bill_number: string; bill_date: string }>(
-    "contractor_bills",
-    { select: "id,net_amount,status,bill_number,bill_date", order: { col: "bill_date" }, limit: 8 },
-  );
-  const requests = useRows<{ id: string; request_number: string; status: string; total_amount: number }>(
-    "material_requests",
-    { select: "id,request_number,status,total_amount", order: { col: "request_date" }, limit: 8 },
-  );
+  const bills = useRows<{
+    net_amount: number;
+    status: string;
+    bill_number: string;
+    bill_date: string;
+  }>("contractor_bills", {
+    select: "id,net_amount,status,bill_number,bill_date",
+    order: { col: "bill_date" },
+    limit: 8,
+  });
+  const requests = useRows<{
+    id: string;
+    request_number: string;
+    status: string;
+    total_amount: number;
+  }>("material_requests", {
+    select: "id,request_number,status,total_amount",
+    order: { col: "request_date" },
+    limit: 8,
+  });
   const cash = useRows<{ closing_cash: number; closing_date: string }>("cash_closing", {
     select: "closing_cash,closing_date",
     order: { col: "closing_date" },
@@ -70,27 +90,47 @@ function Dashboard() {
   const allExpenses = useRows<{ project_id: string | null; amount: number }>("expenses", {
     select: "project_id,amount",
   });
-  const allAttendance = useRows<{ project_id: string | null; calculated_wage: number }>("attendance", {
-    select: "project_id,calculated_wage",
-  });
-  const allReceipts = useRows<{ project_id: string | null; total_amount: number }>("material_receipts", {
-    select: "project_id,total_amount",
-  });
+  const allAttendance = useRows<{ project_id: string | null; calculated_wage: number }>(
+    "attendance",
+    {
+      select: "project_id,calculated_wage",
+    },
+  );
+  const allReceipts = useRows<{ project_id: string | null; total_amount: number }>(
+    "material_receipts",
+    {
+      select: "project_id,total_amount",
+    },
+  );
   const allBills = useRows<{ project_id: string | null; net_amount: number }>("contractor_bills", {
     select: "project_id,net_amount",
   });
 
   const projectCost = (projectId: string) => {
-    const labour = sum((allAttendance.data ?? []).filter((a) => a.project_id === projectId), (a) => a.calculated_wage);
-    const material = sum((allReceipts.data ?? []).filter((r) => r.project_id === projectId), (r) => r.total_amount);
-    const contractor = sum((allBills.data ?? []).filter((b) => b.project_id === projectId), (b) => b.net_amount);
-    const other = sum((allExpenses.data ?? []).filter((e) => e.project_id === projectId), (e) => e.amount);
+    const labour = sum(
+      (allAttendance.data ?? []).filter((a) => a.project_id === projectId),
+      (a) => a.calculated_wage,
+    );
+    const material = sum(
+      (allReceipts.data ?? []).filter((r) => r.project_id === projectId),
+      (r) => r.total_amount,
+    );
+    const contractor = sum(
+      (allBills.data ?? []).filter((b) => b.project_id === projectId),
+      (b) => b.net_amount,
+    );
+    const other = sum(
+      (allExpenses.data ?? []).filter((e) => e.project_id === projectId),
+      (e) => e.amount,
+    );
     return labour + material + contractor + other;
   };
 
   const active = (projects.data ?? []).filter((p) => p.status === "active");
   const contractValue = sum(projects.data ?? [], (p) => p.quotation_amount);
-  const spend = sum(expenses.data ?? [], (e) => e.amount) + sum(attendance.data ?? [], (a) => a.calculated_wage);
+  const spend =
+    sum(expenses.data ?? [], (e) => e.amount) +
+    sum(attendance.data ?? [], (a) => a.calculated_wage);
   const pendingBills = (bills.data ?? []).filter(
     (b) => !["paid", "payment_approved", "closed", "rejected"].includes(b.status),
   );
@@ -114,7 +154,14 @@ function Dashboard() {
     byCategory.set(e.category, (byCategory.get(e.category) ?? 0) + Number(e.amount ?? 0));
   }
   const pie = [...byCategory.entries()].map(([name, value]) => ({ name, value })).slice(0, 6);
-  const pieColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--muted-foreground)"];
+  const pieColors = [
+    "var(--chart-1)",
+    "var(--chart-2)",
+    "var(--chart-3)",
+    "var(--chart-4)",
+    "var(--chart-5)",
+    "var(--muted-foreground)",
+  ];
 
   return (
     <div>
@@ -130,11 +177,18 @@ function Dashboard() {
           hint={`${(projects.data ?? []).length} total`}
         />
         <StatCard label="Contract value" value={currency(contractValue)} hint="All projects" />
-        <StatCard label="Spend (6 months)" value={currency(spend)} hint="Expenses + site wages" tone="warning" />
+        <StatCard
+          label="Spend (6 months)"
+          value={currency(spend)}
+          hint="Expenses + site wages"
+          tone="warning"
+        />
         <StatCard
           label="Cash on hand"
           value={currency(cash.data?.[0]?.closing_cash ?? 0)}
-          hint={cash.data?.[0] ? `As of ${dateFmt(cash.data[0].closing_date)}` : "No closing recorded"}
+          hint={
+            cash.data?.[0] ? `As of ${dateFmt(cash.data[0].closing_date)}` : "No closing recorded"
+          }
           tone="success"
         />
       </div>
@@ -203,7 +257,8 @@ function Dashboard() {
                     <div className="text-right">
                       <p className="text-sm font-semibold">{currency(p.quotation_amount)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Cost: <span className="font-medium text-foreground">{currency(costSoFar)}</span>
+                        Cost:{" "}
+                        <span className="font-medium text-foreground">{currency(costSoFar)}</span>
                       </p>
                     </div>
                   </Link>

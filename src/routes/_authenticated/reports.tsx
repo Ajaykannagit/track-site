@@ -7,7 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
 
@@ -90,9 +96,12 @@ function ReportsPage() {
     ],
   });
 
-  const settings = useRows<{ key: string; value: unknown; description: string | null }>("app_settings", {
-    order: { col: "key", asc: true },
-  });
+  const settings = useRows<{ key: string; value: unknown; description: string | null }>(
+    "app_settings",
+    {
+      order: { col: "key", asc: true },
+    },
+  );
 
   const loading =
     projects.isLoading ||
@@ -135,8 +144,14 @@ function ReportsPage() {
   const totalProfit = totalValue - totalCost;
 
   const unallocated =
-    sum((expenses.data ?? []).filter((e) => !e.project_id), (e) => e.amount) +
-    sum((attendance.data ?? []).filter((a) => !a.project_id), (a) => a.calculated_wage);
+    sum(
+      (expenses.data ?? []).filter((e) => !e.project_id),
+      (e) => e.amount,
+    ) +
+    sum(
+      (attendance.data ?? []).filter((a) => !a.project_id),
+      (a) => a.calculated_wage,
+    );
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
@@ -170,7 +185,12 @@ function ReportsPage() {
       value: (r) => r.value,
       className: "text-right",
     },
-    { header: "Labour", cell: (r) => currency(r.labour), value: (r) => r.labour, className: "text-right" },
+    {
+      header: "Labour",
+      cell: (r) => currency(r.labour),
+      value: (r) => r.labour,
+      className: "text-right",
+    },
     {
       header: "Materials",
       cell: (r) => currency(r.material),
@@ -183,12 +203,24 @@ function ReportsPage() {
       value: (r) => r.contractor,
       className: "text-right",
     },
-    { header: "Other", cell: (r) => currency(r.other), value: (r) => r.other, className: "text-right" },
-    { header: "Total cost", cell: (r) => currency(r.cost), value: (r) => r.cost, className: "text-right" },
+    {
+      header: "Other",
+      cell: (r) => currency(r.other),
+      value: (r) => r.other,
+      className: "text-right",
+    },
+    {
+      header: "Total cost",
+      cell: (r) => currency(r.cost),
+      value: (r) => r.cost,
+      className: "text-right",
+    },
     {
       header: "Profit",
       cell: (r) => (
-        <span className={r.profit >= 0 ? "font-medium text-success" : "font-medium text-destructive"}>
+        <span
+          className={r.profit >= 0 ? "font-medium text-success" : "font-medium text-destructive"}
+        >
           {currency(r.profit)}
         </span>
       ),
@@ -245,7 +277,8 @@ function ReportsPage() {
             </Select>
           </div>
           <p className="text-xs text-muted-foreground">
-            Costs are counted by document date inside this range. Contract value is the full project quotation.
+            Costs are counted by document date inside this range. Contract value is the full project
+            quotation.
           </p>
         </CardContent>
       </Card>
@@ -257,7 +290,11 @@ function ReportsPage() {
           label="Profit"
           value={currency(totalProfit)}
           tone={totalProfit >= 0 ? "success" : "destructive"}
-          hint={totalValue ? `${((totalProfit / totalValue) * 100).toFixed(1)}% margin` : "No contract value"}
+          hint={
+            totalValue
+              ? `${((totalProfit / totalValue) * 100).toFixed(1)}% margin`
+              : "No contract value"
+          }
         />
         <StatCard
           label="Unallocated cost"
@@ -274,7 +311,15 @@ function ReportsPage() {
           <DataTable
             rows={rows}
             loading={loading}
-            exportName={`pnl-${from}-to-${to}`}
+            exportName="brickweld-project-pnl"
+            exportTitle="Project Profit & Loss (P&L) Report"
+            exportDescription="Construction Project Control System — Project-wise Profit & Loss Report"
+            appliedFilters={{
+              "Date Range": `${from} to ${to}`,
+              ...(billStatus !== "all"
+                ? { "Contractor Bill Status": billStatus.replace(/_/g, " ") }
+                : {}),
+            }}
             columns={columns}
             empty="No projects to report on."
           />
@@ -291,7 +336,10 @@ function ReportsPage() {
               rows={byCategory}
               loading={expenses.isLoading}
               searchable={false}
-              exportName="expenses-by-category"
+              exportName="brickweld-expenses-by-category"
+              exportTitle="Expenses by Category Report"
+              exportDescription="Construction Project Control System — Expenses by Category"
+              appliedFilters={{ "Date Range": `${from} to ${to}` }}
               empty="No expenses in this range."
               columns={[
                 { header: "Category", cell: (r) => r.category, value: (r) => r.category },
@@ -318,8 +366,16 @@ function ReportsPage() {
               empty="No configuration entries."
               columns={[
                 { header: "Key", cell: (r) => r.key, value: (r) => r.key },
-                { header: "Value", cell: (r) => JSON.stringify(r.value), value: (r) => JSON.stringify(r.value) },
-                { header: "Description", cell: (r) => r.description ?? "—", value: (r) => r.description },
+                {
+                  header: "Value",
+                  cell: (r) => JSON.stringify(r.value),
+                  value: (r) => JSON.stringify(r.value),
+                },
+                {
+                  header: "Description",
+                  cell: (r) => r.description ?? "—",
+                  value: (r) => r.description,
+                },
               ]}
             />
           </CardContent>
@@ -327,8 +383,9 @@ function ReportsPage() {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Report generated {dateFmt(today())}. Figures come only from recorded attendance wages, material
-        receipts, contractor bills and expenses — no estimated or projected values are added.
+        Report generated {dateFmt(today())}. Figures come only from recorded attendance wages,
+        material receipts, contractor bills and expenses — no estimated or projected values are
+        added.
       </p>
     </div>
   );

@@ -19,6 +19,7 @@ type AuthState = {
   isMD: boolean;
   canWriteFinance: boolean;
   canWriteSite: boolean;
+  canWriteAttendance: boolean;
   refreshRoles: () => Promise<void>;
 };
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isMD,
     canWriteFinance: isMD || roles.includes("accounts"),
     canWriteSite: isMD || roles.includes("accounts") || roles.includes("supervisor"),
+    canWriteAttendance: isMD || roles.includes("supervisor"),
     refreshRoles: () => loadRoles(session?.user.id),
   };
 

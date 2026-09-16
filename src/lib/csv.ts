@@ -1,4 +1,7 @@
-export type CsvColumn<T> = { header: string; value: (row: T) => string | number | null | undefined };
+export type CsvColumn<T> = {
+  header: string;
+  value: (row: T) => string | number | null | undefined;
+};
 
 export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]) {
   const esc = (v: unknown) => {

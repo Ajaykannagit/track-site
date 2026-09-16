@@ -37,10 +37,38 @@ export function useRows<T = Record<string, unknown>>(table: string, opts: ListOp
   });
 }
 
+export function formatDbError(e: unknown, defaultAction = "modify"): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = e as any;
+  const msg = err?.message || String(e || "");
+  const code = err?.code;
+  if (
+    code === "23503" ||
+    msg.includes("violates foreign key constraint") ||
+    msg.includes("foreign key")
+  ) {
+    return "Unable to delete this record because it is referenced by other records (e.g. attendance, expenses, or bills). Please remove or reassign dependent records first.";
+  }
+  if (
+    code === "23505" ||
+    msg.includes("violates unique constraint") ||
+    msg.includes("already exists")
+  ) {
+    return "A record with this code or identifier already exists.";
+  }
+  return msg || `Failed to ${defaultAction} record.`;
+}
+
 export function useSaveRow(table: string, label = "Record") {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, values }: { id?: string; values: Record<string, unknown> }) => {
+    mutationFn: async ({
+      id,
+      values,
+    }: {
+      id?: string | undefined;
+      values: Record<string, unknown>;
+    }) => {
       if (id) {
         const { error } = await supabase.from(table).update(values).eq("id", id);
         if (error) throw error;
@@ -54,7 +82,7 @@ export function useSaveRow(table: string, label = "Record") {
       qc.invalidateQueries({ queryKey: [table] });
       toast.success(`${label} saved`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(formatDbError(e, "save")),
   });
 }
 
@@ -67,11 +95,11 @@ export function useDeleteRow(table: string, label = "Record") {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
-      toast.success(`${label} deleted`);
+      toast.success(`${label} deleted successfully`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(formatDbError(e, "delete")),
   });
 }
 
-export const sum = <T,>(rows: T[], pick: (r: T) => number | null | undefined) =>
+export const sum = <T>(rows: T[], pick: (r: T) => number | null | undefined) =>
   rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);

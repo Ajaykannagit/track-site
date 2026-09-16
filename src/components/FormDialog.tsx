@@ -85,7 +85,10 @@ export function FormDialog({
           }}
         >
           {fields.map((f) => (
-            <div key={f.name} className={f.full || f.type === "textarea" ? "sm:col-span-2" : undefined}>
+            <div
+              key={f.name}
+              className={f.full || f.type === "textarea" ? "sm:col-span-2" : undefined}
+            >
               <Label htmlFor={f.name} className="mb-1.5 block text-xs">
                 {f.label}
                 {f.required ? " *" : ""}

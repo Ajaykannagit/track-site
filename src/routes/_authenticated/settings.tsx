@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
       { title: "Settings — Brickweld" },
       {
         name: "description",
-        content: "Manage user roles and business configuration for the construction control system.",
+        content:
+          "Manage user roles and business configuration for the construction control system.",
       },
       { property: "og:title", content: "Settings — Brickweld" },
       { property: "og:description", content: "Role assignment and application configuration." },
@@ -48,6 +50,7 @@ function SettingsPage() {
   const saveSetting = useSaveRow("app_settings", "Setting");
 
   const [editing, setEditing] = useState<Setting | null>(null);
+  const [deletingRole, setDeletingRole] = useState<RoleRow | null>(null);
 
   const roleFields: Field[] = [
     {
@@ -61,10 +64,18 @@ function SettingsPage() {
       })),
       full: true,
     },
-    { name: "role", label: "Role", type: "select", required: true, options: ROLE_OPTIONS, full: true },
+    {
+      name: "role",
+      label: "Role",
+      type: "select",
+      required: true,
+      options: ROLE_OPTIONS,
+      full: true,
+    },
   ];
 
-  const rolesByUser = (userId: string) => (userRoles.data ?? []).filter((r) => r.user_id === userId);
+  const rolesByUser = (userId: string) =>
+    (userRoles.data ?? []).filter((r) => r.user_id === userId);
   const nameOf = (userId: string) =>
     profiles.data?.find((p) => p.id === userId)?.full_name ?? userId.slice(0, 8);
 
@@ -83,7 +94,8 @@ function SettingsPage() {
       {!isMD && (
         <Card className="mb-4 border-warning/40">
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            Only an MD / Administrator can change roles or configuration. You have read-only access here.
+            Only an MD / Administrator can change roles or configuration. You have read-only access
+            here.
           </CardContent>
         </Card>
       )}
@@ -144,7 +156,10 @@ function SettingsPage() {
                         </div>
                       );
                     },
-                    value: (r) => rolesByUser(r.id).map((x) => x.role).join(" "),
+                    value: (r) =>
+                      rolesByUser(r.id)
+                        .map((x) => x.role)
+                        .join(" "),
                   },
                 ]}
               />
@@ -159,10 +174,16 @@ function SettingsPage() {
               <DataTable
                 rows={userRoles.data ?? []}
                 loading={userRoles.isLoading}
-                exportName="role-assignments"
+                exportName="brickweld-role-assignments"
+                exportTitle="Role Assignments Report"
+                exportDescription="Construction Project Control System — Role Assignments Report"
                 empty="No roles assigned yet."
                 columns={[
-                  { header: "User", cell: (r) => nameOf(r.user_id), value: (r) => nameOf(r.user_id) },
+                  {
+                    header: "User",
+                    cell: (r) => nameOf(r.user_id),
+                    value: (r) => nameOf(r.user_id),
+                  },
                   { header: "Role", cell: (r) => ROLE_LABEL[r.role], value: (r) => r.role },
                   {
                     header: "Granted",
@@ -170,26 +191,37 @@ function SettingsPage() {
                     value: (r) => r.created_at,
                   },
                   {
-                    header: "",
-                    className: "text-right",
+                    header: "Actions",
+                    className: "text-right w-16",
                     cell: (r) =>
                       isMD ? (
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="size-7 text-destructive hover:text-destructive"
                           aria-label="Remove role"
-                          disabled={deleteRole.isPending}
-                          onClick={async () => {
-                            await deleteRole.mutateAsync(r.id);
-                            if (r.user_id === user?.id) await refreshRoles();
-                          }}
+                          onClick={() => setDeletingRole(r)}
                         >
-                          <Trash2 className="size-4 text-destructive" />
+                          <Trash2 className="size-3.5" />
                         </Button>
                       ) : null,
                   },
                 ]}
               />
+
+              {deletingRole && (
+                <ConfirmDeleteDialog
+                  open={!!deletingRole}
+                  onOpenChange={(v) => !v && setDeletingRole(null)}
+                  title="Remove role assignment"
+                  description={`Are you sure you want to remove the ${ROLE_LABEL[deletingRole.role]} role from ${nameOf(deletingRole.user_id)}?`}
+                  onConfirm={async () => {
+                    await deleteRole.mutateAsync(deletingRole.id);
+                    if (deletingRole.user_id === user?.id) await refreshRoles();
+                    setDeletingRole(null);
+                  }}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -212,7 +244,11 @@ function SettingsPage() {
                     cell: (r) => <code className="text-xs">{JSON.stringify(r.value)}</code>,
                     value: (r) => JSON.stringify(r.value),
                   },
-                  { header: "Description", cell: (r) => r.description ?? "—", value: (r) => r.description },
+                  {
+                    header: "Description",
+                    cell: (r) => r.description ?? "—",
+                    value: (r) => r.description,
+                  },
                   {
                     header: "Updated",
                     cell: (r) => dateTimeFmt(r.updated_at),
@@ -242,22 +278,31 @@ function SettingsPage() {
             <CardContent>
               <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Company name</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Company name
+                  </p>
                   <p className="mt-1 font-medium text-foreground">Brickweld</p>
                   <p className="text-xs text-muted-foreground">Civil - Interior - Fabrication</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone number</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Phone number
+                  </p>
                   <p className="mt-1 font-medium text-foreground">+91-9742255005</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Email address</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Email address
+                  </p>
                   <p className="mt-1 font-medium text-foreground">rajesh@brickweld.org.in</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Registered address</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Registered address
+                  </p>
                   <p className="mt-1 text-sm text-foreground">
-                    No.106/A, G.K.D.Nagar, Sri Dhasappa Kalyana Mandapam, Avalapalli Road, Hosur, Tamil Nadu 635109
+                    No.106/A, G.K.D.Nagar, Sri Dhasappa Kalyana Mandapam, Avalapalli Road, Hosur,
+                    Tamil Nadu 635109
                   </p>
                 </div>
               </div>

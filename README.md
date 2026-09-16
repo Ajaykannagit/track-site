@@ -61,8 +61,8 @@ track-site-main/
 ## 5. Prerequisites
 
 - **Node.js**: Version 20+ or 22+ recommended (or modern Bun)
-- **Package Manager**: 
-pm (included with Node.js)
+- **Package Manager**:
+  pm (included with Node.js)
 - **Supabase Account**: A live or local Supabase project with database migrations applied
 
 ---
@@ -71,14 +71,14 @@ pm (included with Node.js)
 
 1. Clone or download the repository:
    `sh
-   git clone <repository-url>
-   cd track-site-main
-   `
+git clone <repository-url>
+cd track-site-main
+`
 
 2. Install dependencies:
    `sh
-   npm install
-   `
+npm install
+`
 
 ---
 
@@ -98,12 +98,13 @@ VITE_SUPABASE_PUBLISHABLE_KEY=\<your-publishable-key>\
 VITE_SUPABASE_PROJECT_ID=\<your-project-id>\
 
 # Optional backend / SSR variables
+
 SUPABASE_URL=\https://<your-project-id>.supabase.co\
 SUPABASE_PUBLISHABLE_KEY=\<your-publishable-key>\
 SUPABASE_PROJECT_ID=\<your-project-id>\
 `
 
-*(Note: Never commit your .env file to version control. It is ignored by .gitignore.)*
+_(Note: Never commit your .env file to version control. It is ignored by .gitignore.)_
 
 ---
 
@@ -124,7 +125,7 @@ The application will start on http://localhost:8080.
 The application connects directly to Supabase via @supabase/supabase-js with Row-Level Security (RLS) enforced at the database level.
 
 - To apply database migrations to a new Supabase project:
- Run the SQL migration scripts located in supabase/migrations/ sequentially using the Supabase Dashboard SQL Editor or Supabase CLI (supabase db push).
+  Run the SQL migration scripts located in supabase/migrations/ sequentially using the Supabase Dashboard SQL Editor or Supabase CLI (supabase db push).
 
 ---
 
@@ -133,10 +134,13 @@ The application connects directly to Supabase via @supabase/supabase-js with Row
 Run typecheck and the production build:
 
 `sh
+
 # Typecheck TypeScript files
+
 npx tsc --noEmit
 
 # Production build
+
 npm run build
 `
 
@@ -151,8 +155,8 @@ npm run preview
 ## 11. Demo Instructions
 
 1. Start the dev server (
-pm run dev) or preview server (
-pm run preview).
+   pm run dev) or preview server (
+   pm run preview).
 2. Navigate to http://localhost:8080/auth.
 3. Sign in with an authorized user (or sign up a new account). The initial user can be assigned the md role in Supabase user_roles table for full administrative access.
 4. **Dashboard**: Inspect the KPI cards, monthly expense trend chart, and the **Active projects** section showing live Cost So Far alongside Contract Value.
@@ -164,6 +168,7 @@ pm run preview).
 
 ## 12. Important Notes for Future Development
 
-- **Small, surgical changes**: Follow the repository guidelines in AGENTS.md. Do not invent financial rules; keep calculations aligned with src/lib/db.ts and eports.tsx.
+- **Small, surgical changes**: Follow the repository guidelines in AGENTS.md. Do not invent financial rules; keep calculations aligned with src/lib/db.ts and
+  eports.tsx.
 - **Database mutations**: Always use useSaveRow and useDeleteRow helpers in src/lib/db.ts to ensure RLS policies and authentication context are respected.
 - **Logo replacement**: The company logo asset can be updated directly in src/components/AppShell.tsx and public/favicon.ico when new branding graphics are supplied.

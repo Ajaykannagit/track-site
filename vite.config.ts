@@ -17,4 +17,3 @@ export default defineConfig({
   // config here ensures local `npm run build` and CI also target Vercel correctly.
   nitro: { preset: "vercel" },
 });
-

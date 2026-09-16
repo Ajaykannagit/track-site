@@ -30,7 +30,10 @@ export const label = (s: string | null | undefined) =>
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   return (
-    <Badge variant="outline" className={`border-transparent ${TONE[status ?? ""] ?? "bg-muted text-muted-foreground"}`}>
+    <Badge
+      variant="outline"
+      className={`border-transparent ${TONE[status ?? ""] ?? "bg-muted text-muted-foreground"}`}
+    >
       {label(status)}
     </Badge>
   );
