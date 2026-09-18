@@ -152,6 +152,7 @@ export type Database = {
       };
       cash_closing: {
         Row: {
+          account_type: string;
           cash_expenses: number;
           cash_received: number;
           closing_cash: number;
@@ -168,6 +169,7 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          account_type?: string;
           cash_expenses?: number;
           cash_received?: number;
           closing_cash?: number;
@@ -184,6 +186,7 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          account_type?: string;
           cash_expenses?: number;
           cash_received?: number;
           closing_cash?: number;
@@ -563,6 +566,7 @@ export type Database = {
           expense_date: string;
           id: string;
           is_demo: boolean;
+          material_name: string | null;
           payment_method: string | null;
           project_id: string | null;
           receipt_path: string | null;
@@ -579,6 +583,7 @@ export type Database = {
           expense_date?: string;
           id?: string;
           is_demo?: boolean;
+          material_name?: string | null;
           payment_method?: string | null;
           project_id?: string | null;
           receipt_path?: string | null;
@@ -595,6 +600,7 @@ export type Database = {
           expense_date?: string;
           id?: string;
           is_demo?: boolean;
+          material_name?: string | null;
           payment_method?: string | null;
           project_id?: string | null;
           receipt_path?: string | null;
@@ -888,6 +894,7 @@ export type Database = {
           created_by: string | null;
           id: string;
           is_demo: boolean;
+          material_name: string | null;
           photo_path: string | null;
           project_id: string;
           remarks: string | null;
@@ -904,6 +911,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           is_demo?: boolean;
+          material_name?: string | null;
           photo_path?: string | null;
           project_id: string;
           remarks?: string | null;
@@ -920,6 +928,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           is_demo?: boolean;
+          material_name?: string | null;
           photo_path?: string | null;
           project_id?: string;
           remarks?: string | null;
@@ -1583,6 +1592,79 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [];
+      };
+      supplier_payments: {
+        Row: {
+          amount: number;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          is_demo: boolean;
+          payment_date: string;
+          payment_method: string | null;
+          po_id: string | null;
+          project_id: string;
+          reference_number: string | null;
+          remarks: string | null;
+          supplier_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          amount?: number;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          is_demo?: boolean;
+          payment_date?: string;
+          payment_method?: string | null;
+          po_id?: string | null;
+          project_id: string;
+          reference_number?: string | null;
+          remarks?: string | null;
+          supplier_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          is_demo?: boolean;
+          payment_date?: string;
+          payment_method?: string | null;
+          po_id?: string | null;
+          project_id?: string;
+          reference_number?: string | null;
+          remarks?: string | null;
+          supplier_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_po_id_fkey";
+            columns: ["po_id"];
+            isOneToOne: false;
+            referencedRelation: "purchase_orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payments_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       user_roles: {
         Row: {
