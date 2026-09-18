@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { downloadCsv } from "@/lib/csv";
-import { exportToExcel } from "@/lib/excel";
+import { exportToExcel, type ExcelColumn } from "@/lib/excel";
 
 export type Column<T> = {
   header: string;
@@ -26,6 +26,11 @@ export type Column<T> = {
   /** Plain value used for search, Excel and CSV export. */
   value?: (row: T) => string | number | null | undefined;
   className?: string;
+  /** Excel specific export customizations */
+  type?: "text" | "number" | "currency" | "date";
+  excelValue?: (row: T) => string | number | Date | null | undefined;
+  width?: number;
+  align?: "left" | "center" | "right";
 };
 
 export function DataTable<T extends { id?: string }>({
@@ -78,11 +83,16 @@ export function DataTable<T extends { id?: string }>({
         filters: appliedFilters,
         rows: filtered,
         columns: columns
-          .filter((c) => c.header && c.value)
-          .map((c) => ({
-            header: c.header,
-            value: (r: T) => c.value?.(r) ?? "",
-          })),
+          .filter((c) => c.header && (c.excelValue || c.value))
+          .map((c) => {
+            const valFn = (r: unknown) =>
+              c.excelValue ? c.excelValue(r as T) : (c.value ? c.value(r as T) : "");
+            const col: ExcelColumn<unknown> = { header: c.header, value: valFn };
+            if (c.type !== undefined) col.type = c.type;
+            if (c.width !== undefined) col.width = c.width;
+            if (c.align !== undefined) col.align = c.align;
+            return col;
+          }),
       });
     } finally {
       setExporting(false);

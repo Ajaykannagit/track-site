@@ -23,13 +23,13 @@ import { currency, dateFmt, today } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/materials")({
   head: () => ({
     meta: [
-      { title: "Materials — Brickweld" },
+      { title: "Materials — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Material indents, purchase orders and site receipts with approval status for each project.",
       },
-      { property: "og:title", content: "Materials — Brickweld" },
+      { property: "og:title", content: "Materials — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Indent to purchase order to goods receipt, tracked per site.",
@@ -43,6 +43,7 @@ type Request = {
   id: string;
   request_number: string;
   project_id: string;
+  material_name?: string | null;
   request_date: string;
   required_date: string | null;
   status: string;
@@ -76,6 +77,18 @@ type Receipt = {
   remarks: string | null;
 };
 
+type SupplierPayment = {
+  id: string;
+  project_id: string;
+  supplier_id: string;
+  po_id: string | null;
+  payment_date: string;
+  amount: number;
+  payment_method: string | null;
+  reference_number: string | null;
+  remarks: string | null;
+};
+
 const docNumber = (prefix: string) => `${prefix}-${Date.now().toString().slice(-8)}`;
 
 function MaterialsPage() {
@@ -91,10 +104,15 @@ function MaterialsPage() {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [deletingReceipt, setDeletingReceipt] = useState<Receipt | null>(null);
 
+  const [editingPayment, setEditingPayment] = useState<SupplierPayment | null>(null);
+  const [deletingPayment, setDeletingPayment] = useState<SupplierPayment | null>(null);
+
   // Filters
   const [reqProjectFilter, setReqProjectFilter] = useState<string>("all");
   const [poProjectFilter, setPoProjectFilter] = useState<string>("all");
   const [grnProjectFilter, setGrnProjectFilter] = useState<string>("all");
+  const [payProjectFilter, setPayProjectFilter] = useState<string>("all");
+  const [paySupplierFilter, setPaySupplierFilter] = useState<string>("all");
 
   const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
   const suppliers = useRows<{ id: string; name: string }>("suppliers", { select: "id,name" });
@@ -108,6 +126,10 @@ function MaterialsPage() {
     order: { col: "receipt_date" },
     limit: 300,
   });
+  const payments = useRows<SupplierPayment>("supplier_payments", {
+    order: { col: "payment_date" },
+    limit: 300,
+  });
 
   const saveRequest = useSaveRow("material_requests", "Material request");
   const deleteRequest = useDeleteRow("material_requests", "Material request");
@@ -117,6 +139,9 @@ function MaterialsPage() {
 
   const saveReceipt = useSaveRow("material_receipts", "Material receipt");
   const deleteReceipt = useDeleteRow("material_receipts", "Material receipt");
+
+  const savePayment = useSaveRow("supplier_payments", "Supplier payment");
+  const deletePayment = useDeleteRow("supplier_payments", "Supplier payment");
 
   const projectName = (id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—";
   const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
@@ -146,6 +171,13 @@ function MaterialsPage() {
     return list;
   }, [receipts.data, grnProjectFilter]);
 
+  const filteredPayments = useMemo(() => {
+    let list = payments.data ?? [];
+    if (payProjectFilter !== "all") list = list.filter((p) => p.project_id === payProjectFilter);
+    if (paySupplierFilter !== "all") list = list.filter((p) => p.supplier_id === paySupplierFilter);
+    return list;
+  }, [payments.data, payProjectFilter, paySupplierFilter]);
+
   // Request Columns
   const requestColumns: Column<Request>[] = [
     { header: "Indent #", cell: (r) => r.request_number, value: (r) => r.request_number },
@@ -153,6 +185,11 @@ function MaterialsPage() {
       header: "Project",
       cell: (r) => projectName(r.project_id),
       value: (r) => projectName(r.project_id),
+    },
+    {
+      header: "Material",
+      cell: (r) => r.material_name || "—",
+      value: (r) => r.material_name,
     },
     { header: "Raised", cell: (r) => dateFmt(r.request_date), value: (r) => r.request_date },
     { header: "Required", cell: (r) => dateFmt(r.required_date), value: (r) => r.required_date },
@@ -295,6 +332,66 @@ function MaterialsPage() {
       : []),
   ];
 
+  // Payment Columns
+  const paymentColumns: Column<SupplierPayment>[] = [
+    { header: "Date", cell: (r) => dateFmt(r.payment_date), value: (r) => r.payment_date },
+    {
+      header: "Project",
+      cell: (r) => projectName(r.project_id),
+      value: (r) => projectName(r.project_id),
+    },
+    {
+      header: "Supplier",
+      cell: (r) => supplierName(r.supplier_id),
+      value: (r) => supplierName(r.supplier_id),
+    },
+    {
+      header: "Against PO",
+      cell: (r) => (r.po_id ? (pos.data?.find((p) => p.id === r.po_id)?.po_number ?? "—") : "—"),
+      value: (r) => r.po_id,
+    },
+    { header: "Method", cell: (r) => r.payment_method ?? "—", value: (r) => r.payment_method },
+    {
+      header: "Reference",
+      cell: (r) => r.reference_number ?? "—",
+      value: (r) => r.reference_number,
+    },
+    {
+      header: "Amount",
+      cell: (r) => currency(r.amount),
+      value: (r) => r.amount,
+      className: "text-right",
+    },
+    ...(canModifyFinance
+      ? [
+          {
+            header: "Actions",
+            className: "text-right w-24",
+            cell: (r: SupplierPayment) => (
+              <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setEditingPayment(r)}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-destructive hover:text-destructive"
+                  onClick={() => setDeletingPayment(r)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   // Field specs
   const requestFields: Field[] = [
     { name: "request_number", label: "Indent number", required: true },
@@ -307,6 +404,7 @@ function MaterialsPage() {
     },
     { name: "request_date", label: "Request date", type: "date", required: true },
     { name: "required_date", label: "Required by", type: "date" },
+    { name: "material_name", label: "Material name (optional)" },
     {
       name: "status",
       label: "Status",
@@ -317,6 +415,33 @@ function MaterialsPage() {
       })),
     },
     { name: "total_amount", label: "Estimated value (₹)", type: "number" },
+    { name: "remarks", label: "Remarks", type: "textarea" },
+  ];
+
+  const paymentFields: Field[] = [
+    { name: "payment_date", label: "Payment date", type: "date", required: true },
+    {
+      name: "project_id",
+      label: "Project",
+      type: "select",
+      required: true,
+      options: projectOptions,
+    },
+    { name: "supplier_id", label: "Supplier", type: "select", required: true, options: supplierOptions },
+    {
+      name: "po_id",
+      label: "Against PO (optional)",
+      type: "select",
+      options: (pos.data ?? []).map((p) => ({ value: p.id, label: p.po_number })),
+    },
+    {
+      name: "payment_method",
+      label: "Method",
+      type: "select",
+      options: ["bank", "cash", "upi", "cheque"].map((m) => ({ value: m, label: m })),
+    },
+    { name: "amount", label: "Amount (₹)", type: "number", required: true },
+    { name: "reference_number", label: "Reference number" },
     { name: "remarks", label: "Remarks", type: "textarea" },
   ];
 
@@ -381,7 +506,7 @@ function MaterialsPage() {
         description="Indent → purchase order → site receipt, with approval status."
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Open indents"
           value={String((requests.data ?? []).filter((r) => r.status !== "closed").length)}
@@ -396,6 +521,10 @@ function MaterialsPage() {
           value={currency(sum(receipts.data ?? [], (r) => r.total_amount))}
           tone="success"
         />
+        <StatCard
+          label="Paid to suppliers"
+          value={currency(sum(payments.data ?? [], (r) => r.amount))}
+        />
       </div>
 
       <Tabs defaultValue="requests">
@@ -403,7 +532,9 @@ function MaterialsPage() {
           <TabsTrigger value="requests">Indents</TabsTrigger>
           <TabsTrigger value="pos">Purchase orders</TabsTrigger>
           <TabsTrigger value="receipts">Receipts</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
         </TabsList>
+
 
         {/* ================= INDENTS ================= */}
         <TabsContent value="requests" className="mt-4 space-y-3">
@@ -423,6 +554,7 @@ function MaterialsPage() {
                   request_date: today(),
                   status: "draft",
                   total_amount: 0,
+                  material_name: "",
                 }}
                 fields={requestFields}
                 onSubmit={async (values) => {
@@ -430,6 +562,7 @@ function MaterialsPage() {
                     values: {
                       ...values,
                       required_date: values["required_date"] || null,
+                      material_name: values["material_name"] || null,
                       total_amount: Number(values["total_amount"] ?? 0),
                     },
                   });
@@ -481,6 +614,7 @@ function MaterialsPage() {
                 required_date: editingRequest.required_date ?? "",
                 status: editingRequest.status,
                 total_amount: editingRequest.total_amount,
+                material_name: editingRequest.material_name ?? "",
                 remarks: editingRequest.remarks ?? "",
               }}
               onSubmit={async (values) => {
@@ -489,6 +623,7 @@ function MaterialsPage() {
                   values: {
                     ...values,
                     required_date: values["required_date"] || null,
+                    material_name: values["material_name"] || null,
                     total_amount: Number(values["total_amount"] ?? 0),
                   },
                 });
@@ -774,6 +909,141 @@ function MaterialsPage() {
             appliedFilters={
               grnProjectFilter !== "all" ? { Project: projectName(grnProjectFilter) } : undefined
             }
+          />
+        </TabsContent>
+
+        {/* ================= SUPPLIER PAYMENTS ================= */}
+        <TabsContent value="payments" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {canModifyFinance && (
+              <FormDialog
+                title="Record supplier payment"
+                description="Log a payment made to a supplier."
+                trigger={
+                  <Button>
+                    <Plus className="mr-2 size-4" /> New payment
+                  </Button>
+                }
+                submitting={savePayment.isPending}
+                initial={{ payment_date: today(), payment_method: "bank", amount: 0 }}
+                fields={paymentFields}
+                onSubmit={async (values) => {
+                  await savePayment.mutateAsync({
+                    values: {
+                      ...values,
+                      po_id: values["po_id"] || null,
+                      amount: Number(values["amount"] ?? 0),
+                    },
+                  });
+                }}
+              />
+            )}
+
+            {/* Payment Filters */}
+            <div className="no-print flex items-center gap-2">
+              <div>
+                <Select value={payProjectFilter} onValueChange={setPayProjectFilter}>
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projectOptions.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Select value={paySupplierFilter} onValueChange={setPaySupplierFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue placeholder="All Suppliers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Suppliers</SelectItem>
+                    {supplierOptions.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(payProjectFilter !== "all" || paySupplierFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPayProjectFilter("all");
+                    setPaySupplierFilter("all");
+                  }}
+                  className="h-8 px-2 text-xs"
+                >
+                  <RotateCcw className="mr-1 size-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {editingPayment && (
+            <FormDialog
+              open={!!editingPayment}
+              onOpenChange={(v) => !v && setEditingPayment(null)}
+              title="Edit supplier payment"
+              fields={paymentFields}
+              submitting={savePayment.isPending}
+              initial={{
+                payment_date: editingPayment.payment_date,
+                project_id: editingPayment.project_id,
+                supplier_id: editingPayment.supplier_id,
+                po_id: editingPayment.po_id ?? "",
+                payment_method: editingPayment.payment_method ?? "bank",
+                amount: editingPayment.amount,
+                reference_number: editingPayment.reference_number ?? "",
+                remarks: editingPayment.remarks ?? "",
+              }}
+              onSubmit={async (values) => {
+                await savePayment.mutateAsync({
+                  id: editingPayment.id,
+                  values: {
+                    ...values,
+                    po_id: values["po_id"] || null,
+                    amount: Number(values["amount"] ?? 0),
+                  },
+                });
+                setEditingPayment(null);
+              }}
+            />
+          )}
+
+          {deletingPayment && (
+            <ConfirmDeleteDialog
+              open={!!deletingPayment}
+              onOpenChange={(v) => !v && setDeletingPayment(null)}
+              title="Delete payment"
+              description={`Are you sure you want to delete this payment of ${currency(deletingPayment.amount)}? This action cannot be undone.`}
+              onConfirm={async () => {
+                await deletePayment.mutateAsync(deletingPayment.id);
+                setDeletingPayment(null);
+              }}
+            />
+          )}
+
+          <DataTable
+            rows={filteredPayments}
+            columns={paymentColumns}
+            loading={payments.isLoading}
+            exportName="brickweld-supplier-payments"
+            exportTitle="Supplier Payments Report"
+            exportDescription="Construction Project Control System — Supplier Payments Report"
+            appliedFilters={{
+              ...(payProjectFilter !== "all" ? { Project: projectName(payProjectFilter) } : {}),
+              ...(paySupplierFilter !== "all"
+                ? { Supplier: supplierName(paySupplierFilter) }
+                : {}),
+            }}
           />
         </TabsContent>
       </Tabs>

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,13 +24,13 @@ import { currency, dateFmt, monthStart, today } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
     meta: [
-      { title: "Accounts & Cash — Brickweld" },
+      { title: "Accounts & Cash — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Site expenses, petty cash closing and daily cash position for every construction project.",
       },
-      { property: "og:title", content: "Accounts & Cash — Brickweld" },
+      { property: "og:title", content: "Accounts & Cash — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Track site expenses and daily cash closing balances.",
@@ -44,6 +45,7 @@ type Expense = {
   expense_date: string;
   project_id: string | null;
   category: string;
+  material_name?: string | null;
   description: string | null;
   amount: number;
   payment_method: string | null;
@@ -53,6 +55,7 @@ type Closing = {
   id: string;
   closing_date: string;
   project_id: string | null;
+  account_type?: string | null;
   opening_cash: number;
   cash_received: number;
   cash_expenses: number;
@@ -77,6 +80,7 @@ function AccountsPage() {
   const [expenseProjectFilter, setExpenseProjectFilter] = useState<string>("all");
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
   const [closingProjectFilter, setClosingProjectFilter] = useState<string>("all");
+  const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
 
   const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
@@ -129,8 +133,11 @@ function AccountsPage() {
     if (closingProjectFilter !== "all") {
       list = list.filter((c) => c.project_id === closingProjectFilter);
     }
+    if (closingAccountFilter !== "all") {
+      list = list.filter((c) => (c.account_type || "petty_cash") === closingAccountFilter);
+    }
     return list;
-  }, [closings.data, closingProjectFilter]);
+  }, [closings.data, closingProjectFilter, closingAccountFilter]);
 
   const expenseColumns: Column<Expense>[] = [
     { header: "Date", cell: (r) => dateFmt(r.expense_date), value: (r) => r.expense_date },
@@ -140,6 +147,11 @@ function AccountsPage() {
       value: (r) => projectName(r.project_id),
     },
     { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+    {
+      header: "Material",
+      cell: (r) => r.material_name || "—",
+      value: (r) => r.material_name,
+    },
     { header: "Description", cell: (r) => r.description ?? "—", value: (r) => r.description },
     { header: "Method", cell: (r) => r.payment_method ?? "—", value: (r) => r.payment_method },
     {
@@ -180,6 +192,15 @@ function AccountsPage() {
 
   const closingColumns: Column<Closing>[] = [
     { header: "Date", cell: (r) => dateFmt(r.closing_date), value: (r) => r.closing_date },
+    {
+      header: "Account",
+      cell: (r) => (
+        <Badge variant={r.account_type === "bank" ? "secondary" : "outline"}>
+          {r.account_type === "bank" ? "Bank Account" : "Petty Cash"}
+        </Badge>
+      ),
+      value: (r) => (r.account_type === "bank" ? "Bank Account" : "Petty Cash"),
+    },
     {
       header: "Project",
       cell: (r) => projectName(r.project_id),
@@ -245,6 +266,21 @@ function AccountsPage() {
       : []),
   ];
 
+  const categoryOptions = useMemo(() => {
+    const dbNames = (categories.data ?? []).map((c) => c.name);
+    const defaults = [
+      "Fuel",
+      "Transport",
+      "Site Consumables",
+      "Food",
+      "Tools",
+      "Machinery Rent",
+      "Miscellaneous",
+    ];
+    const merged = Array.from(new Set([...dbNames, ...defaults]));
+    return merged.map((name) => ({ value: name, label: name }));
+  }, [categories.data]);
+
   const expenseFields: Field[] = [
     { name: "expense_date", label: "Date", type: "date", required: true },
     { name: "project_id", label: "Project", type: "select", options: projectOptions },
@@ -253,8 +289,9 @@ function AccountsPage() {
       label: "Category",
       type: "select",
       required: true,
-      options: (categories.data ?? []).map((c) => ({ value: c.name, label: c.name })),
+      options: categoryOptions,
     },
+    { name: "material_name", label: "Material name / description (optional)", type: "text" },
     {
       name: "payment_method",
       label: "Payment method",
@@ -267,13 +304,28 @@ function AccountsPage() {
 
   const closingFields: Field[] = [
     { name: "closing_date", label: "Date", type: "date", required: true },
+    {
+      name: "account_type",
+      label: "Account",
+      type: "select",
+      required: true,
+      options: [
+        { value: "petty_cash", label: "Petty Cash" },
+        { value: "bank", label: "Bank Account" },
+      ],
+    },
     { name: "project_id", label: "Project", type: "select", options: projectOptions },
-    { name: "opening_cash", label: "Opening cash (₹)", type: "number" },
-    { name: "cash_received", label: "Cash received (₹)", type: "number" },
-    { name: "cash_expenses", label: "Cash expenses (₹)", type: "number" },
+    { name: "opening_cash", label: "Opening balance (₹)", type: "number" },
+    { name: "cash_received", label: "Cash / money received (₹)", type: "number" },
+    { name: "cash_expenses", label: "Expenses paid (₹)", type: "number" },
     { name: "other_transactions", label: "Other transactions (₹)", type: "number" },
     { name: "remarks", label: "Remarks", type: "textarea" },
   ];
+
+  const latestPettyClosing = closings.data?.find(
+    (c) => (c.account_type || "petty_cash") === "petty_cash"
+  );
+  const latestBankClosing = closings.data?.find((c) => c.account_type === "bank");
 
   return (
     <div>
@@ -298,20 +350,25 @@ function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total expenses"
           value={currency(sum(filteredExpenses, (r) => r.amount))}
           tone="destructive"
         />
         <StatCard
-          label="Cash received"
+          label="Money received"
           value={currency(sum(filteredClosings, (r) => r.cash_received))}
           tone="success"
         />
         <StatCard
-          label="Latest closing cash"
-          value={currency(filteredClosings.length ? filteredClosings[0]!.closing_cash : 0)}
+          label="Petty cash balance"
+          value={currency(latestPettyClosing ? latestPettyClosing.closing_cash : 0)}
+        />
+        <StatCard
+          label="Bank account balance"
+          value={currency(latestBankClosing ? latestBankClosing.closing_cash : 0)}
+          tone="warning"
         />
       </div>
 
@@ -334,13 +391,14 @@ function AccountsPage() {
                   </Button>
                 }
                 submitting={saveExpense.isPending}
-                initial={{ expense_date: today(), payment_method: "cash" }}
+                initial={{ expense_date: today(), payment_method: "cash", material_name: "" }}
                 fields={expenseFields}
                 onSubmit={async (values) => {
                   await saveExpense.mutateAsync({
                     values: {
                       ...values,
                       project_id: values["project_id"] || null,
+                      material_name: values["material_name"] || null,
                       amount: Number(values["amount"] ?? 0),
                     },
                   });
@@ -373,9 +431,9 @@ function AccountsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
-                    {(categories.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.name}>
-                        {c.name}
+                    {categoryOptions.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -409,6 +467,7 @@ function AccountsPage() {
                 expense_date: editingExpense.expense_date,
                 project_id: editingExpense.project_id ?? "",
                 category: editingExpense.category,
+                material_name: editingExpense.material_name ?? "",
                 payment_method: editingExpense.payment_method ?? "cash",
                 amount: editingExpense.amount,
                 description: editingExpense.description ?? "",
@@ -419,6 +478,7 @@ function AccountsPage() {
                   values: {
                     ...values,
                     project_id: values["project_id"] || null,
+                    material_name: values["material_name"] || null,
                     amount: Number(values["amount"] ?? 0),
                   },
                 });
@@ -472,6 +532,7 @@ function AccountsPage() {
                 submitting={saveClosing.isPending}
                 initial={{
                   closing_date: today(),
+                  account_type: "petty_cash",
                   opening_cash: 0,
                   cash_received: 0,
                   cash_expenses: 0,
@@ -487,6 +548,7 @@ function AccountsPage() {
                     values: {
                       ...values,
                       project_id: values["project_id"] || null,
+                      account_type: values["account_type"] || "petty_cash",
                       opening_cash: opening,
                       cash_received: received,
                       cash_expenses: spent,
@@ -498,8 +560,8 @@ function AccountsPage() {
               />
             )}
 
-            {/* Closing Project Filter */}
-            <div className="no-print flex items-center gap-2">
+            {/* Closing Filters */}
+            <div className="no-print flex flex-wrap items-center gap-2">
               <div>
                 <Select value={closingProjectFilter} onValueChange={setClosingProjectFilter}>
                   <SelectTrigger className="w-44 h-8 text-xs">
@@ -515,11 +577,28 @@ function AccountsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {closingProjectFilter !== "all" && (
+
+              <div>
+                <Select value={closingAccountFilter} onValueChange={setClosingAccountFilter}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue placeholder="All Accounts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Accounts</SelectItem>
+                    <SelectItem value="petty_cash">Petty Cash</SelectItem>
+                    <SelectItem value="bank">Bank Account</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(closingProjectFilter !== "all" || closingAccountFilter !== "all") && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setClosingProjectFilter("all")}
+                  onClick={() => {
+                    setClosingProjectFilter("all");
+                    setClosingAccountFilter("all");
+                  }}
                   className="h-8 px-2 text-xs"
                 >
                   <RotateCcw className="mr-1 size-3" /> Reset
@@ -538,6 +617,7 @@ function AccountsPage() {
               initial={{
                 closing_date: editingClosing.closing_date,
                 project_id: editingClosing.project_id ?? "",
+                account_type: editingClosing.account_type || "petty_cash",
                 opening_cash: editingClosing.opening_cash,
                 cash_received: editingClosing.cash_received,
                 cash_expenses: editingClosing.cash_expenses,
@@ -554,6 +634,7 @@ function AccountsPage() {
                   values: {
                     ...values,
                     project_id: values["project_id"] || null,
+                    account_type: values["account_type"] || "petty_cash",
                     opening_cash: opening,
                     cash_received: received,
                     cash_expenses: spent,
@@ -590,6 +671,9 @@ function AccountsPage() {
               "Date Range": `${from} to ${to}`,
               ...(closingProjectFilter !== "all"
                 ? { Project: projectName(closingProjectFilter) }
+                : {}),
+              ...(closingAccountFilter !== "all"
+                ? { Account: closingAccountFilter === "bank" ? "Bank Account" : "Petty Cash" }
                 : {}),
             }}
           />

@@ -23,13 +23,13 @@ import { currency, dateFmt, today } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/contractors")({
   head: () => ({
     meta: [
-      { title: "Contractors — Brickweld" },
+      { title: "Contractors — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Work orders, measurement books, contractor bills and payments across all construction sites.",
       },
-      { property: "og:title", content: "Contractors — Brickweld" },
+      { property: "og:title", content: "Contractors — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Work order to measurement book to bill to payment, in one place.",
@@ -606,6 +606,7 @@ function ContractorsPage() {
           <TabsTrigger value="mb">Measurement books</TabsTrigger>
           <TabsTrigger value="bills">Bills</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="flow">Flow</TabsTrigger>
         </TabsList>
 
         {/* ================= WORK ORDERS ================= */}
@@ -988,6 +989,109 @@ function ContractorsPage() {
                 : {}),
             }}
           />
+        </TabsContent>
+
+        {/* ================= FLOW TRACKER ================= */}
+        <TabsContent value="flow" className="mt-4">
+          <div className="rounded-lg border bg-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50">
+                <tr>
+                  <th className="p-3 text-left font-medium">Work Order</th>
+                  <th className="p-3 text-left font-medium">Project</th>
+                  <th className="p-3 text-left font-medium">Contractor</th>
+                  <th className="p-3 text-right font-medium">WO Value</th>
+                  <th className="p-3 text-right font-medium">MB Measured</th>
+                  <th className="p-3 text-right font-medium">Billed (Net)</th>
+                  <th className="p-3 text-right font-medium">Paid</th>
+                  <th className="p-3 text-right font-medium">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredWos.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                      No work orders found. Add work orders to see the flow.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredWos.map((wo) => {
+                    const woMbs = (mbs.data ?? []).filter((m) => m.work_order_id === wo.id);
+                    const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                    const woPaid = (payments.data ?? [])
+                      .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                      .reduce((acc, p) => acc + p.amount, 0);
+                    const mbTotal = woMbs.reduce((acc, m) => acc + m.total_amount, 0);
+                    const billTotal = woBills.reduce((acc, b) => acc + b.net_amount, 0);
+                    const outstanding = billTotal - woPaid;
+                    return (
+                      <tr key={wo.id} className="hover:bg-muted/30">
+                        <td className="p-3 font-mono text-xs">{wo.work_order_number}</td>
+                        <td className="p-3">{projectName(wo.project_id)}</td>
+                        <td className="p-3">{contractorName(wo.contractor_id)}</td>
+                        <td className="p-3 text-right tabular-nums">{currency(wo.contract_amount)}</td>
+                        <td className="p-3 text-right tabular-nums">{currency(mbTotal)}</td>
+                        <td className="p-3 text-right tabular-nums">{currency(billTotal)}</td>
+                        <td className="p-3 text-right tabular-nums text-emerald-700">{currency(woPaid)}</td>
+                        <td className={`p-3 text-right tabular-nums font-medium ${outstanding > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                          {currency(outstanding)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {filteredWos.length > 0 && (
+                <tfoot className="border-t bg-muted/50 font-semibold">
+                  <tr>
+                    <td colSpan={3} className="p-3">Total</td>
+                    <td className="p-3 text-right tabular-nums">
+                      {currency(filteredWos.reduce((a, w) => a + w.contract_amount, 0))}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {currency(
+                        filteredWos.reduce((a, wo) => {
+                          const woMbs = (mbs.data ?? []).filter((m) => m.work_order_id === wo.id);
+                          return a + woMbs.reduce((s, m) => s + m.total_amount, 0);
+                        }, 0)
+                      )}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {currency(
+                        filteredWos.reduce((a, wo) => {
+                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          return a + woBills.reduce((s, b) => s + b.net_amount, 0);
+                        }, 0)
+                      )}
+                    </td>
+                    <td className="p-3 text-right tabular-nums text-emerald-700">
+                      {currency(
+                        filteredWos.reduce((a, wo) => {
+                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          const woPaid = (payments.data ?? [])
+                            .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                            .reduce((s, p) => s + p.amount, 0);
+                          return a + woPaid;
+                        }, 0)
+                      )}
+                    </td>
+                    <td className="p-3 text-right tabular-nums text-destructive">
+                      {currency(
+                        filteredWos.reduce((a, wo) => {
+                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          const billTotal = woBills.reduce((s, b) => s + b.net_amount, 0);
+                          const woPaid = (payments.data ?? [])
+                            .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                            .reduce((s, p) => s + p.amount, 0);
+                          return a + (billTotal - woPaid);
+                        }, 0)
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

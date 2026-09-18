@@ -21,12 +21,12 @@ import { currency, dateFmt, monthStart } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Brickweld" },
+      { title: "Dashboard — Brickweld Pvt Ltd" },
       {
         name: "description",
         content: "Live view of project value, site spend, pending approvals and cash position.",
       },
-      { property: "og:title", content: "Dashboard — Brickweld" },
+      { property: "og:title", content: "Dashboard — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Project value, spend, approvals and cash at a glance.",

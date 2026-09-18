@@ -75,13 +75,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Brickweld - Civil - Interior - Fabrication" },
+      { title: "Brickweld Pvt Ltd - Civil - Interior - Fabrication" },
       {
         name: "description",
         content:
           "Manage construction projects, site attendance, payroll, accounts, materials, contractors and project profitability in one place.",
       },
-      { property: "og:title", content: "Brickweld - Civil - Interior - Fabrication" },
+      { property: "og:title", content: "Brickweld Pvt Ltd - Civil - Interior - Fabrication" },
       {
         property: "og:description",
         content:

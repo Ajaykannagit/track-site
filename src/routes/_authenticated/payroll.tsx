@@ -22,12 +22,12 @@ import { currency } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/payroll")({
   head: () => ({
     meta: [
-      { title: "Payroll — Brickweld" },
+      { title: "Payroll — Brickweld Pvt Ltd" },
       {
         name: "description",
         content: "Monthly payroll runs with gross, deductions and net pay per employee.",
       },
-      { property: "og:title", content: "Payroll — Brickweld" },
+      { property: "og:title", content: "Payroll — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Run and approve monthly wages for site and office staff.",

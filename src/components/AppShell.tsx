@@ -62,9 +62,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <div className="flex items-center gap-2 border-b border-sidebar-border px-4 py-4">
-      <img src="/logo.png" className="size-9 rounded-md object-contain" alt="Brickweld" />
+      <img src="/logo.png" className="size-9 rounded-md object-contain" alt="Brickweld Pvt Ltd" />
       <div className="leading-tight">
-        <p className="font-display text-base font-semibold text-sidebar-foreground">Brickweld</p>
+        <p className="font-display text-base font-semibold text-sidebar-foreground">Brickweld Pvt Ltd</p>
         <p className="text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
           Civil - Interior - Fabrication
         </p>

@@ -20,13 +20,13 @@ import { currency, dateFmt, monthStart, today } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
-      { title: "Reports & P&L — Brickweld" },
+      { title: "Reports & P&L — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Project-wise profit and loss: contract value against labour, material, contractor and other site costs.",
       },
-      { property: "og:title", content: "Reports & P&L — Brickweld" },
+      { property: "og:title", content: "Reports & P&L — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Company and project level profitability across a chosen date range.",

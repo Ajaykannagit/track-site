@@ -16,13 +16,13 @@ import { dateTimeFmt } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — Brickweld" },
+      { title: "Settings — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Manage user roles and business configuration for the construction control system.",
       },
-      { property: "og:title", content: "Settings — Brickweld" },
+      { property: "og:title", content: "Settings — Brickweld Pvt Ltd" },
       { property: "og:description", content: "Role assignment and application configuration." },
     ],
   }),
@@ -281,7 +281,7 @@ function SettingsPage() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">
                     Company name
                   </p>
-                  <p className="mt-1 font-medium text-foreground">Brickweld</p>
+                  <p className="mt-1 font-medium text-foreground">Brickweld Pvt Ltd</p>
                   <p className="text-xs text-muted-foreground">Civil - Interior - Fabrication</p>
                 </div>
                 <div>

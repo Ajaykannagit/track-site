@@ -23,12 +23,12 @@ import { currency, dateFmt, monthStart, today } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
     meta: [
-      { title: "Attendance — Brickweld" },
+      { title: "Attendance — Brickweld Pvt Ltd" },
       {
         name: "description",
         content: "Daily labour, office and contractor attendance with wages and overtime.",
       },
-      { property: "og:title", content: "Attendance — Brickweld" },
+      { property: "og:title", content: "Attendance — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Capture site attendance, overtime and wage cost per day.",
@@ -205,13 +205,38 @@ function AttendancePage() {
   };
 
   const columns: Column<Row>[] = [
-    { header: "Date", cell: (r) => dateFmt(r.attendance_date), value: (r) => r.attendance_date },
+    {
+      header: "Date",
+      cell: (r) => dateFmt(r.attendance_date),
+      value: (r) => r.attendance_date,
+      excelValue: (r) => {
+        if (!r.attendance_date) return null;
+        const parts = String(r.attendance_date).split("-").map(Number);
+        if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+          return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        }
+        return new Date(r.attendance_date);
+      },
+      type: "date",
+      align: "center",
+      width: 15,
+    },
     {
       header: "Project",
       cell: (r) => name(projects.data, r.project_id),
       value: (r) => name(projects.data, r.project_id),
+      type: "text",
+      align: "left",
+      width: 32,
     },
-    { header: "Kind", cell: (r) => r.kind, value: (r) => r.kind },
+    {
+      header: "Kind",
+      cell: (r) => r.kind,
+      value: (r) => r.kind,
+      type: "text",
+      align: "center",
+      width: 14,
+    },
     {
       header: "Person / gang",
       cell: (r) =>
@@ -223,24 +248,48 @@ function AttendancePage() {
       value: (r) =>
         r.employee_id
           ? name(employees.data, r.employee_id)
-          : name(contractors.data, r.contractor_id),
+          : r.contractor_id
+            ? name(contractors.data, r.contractor_id)
+            : `${r.workforce_count ?? 0} workers`,
+      type: "text",
+      align: "left",
+      width: 26,
     },
-    { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
+    {
+      header: "Status",
+      cell: (r) => <StatusBadge status={r.status} />,
+      value: (r) => r.status,
+      type: "text",
+      align: "center",
+      width: 14,
+    },
     {
       header: "Hours",
       cell: (r) => `${r.working_hours} + ${r.ot_hours} OT`,
       value: (r) => r.working_hours,
+      excelValue: (r) => Number(r.working_hours ?? 0),
+      type: "number",
+      align: "right",
+      width: 12,
     },
     {
       header: "Rate",
       cell: (r) => currency(r.wage_rate),
       value: (r) => r.wage_rate,
+      excelValue: (r) => Number(r.wage_rate ?? 0),
+      type: "currency",
+      align: "right",
+      width: 16,
       className: "text-right",
     },
     {
       header: "Wage",
       cell: (r) => currency(r.calculated_wage),
       value: (r) => r.calculated_wage,
+      excelValue: (r) => Number(r.calculated_wage ?? 0),
+      type: "currency",
+      align: "right",
+      width: 16,
       className: "text-right",
     },
     ...(canWriteAttendance
@@ -277,8 +326,37 @@ function AttendancePage() {
 
   const present = filteredData.filter((r) => r.status === "present").length;
 
+  const formatFilterDate = (val: string) => {
+    if (!val) return "";
+    const parts = val.split("-").map(Number);
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+      return `${String(parts[2]).padStart(2, "0")}-${monthNames[parts[1] - 1]}-${parts[0]}`;
+    }
+    return val;
+  };
+
   const appliedFiltersMap: Record<string, string> = {
-    "Date Range": `${from} to ${to}`,
+    ...(from && to
+      ? { "Date Range": `${formatFilterDate(from)} to ${formatFilterDate(to)}` }
+      : from
+        ? { "From Date": formatFilterDate(from) }
+        : to
+          ? { "To Date": formatFilterDate(to) }
+          : {}),
     ...(typeFilter !== "all"
       ? {
           Type:

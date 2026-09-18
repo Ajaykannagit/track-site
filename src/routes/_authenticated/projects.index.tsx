@@ -23,12 +23,12 @@ import { currency, dateFmt } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/projects/")({
   head: () => ({
     meta: [
-      { title: "Projects — Brickweld" },
+      { title: "Projects — Brickweld Pvt Ltd" },
       {
         name: "description",
         content: "All construction projects with contract value, status and site details.",
       },
-      { property: "og:title", content: "Projects — Brickweld" },
+      { property: "og:title", content: "Projects — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Track every construction project from planning to handover.",

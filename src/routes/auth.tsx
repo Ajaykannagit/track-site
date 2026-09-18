@@ -12,13 +12,13 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in — Brickweld" },
+      { title: "Sign in — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Sign in to the construction project management, payroll, accounts and contractor control system.",
       },
-      { property: "og:title", content: "Sign in — Brickweld" },
+      { property: "og:title", content: "Sign in — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Secure role-based access for MD, supervisors and accounts teams.",
@@ -76,9 +76,9 @@ function AuthPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-sidebar p-10 lg:flex">
         <div className="flex items-center gap-3 text-sidebar-foreground">
-          <img src="/logo.png" className="size-11 rounded-md object-contain" alt="Brickweld" />
+          <img src="/logo.png" className="size-11 rounded-md object-contain" alt="Brickweld Pvt Ltd" />
           <div>
-            <p className="font-display text-xl font-bold">Brickweld</p>
+            <p className="font-display text-xl font-bold">Brickweld Pvt Ltd</p>
             <p className="text-xs uppercase tracking-wide text-sidebar-foreground/60">
               Civil - Interior - Fabrication
             </p>

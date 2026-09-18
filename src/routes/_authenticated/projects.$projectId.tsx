@@ -11,12 +11,12 @@ import { currency, dateFmt } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   head: () => ({
     meta: [
-      { title: "Project detail — Brickweld" },
+      { title: "Project detail — Brickweld Pvt Ltd" },
       {
         name: "description",
         content: "Budget, spend, attendance, materials and contractor activity for a project.",
       },
-      { property: "og:title", content: "Project detail — Brickweld" },
+      { property: "og:title", content: "Project detail — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Full financial and site picture for a single construction project.",
@@ -166,11 +166,11 @@ function ProjectDetail() {
       <Tabs defaultValue="budget" className="mt-4">
         <TabsList className="no-print flex-wrap">
           <TabsTrigger value="budget">Budget</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="contractors">Contractor bills</TabsTrigger>
           <TabsTrigger value="info">Details</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
         </TabsList>
 
         <TabsContent value="budget">
@@ -187,33 +187,6 @@ function ProjectDetail() {
                 className: "text-right",
               },
               { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
-            ]}
-          />
-        </TabsContent>
-
-        <TabsContent value="expenses">
-          <DataTable
-            rows={expenses.data ?? []}
-            loading={expenses.isLoading}
-            exportName="project-expenses"
-            columns={[
-              {
-                header: "Date",
-                cell: (r) => dateFmt(r.expense_date),
-                value: (r) => r.expense_date,
-              },
-              { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-              {
-                header: "Description",
-                cell: (r) => r.description ?? "—",
-                value: (r) => r.description,
-              },
-              {
-                header: "Amount",
-                cell: (r) => currency(r.amount),
-                value: (r) => r.amount,
-                className: "text-right",
-              },
             ]}
           />
         </TabsContent>
@@ -306,6 +279,33 @@ function ProjectDetail() {
               <Detail label="Scope / notes" value={p?.details ?? "—"} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="expenses">
+          <DataTable
+            rows={expenses.data ?? []}
+            loading={expenses.isLoading}
+            exportName="project-expenses"
+            columns={[
+              {
+                header: "Date",
+                cell: (r) => dateFmt(r.expense_date),
+                value: (r) => r.expense_date,
+              },
+              { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+              {
+                header: "Description",
+                cell: (r) => r.description ?? "—",
+                value: (r) => r.description,
+              },
+              {
+                header: "Amount",
+                cell: (r) => currency(r.amount),
+                value: (r) => r.amount,
+                className: "text-right",
+              },
+            ]}
+          />
         </TabsContent>
       </Tabs>
     </div>
