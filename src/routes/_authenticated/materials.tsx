@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { History, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -19,6 +19,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
+import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
+import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/materials")({
   head: () => ({
@@ -204,9 +206,18 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-32",
             cell: (r: Request) => (
               <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="material_requests"
+                  recordId={r.id}
+                  trigger={
+                    <Button variant="ghost" size="icon" className="size-7" title="Change history">
+                      <History className="size-3.5" />
+                    </Button>
+                  }
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -618,6 +629,18 @@ function MaterialsPage() {
                 remarks: editingRequest.remarks ?? "",
               }}
               onSubmit={async (values) => {
+                await logRecordFieldDiffs(
+                  "material_requests",
+                  editingRequest.id,
+                  "materials",
+                  editingRequest as Record<string, unknown>,
+                  {
+                    material_name: values["material_name"] || null,
+                    status: values["status"],
+                    total_amount: Number(values["total_amount"] ?? 0),
+                  },
+                  ["material_name", "status", "total_amount"]
+                );
                 await saveRequest.mutateAsync({
                   id: editingRequest.id,
                   values: {
@@ -639,6 +662,13 @@ function MaterialsPage() {
               title="Delete indent"
               description={`Are you sure you want to delete indent "${deletingRequest.request_number}"? This action cannot be undone.`}
               onConfirm={async () => {
+                await logAuditEntry({
+                  tableName: "material_requests",
+                  recordId: deletingRequest.id,
+                  action: "delete",
+                  module: "materials",
+                  details: { request_number: deletingRequest.request_number, material_name: deletingRequest.material_name },
+                });
                 await deleteRequest.mutateAsync(deletingRequest.id);
                 setDeletingRequest(null);
               }}

@@ -76,9 +76,9 @@ function AuthPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-sidebar p-10 lg:flex">
         <div className="flex items-center gap-3 text-sidebar-foreground">
-          <img src="/logo.png" className="size-11 rounded-md object-contain" alt="Brickweld Pvt Ltd" />
+          <img src="/logo.png" className="size-11 rounded-md object-contain" alt="BRICKWELD PRIVATE LIMITED" />
           <div>
-            <p className="font-display text-xl font-bold">Brickweld Pvt Ltd</p>
+            <p className="font-display text-xl font-bold">BRICKWELD PRIVATE LIMITED</p>
             <p className="text-xs uppercase tracking-wide text-sidebar-foreground/60">
               Civil - Interior - Fabrication
             </p>

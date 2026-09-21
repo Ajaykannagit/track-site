@@ -19,6 +19,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
+import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
@@ -433,6 +434,19 @@ function AttendancePage() {
           }}
           fields={formFields}
           onSubmit={async (values) => {
+            await logRecordFieldDiffs(
+              "attendance",
+              editingRow.id,
+              "attendance",
+              editingRow as Record<string, unknown>,
+              {
+                status: values["status"],
+                working_hours: Number(values["working_hours"] ?? editingRow.working_hours),
+                ot_hours: Number(values["ot_hours"] ?? editingRow.ot_hours),
+                calculated_wage: Number(values["calculated_wage"] ?? editingRow.calculated_wage),
+              },
+              ["status", "working_hours", "ot_hours", "calculated_wage"]
+            );
             await handleFormSubmit(values, editingRow.id);
             setEditingRow(null);
           }}
@@ -447,6 +461,13 @@ function AttendancePage() {
           title="Delete attendance record"
           description="Are you sure you want to delete this attendance entry? This action cannot be undone."
           onConfirm={async () => {
+            await logAuditEntry({
+              tableName: "attendance",
+              recordId: deletingRow.id,
+              action: "delete",
+              module: "attendance",
+              details: { attendance_date: deletingRow.attendance_date, status: deletingRow.status },
+            });
             await deleteRow.mutateAsync(deletingRow.id);
             setDeletingRow(null);
           }}

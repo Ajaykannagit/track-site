@@ -20,6 +20,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
+import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
+import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
@@ -164,9 +166,14 @@ function AccountsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-28",
             cell: (r: Expense) => (
               <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="expenses"
+                  recordId={r.id}
+                  title={`Expense Audit History — ${r.category}`}
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -240,9 +247,14 @@ function AccountsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-28",
             cell: (r: Closing) => (
               <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="cash_closing"
+                  recordId={r.id}
+                  title="Cash Closing Audit History"
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -473,14 +485,23 @@ function AccountsPage() {
                 description: editingExpense.description ?? "",
               }}
               onSubmit={async (values) => {
+                const newVals = {
+                  ...values,
+                  project_id: values["project_id"] || null,
+                  material_name: values["material_name"] || null,
+                  amount: Number(values["amount"] ?? 0),
+                };
+                await logRecordFieldDiffs(
+                  "expenses",
+                  editingExpense.id,
+                  "expenses",
+                  editingExpense as any,
+                  newVals,
+                  ["amount", "category", "material_name", "payment_method", "description", "expense_date"]
+                );
                 await saveExpense.mutateAsync({
                   id: editingExpense.id,
-                  values: {
-                    ...values,
-                    project_id: values["project_id"] || null,
-                    material_name: values["material_name"] || null,
-                    amount: Number(values["amount"] ?? 0),
-                  },
+                  values: newVals,
                 });
                 setEditingExpense(null);
               }}
@@ -494,6 +515,14 @@ function AccountsPage() {
               title="Delete expense"
               description={`Are you sure you want to delete expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})? This action cannot be undone.`}
               onConfirm={async () => {
+                await logAuditEntry({
+                  tableName: "expenses",
+                  recordId: deletingExpense.id,
+                  action: "delete",
+                  module: "expenses",
+                  oldValue: deletingExpense.amount,
+                  reason: `Deleted expense (${deletingExpense.category})`,
+                });
                 await deleteExpense.mutateAsync(deletingExpense.id);
                 setDeletingExpense(null);
               }}
@@ -629,6 +658,21 @@ function AccountsPage() {
                 const received = Number(values["cash_received"] ?? 0);
                 const spent = Number(values["cash_expenses"] ?? 0);
                 const other = Number(values["other_transactions"] ?? 0);
+                await logRecordFieldDiffs(
+                  "cash_closing",
+                  editingClosing.id,
+                  "accounts",
+                  editingClosing as Record<string, unknown>,
+                  {
+                    closing_date: values["closing_date"],
+                    account_type: values["account_type"] || "petty_cash",
+                    opening_cash: opening,
+                    cash_received: received,
+                    cash_expenses: spent,
+                    other_transactions: other,
+                  },
+                  ["closing_date", "account_type", "opening_cash", "cash_received", "cash_expenses", "other_transactions"]
+                );
                 await saveClosing.mutateAsync({
                   id: editingClosing.id,
                   values: {
@@ -654,6 +698,13 @@ function AccountsPage() {
               title="Delete cash closing"
               description={`Are you sure you want to delete cash closing for ${dateFmt(deletingClosing.closing_date)}? This action cannot be undone.`}
               onConfirm={async () => {
+                await logAuditEntry({
+                  tableName: "cash_closing",
+                  recordId: deletingClosing.id,
+                  action: "delete",
+                  module: "accounts",
+                  details: { closing_date: deletingClosing.closing_date, account_type: deletingClosing.account_type },
+                });
                 await deleteClosing.mutateAsync(deletingClosing.id);
                 setDeletingClosing(null);
               }}
