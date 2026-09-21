@@ -66,6 +66,17 @@ type Closing = {
   remarks: string | null;
 };
 
+type Transfer = {
+  id: string;
+  transfer_date: string;
+  project_id: string | null;
+  from_account: string;
+  to_account: string;
+  amount: number;
+  reference_number: string | null;
+  remarks: string | null;
+};
+
 function AccountsPage() {
   const { canWriteFinance, isMD } = useAuth();
   const [from, setFrom] = useState(monthStart());
@@ -78,11 +89,15 @@ function AccountsPage() {
   const [editingClosing, setEditingClosing] = useState<Closing | null>(null);
   const [deletingClosing, setDeletingClosing] = useState<Closing | null>(null);
 
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [deletingTransfer, setDeletingTransfer] = useState<Transfer | null>(null);
+
   // Filters
   const [expenseProjectFilter, setExpenseProjectFilter] = useState<string>("all");
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
   const [closingProjectFilter, setClosingProjectFilter] = useState<string>("all");
   const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
+  const [transferProjectFilter, setTransferProjectFilter] = useState<string>("all");
 
   const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
@@ -105,12 +120,23 @@ function AccountsPage() {
     order: { col: "closing_date" },
     limit: 500,
   });
+  const transfers = useRows<Transfer>("account_transfers", {
+    filters: [
+      { col: "transfer_date", op: "gte", value: from },
+      { col: "transfer_date", op: "lte", value: to },
+    ],
+    order: { col: "transfer_date" },
+    limit: 500,
+  });
 
   const saveExpense = useSaveRow("expenses", "Expense");
   const deleteExpense = useDeleteRow("expenses", "Expense");
 
   const saveClosing = useSaveRow("cash_closing", "Cash closing");
   const deleteClosing = useDeleteRow("cash_closing", "Cash closing");
+
+  const saveTransfer = useSaveRow("account_transfers", "Transfer");
+  const deleteTransfer = useDeleteRow("account_transfers", "Transfer");
 
   const projectName = (id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—";
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
@@ -140,6 +166,15 @@ function AccountsPage() {
     }
     return list;
   }, [closings.data, closingProjectFilter, closingAccountFilter]);
+
+  // Filtered transfers
+  const filteredTransfers = useMemo(() => {
+    let list = transfers.data ?? [];
+    if (transferProjectFilter !== "all") {
+      list = list.filter((t) => t.project_id === transferProjectFilter);
+    }
+    return list;
+  }, [transfers.data, transferProjectFilter]);
 
   const expenseColumns: Column<Expense>[] = [
     { header: "Date", cell: (r) => dateFmt(r.expense_date), value: (r) => r.expense_date },
@@ -334,6 +369,102 @@ function AccountsPage() {
     { name: "remarks", label: "Remarks", type: "textarea" },
   ];
 
+  const transferColumns: Column<Transfer>[] = [
+    { header: "Date", cell: (r) => dateFmt(r.transfer_date), value: (r) => r.transfer_date },
+    {
+      header: "Project",
+      cell: (r) => projectName(r.project_id),
+      value: (r) => projectName(r.project_id),
+    },
+    {
+      header: "From Account",
+      cell: (r) => (
+        <Badge variant={r.from_account === "bank" ? "secondary" : "outline"}>
+          {r.from_account === "bank" ? "Bank Account" : "Petty Cash"}
+        </Badge>
+      ),
+      value: (r) => (r.from_account === "bank" ? "Bank Account" : "Petty Cash"),
+    },
+    {
+      header: "To Account",
+      cell: (r) => (
+        <Badge variant={r.to_account === "bank" ? "secondary" : "outline"}>
+          {r.to_account === "bank" ? "Bank Account" : "Petty Cash"}
+        </Badge>
+      ),
+      value: (r) => (r.to_account === "bank" ? "Bank Account" : "Petty Cash"),
+    },
+    {
+      header: "Amount",
+      cell: (r) => currency(r.amount),
+      value: (r) => r.amount,
+      className: "text-right",
+    },
+    { header: "Ref #", cell: (r) => r.reference_number || "—", value: (r) => r.reference_number },
+    { header: "Remarks", cell: (r) => r.remarks || "—", value: (r) => r.remarks },
+    ...(canModify
+      ? [
+          {
+            header: "Actions",
+            className: "text-right w-28",
+            cell: (r: Transfer) => (
+              <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="account_transfers"
+                  recordId={r.id}
+                  title="Transfer Audit History"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setEditingTransfer(r)}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-destructive hover:text-destructive"
+                  onClick={() => setDeletingTransfer(r)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  const transferFields: Field[] = [
+    { name: "transfer_date", label: "Date", type: "date", required: true },
+    { name: "project_id", label: "Project", type: "select", options: projectOptions },
+    {
+      name: "from_account",
+      label: "From Account",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    {
+      name: "to_account",
+      label: "To Account",
+      type: "select",
+      required: true,
+      options: [
+        { value: "petty_cash", label: "Petty Cash" },
+        { value: "bank", label: "Bank Account" },
+      ],
+    },
+    { name: "amount", label: "Transfer Amount (₹)", type: "number", required: true },
+    { name: "reference_number", label: "Reference / Cheque / UTR #", type: "text" },
+    { name: "remarks", label: "Remarks", type: "textarea" },
+  ];
+
   const latestPettyClosing = closings.data?.find(
     (c) => (c.account_type || "petty_cash") === "petty_cash"
   );
@@ -388,6 +519,7 @@ function AccountsPage() {
         <TabsList className="no-print">
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="cash">Cash closing</TabsTrigger>
+          <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
         </TabsList>
 
         {/* ================= EXPENSES ================= */}
@@ -725,6 +857,167 @@ function AccountsPage() {
                 : {}),
               ...(closingAccountFilter !== "all"
                 ? { Account: closingAccountFilter === "bank" ? "Bank Account" : "Petty Cash" }
+                : {}),
+            }}
+          />
+        </TabsContent>
+
+        {/* ================= TRANSFERS ================= */}
+        <TabsContent value="transfers" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {canModify && (
+              <FormDialog
+                title="Transfer Funds (Contra)"
+                description="Transfer funds between Bank Account and Petty Cash."
+                trigger={
+                  <Button>
+                    <Plus className="mr-2 size-4" /> New Transfer
+                  </Button>
+                }
+                submitting={saveTransfer.isPending}
+                initial={{
+                  transfer_date: today(),
+                  from_account: "bank",
+                  to_account: "petty_cash",
+                  amount: 0,
+                  reference_number: "",
+                  remarks: "",
+                }}
+                fields={transferFields}
+                onSubmit={async (values) => {
+                  const amount = Number(values["amount"] ?? 0);
+                  await saveTransfer.mutateAsync({
+                    values: {
+                      ...values,
+                      project_id: values["project_id"] || null,
+                      from_account: values["from_account"] || "bank",
+                      to_account: values["to_account"] || "petty_cash",
+                      amount,
+                      reference_number: values["reference_number"] || null,
+                      remarks: values["remarks"] || null,
+                    },
+                  });
+                }}
+              />
+            )}
+
+            {/* Transfer Filters */}
+            <div className="no-print flex flex-wrap items-end gap-2">
+              <div>
+                <Select value={transferProjectFilter} onValueChange={setTransferProjectFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projectOptions.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {transferProjectFilter !== "all" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTransferProjectFilter("all")}
+                  className="h-8 px-2 text-xs"
+                >
+                  <RotateCcw className="mr-1 size-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {editingTransfer && (
+            <FormDialog
+              open={!!editingTransfer}
+              onOpenChange={(v) => !v && setEditingTransfer(null)}
+              title="Edit Transfer"
+              fields={transferFields}
+              submitting={saveTransfer.isPending}
+              initial={{
+                transfer_date: editingTransfer.transfer_date,
+                project_id: editingTransfer.project_id ?? "",
+                from_account: editingTransfer.from_account,
+                to_account: editingTransfer.to_account,
+                amount: editingTransfer.amount,
+                reference_number: editingTransfer.reference_number ?? "",
+                remarks: editingTransfer.remarks ?? "",
+              }}
+              onSubmit={async (values) => {
+                const amount = Number(values["amount"] ?? 0);
+                await logRecordFieldDiffs(
+                  "account_transfers",
+                  editingTransfer.id,
+                  "accounts",
+                  editingTransfer as Record<string, unknown>,
+                  {
+                    transfer_date: values["transfer_date"],
+                    from_account: values["from_account"],
+                    to_account: values["to_account"],
+                    amount,
+                    reference_number: values["reference_number"] || null,
+                    remarks: values["remarks"] || null,
+                  },
+                  ["transfer_date", "from_account", "to_account", "amount", "reference_number", "remarks"]
+                );
+                await saveTransfer.mutateAsync({
+                  id: editingTransfer.id,
+                  values: {
+                    ...values,
+                    project_id: values["project_id"] || null,
+                    from_account: values["from_account"] || "bank",
+                    to_account: values["to_account"] || "petty_cash",
+                    amount,
+                    reference_number: values["reference_number"] || null,
+                    remarks: values["remarks"] || null,
+                  },
+                });
+                setEditingTransfer(null);
+              }}
+            />
+          )}
+
+          {deletingTransfer && (
+            <ConfirmDeleteDialog
+              open={!!deletingTransfer}
+              onOpenChange={(v) => !v && setDeletingTransfer(null)}
+              title="Delete Transfer"
+              description={`Are you sure you want to delete transfer of ${currency(deletingTransfer.amount)} (${dateFmt(deletingTransfer.transfer_date)})? This action cannot be undone.`}
+              onConfirm={async () => {
+                await logAuditEntry({
+                  tableName: "account_transfers",
+                  recordId: deletingTransfer.id,
+                  action: "delete",
+                  module: "accounts",
+                  details: {
+                    transfer_date: deletingTransfer.transfer_date,
+                    amount: deletingTransfer.amount,
+                    from_account: deletingTransfer.from_account,
+                    to_account: deletingTransfer.to_account,
+                  },
+                });
+                await deleteTransfer.mutateAsync(deletingTransfer.id);
+                setDeletingTransfer(null);
+              }}
+            />
+          )}
+
+          <DataTable
+            rows={filteredTransfers}
+            columns={transferColumns}
+            loading={transfers.isLoading}
+            exportName="brickweld-transfers"
+            exportTitle="Account Transfers Report"
+            exportDescription="Construction Project Control System — Account Transfers Report"
+            appliedFilters={{
+              "Date Range": `${from} to ${to}`,
+              ...(transferProjectFilter !== "all"
+                ? { Project: projectName(transferProjectFilter) }
                 : {}),
             }}
           />

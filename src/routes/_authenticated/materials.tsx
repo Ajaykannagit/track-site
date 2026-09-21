@@ -21,6 +21,7 @@ import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
 import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
+import { IndentItemsSheet } from "@/components/IndentItemsSheet";
 
 export const Route = createFileRoute("/_authenticated/materials")({
   head: () => ({
@@ -97,6 +98,7 @@ function MaterialsPage() {
   const { canWriteSite, canWriteFinance, isMD } = useAuth();
 
   // Selected for Edit and Delete
+  const [viewingRequest, setViewingRequest] = useState<Request | null>(null);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<Request | null>(null);
 
@@ -206,9 +208,18 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-32",
+            className: "text-right w-36",
             cell: (r: Request) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  title="View / edit items"
+                  onClick={() => setViewingRequest(r)}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
                 <ChangeHistoryDialog
                   tableName="material_requests"
                   recordId={r.id}
@@ -1077,6 +1088,13 @@ function MaterialsPage() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Phase 2 — Indent line items side sheet */}
+      <IndentItemsSheet
+        indent={viewingRequest}
+        canEdit={canModifySite}
+        onClose={() => setViewingRequest(null)}
+      />
     </div>
   );
 }

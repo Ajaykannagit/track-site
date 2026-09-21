@@ -8,6 +8,53 @@ export type Database = {
   };
   public: {
     Tables: {
+      account_transfers: {
+        Row: {
+          amount: number;
+          created_at: string;
+          created_by: string | null;
+          from_account: string;
+          id: string;
+          project_id: string | null;
+          reference_number: string | null;
+          remarks: string | null;
+          to_account: string;
+          transfer_date: string;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          created_by?: string | null;
+          from_account: string;
+          id?: string;
+          project_id?: string | null;
+          reference_number?: string | null;
+          remarks?: string | null;
+          to_account: string;
+          transfer_date?: string;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          created_by?: string | null;
+          from_account?: string;
+          id?: string;
+          project_id?: string | null;
+          reference_number?: string | null;
+          remarks?: string | null;
+          to_account?: string;
+          transfer_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_transfers_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       app_settings: {
         Row: {
           description: string | null;
