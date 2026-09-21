@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { History, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { History, ListPlus, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -191,8 +191,21 @@ function MaterialsPage() {
       value: (r) => projectName(r.project_id),
     },
     {
-      header: "Material",
-      cell: (r) => r.material_name || "—",
+      header: "Material / Items",
+      cell: (r) => (
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium">{r.material_name || "—"}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 text-[11px] text-primary hover:bg-primary/10"
+            title="Inspect line items"
+            onClick={() => setViewingRequest(r)}
+          >
+            <ListPlus className="mr-1 size-3" /> Items
+          </Button>
+        </div>
+      ),
       value: (r) => r.material_name,
     },
     { header: "Raised", cell: (r) => dateFmt(r.request_date), value: (r) => r.request_date },
@@ -214,20 +227,16 @@ function MaterialsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7"
-                  title="View / edit items"
+                  className="size-7 text-primary hover:text-primary"
+                  title="View / edit line items"
                   onClick={() => setViewingRequest(r)}
                 >
-                  <Plus className="size-3.5" />
+                  <ListPlus className="size-3.5" />
                 </Button>
                 <ChangeHistoryDialog
                   tableName="material_requests"
                   recordId={r.id}
-                  trigger={
-                    <Button variant="ghost" size="icon" className="size-7" title="Change history">
-                      <History className="size-3.5" />
-                    </Button>
-                  }
+                  title={`Indent Audit History — ${r.request_number}`}
                 />
                 <Button
                   variant="ghost"
@@ -627,7 +636,20 @@ function MaterialsPage() {
               open={!!editingRequest}
               onOpenChange={(v) => !v && setEditingRequest(null)}
               title="Edit material indent"
-              fields={requestFields}
+              fields={[
+                ...requestFields,
+                { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
+                {
+                  name: "audit_status",
+                  label: "Verification status",
+                  type: "select",
+                  options: [
+                    { value: "verified", label: "Verified" },
+                    { value: "pending_verification", label: "Pending Verification" },
+                    { value: "corrected", label: "Corrected Entry" },
+                  ],
+                },
+              ]}
               submitting={saveRequest.isPending}
               initial={{
                 request_number: editingRequest.request_number,
@@ -638,8 +660,12 @@ function MaterialsPage() {
                 total_amount: editingRequest.total_amount,
                 material_name: editingRequest.material_name ?? "",
                 remarks: editingRequest.remarks ?? "",
+                edit_reason: "",
+                audit_status: "corrected",
               }}
               onSubmit={async (values) => {
+                const reason = String(values["edit_reason"] || "Indent updated");
+                const auditStatus = String(values["audit_status"] || "corrected");
                 await logRecordFieldDiffs(
                   "material_requests",
                   editingRequest.id,
@@ -650,16 +676,21 @@ function MaterialsPage() {
                     status: values["status"],
                     total_amount: Number(values["total_amount"] ?? 0),
                   },
-                  ["material_name", "status", "total_amount"]
+                  ["material_name", "status", "total_amount"],
+                  reason,
+                  auditStatus
                 );
+                const saveVals = {
+                  ...values,
+                  required_date: values["required_date"] || null,
+                  material_name: values["material_name"] || null,
+                  total_amount: Number(values["total_amount"] ?? 0),
+                };
+                delete (saveVals as any)["edit_reason"];
+                delete (saveVals as any)["audit_status"];
                 await saveRequest.mutateAsync({
                   id: editingRequest.id,
-                  values: {
-                    ...values,
-                    required_date: values["required_date"] || null,
-                    material_name: values["material_name"] || null,
-                    total_amount: Number(values["total_amount"] ?? 0),
-                  },
+                  values: saveVals,
                 });
                 setEditingRequest(null);
               }}

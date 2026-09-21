@@ -55,17 +55,21 @@ function ItemForm({
   onSave,
   onCancel,
   saving,
+  isEditing = false,
 }: {
-  initial: Partial<RequestItem>;
-  onSave: (v: Partial<RequestItem>) => Promise<void>;
+  initial: Partial<RequestItem> & { edit_reason?: string; audit_status?: string };
+  onSave: (v: Partial<RequestItem> & { edit_reason?: string; audit_status?: string }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
+  isEditing?: boolean;
 }) {
   const [material, setMaterial] = useState(initial.material ?? "");
   const [spec, setSpec] = useState(initial.specification ?? "");
   const [unit, setUnit] = useState(initial.unit ?? "");
   const [qty, setQty] = useState(String(initial.quantity ?? ""));
   const [rate, setRate] = useState(String(initial.rate ?? ""));
+  const [editReason, setEditReason] = useState(initial.edit_reason ?? "");
+  const [auditStatus, setAuditStatus] = useState(initial.audit_status ?? "corrected");
 
   const amount = (Number(qty) || 0) * (Number(rate) || 0);
 
@@ -78,6 +82,7 @@ function ItemForm({
       quantity: Number(qty) || 0,
       rate: Number(rate) || 0,
       amount,
+      ...(isEditing ? { edit_reason: editReason.trim() || "Item modified", audit_status: auditStatus } : {}),
     });
   };
 
@@ -139,6 +144,33 @@ function ItemForm({
           <Label className="text-xs mb-1 block">Amount</Label>
           <Input value={currency(amount)} readOnly className="h-8 text-sm bg-muted" />
         </div>
+
+        {isEditing && (
+          <>
+            <div className="sm:col-span-3">
+              <Label className="text-xs mb-1 block">Reason for edit *</Label>
+              <Input
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="Reason for modifying this line item"
+                required
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Verification status</Label>
+              <select
+                value={auditStatus}
+                onChange={(e) => setAuditStatus(e.target.value)}
+                className="w-full h-8 text-xs border rounded px-2 bg-background"
+              >
+                <option value="verified">Verified</option>
+                <option value="pending_verification">Pending Verification</option>
+                <option value="corrected">Corrected</option>
+              </select>
+            </div>
+          </>
+        )}
       </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={saving || !material.trim()}>
@@ -154,7 +186,12 @@ function ItemForm({
 
 // ── Main Sheet ────────────────────────────────────────────────────────────────
 
-export function IndentItemsSheet({ indent, canEdit, onClose }: Props) {
+export function IndentItemsSheet({
+  indent,
+  canEdit,
+  onClose,
+  onTotalUpdated,
+}: Props & { onTotalUpdated?: (newTotal: number, materialSummary: string) => void }) {
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<RequestItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<RequestItem | null>(null);
@@ -167,27 +204,53 @@ export function IndentItemsSheet({ indent, canEdit, onClose }: Props) {
 
   const saveItem = useSaveRow("material_request_items", "Item");
   const deleteItem = useDeleteRow("material_request_items", "Item");
+  const saveIndent = useSaveRow("material_requests", "Indent");
 
   const total = (items.data ?? []).reduce((s, i) => s + i.amount, 0);
 
-  const handleAddItem = async (vals: Partial<RequestItem>) => {
-    await saveItem.mutateAsync({
-      values: { ...vals, request_id: indent!.id },
+  const syncParentIndent = async (itemList: RequestItem[]) => {
+    if (!indent) return;
+    const newTotal = itemList.reduce((s, i) => s + i.amount, 0);
+    const summaryNames = Array.from(new Set(itemList.map((i) => i.material))).slice(0, 3).join(", ");
+    await saveIndent.mutateAsync({
+      id: indent.id,
+      values: {
+        total_amount: newTotal,
+        material_name: summaryNames || null,
+      },
     });
+    onTotalUpdated?.(newTotal, summaryNames);
+  };
+
+  const handleAddItem = async (vals: Partial<RequestItem>) => {
+    const { edit_reason, audit_status, ...itemVals } = vals as any;
+    await saveItem.mutateAsync({
+      values: { ...itemVals, request_id: indent!.id },
+    });
+    const updated = [...(items.data ?? []), { ...itemVals, id: "temp", request_id: indent!.id } as RequestItem];
+    await syncParentIndent(updated);
     setAddingItem(false);
   };
 
-  const handleEditItem = async (vals: Partial<RequestItem>) => {
+  const handleEditItem = async (vals: Partial<RequestItem> & { edit_reason?: string; audit_status?: string }) => {
     if (!editingItem) return;
+    const reason = vals.edit_reason || "Item modified";
+    const auditStatus = vals.audit_status || "corrected";
+    const { edit_reason, audit_status, ...itemVals } = vals;
+
     await logRecordFieldDiffs(
       "material_request_items",
       editingItem.id,
       "materials",
       editingItem as Record<string, unknown>,
-      vals as Record<string, unknown>,
-      ["material", "specification", "unit", "quantity", "rate", "amount"]
+      itemVals as Record<string, unknown>,
+      ["material", "specification", "unit", "quantity", "rate", "amount"],
+      reason,
+      auditStatus
     );
-    await saveItem.mutateAsync({ id: editingItem.id, values: vals });
+    await saveItem.mutateAsync({ id: editingItem.id, values: itemVals });
+    const updated = (items.data ?? []).map((i) => (i.id === editingItem.id ? { ...i, ...itemVals } : i));
+    await syncParentIndent(updated);
     setEditingItem(null);
   };
 
@@ -201,6 +264,8 @@ export function IndentItemsSheet({ indent, canEdit, onClose }: Props) {
       details: { material: deletingItem.material },
     });
     await deleteItem.mutateAsync(deletingItem.id);
+    const updated = (items.data ?? []).filter((i) => i.id !== deletingItem.id);
+    await syncParentIndent(updated);
     setDeletingItem(null);
   };
 
@@ -266,6 +331,7 @@ export function IndentItemsSheet({ indent, canEdit, onClose }: Props) {
                             onSave={handleEditItem}
                             onCancel={() => setEditingItem(null)}
                             saving={saveItem.isPending}
+                            isEditing={true}
                           />
                         </TableCell>
                       </TableRow>

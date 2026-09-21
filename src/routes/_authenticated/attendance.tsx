@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
 import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
+import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
@@ -297,9 +298,14 @@ function AttendancePage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-28",
             cell: (r: Row) => (
               <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="attendance"
+                  recordId={r.id}
+                  title="Attendance Audit History"
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -418,6 +424,20 @@ function AttendancePage() {
           title="Edit attendance"
           description="Update attendance record details, hours, rates or remarks."
           submitting={save.isPending}
+          fields={[
+            ...formFields,
+            { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
+            {
+              name: "audit_status",
+              label: "Verification status",
+              type: "select",
+              options: [
+                { value: "verified", label: "Verified" },
+                { value: "pending_verification", label: "Pending Verification" },
+                { value: "corrected", label: "Corrected Entry" },
+              ],
+            },
+          ]}
           initial={{
             attendance_date: editingRow.attendance_date,
             project_id: editingRow.project_id ?? "",
@@ -431,9 +451,12 @@ function AttendancePage() {
             wage_rate: editingRow.wage_rate,
             calculated_wage: editingRow.calculated_wage,
             remarks: editingRow.remarks ?? "",
+            edit_reason: "",
+            audit_status: "corrected",
           }}
-          fields={formFields}
           onSubmit={async (values) => {
+            const reason = String(values["edit_reason"] || "Attendance updated");
+            const auditStatus = String(values["audit_status"] || "corrected");
             await logRecordFieldDiffs(
               "attendance",
               editingRow.id,
@@ -445,7 +468,9 @@ function AttendancePage() {
                 ot_hours: Number(values["ot_hours"] ?? editingRow.ot_hours),
                 calculated_wage: Number(values["calculated_wage"] ?? editingRow.calculated_wage),
               },
-              ["status", "working_hours", "ot_hours", "calculated_wage"]
+              ["status", "working_hours", "ot_hours", "calculated_wage"],
+              reason,
+              auditStatus
             );
             await handleFormSubmit(values, editingRow.id);
             setEditingRow(null);

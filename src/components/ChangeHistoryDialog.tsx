@@ -36,8 +36,9 @@ export function ChangeHistoryDialog({
     ],
     order: { col: "performed_at", asc: false },
     limit: 100,
-    enabled: open,
   });
+
+  const hasModifications = (logs.data ?? []).some((l: any) => l.action === "update" || l.old_value !== null);
 
   const exportAudit = async (type: "excel" | "csv") => {
     const list = logs.data ?? [];
@@ -66,8 +67,13 @@ export function ChangeHistoryDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button variant="ghost" size="icon" className="size-7" title="View change history">
-            <History className="size-3.5" />
+          <Button
+            variant={hasModifications ? "destructive" : "ghost"}
+            size="icon"
+            className={`size-7 ${hasModifications ? "bg-red-500/15 text-red-600 hover:bg-red-500/25 hover:text-red-700 dark:bg-red-950/50 dark:text-red-400" : ""}`}
+            title={hasModifications ? "Modified record — view change history" : "View change history"}
+          >
+            <History className={`size-3.5 ${hasModifications ? "text-red-600 dark:text-red-400" : ""}`} />
           </Button>
         )}
       </DialogTrigger>

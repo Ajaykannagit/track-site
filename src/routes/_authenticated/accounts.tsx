@@ -605,7 +605,20 @@ function AccountsPage() {
               open={!!editingExpense}
               onOpenChange={(v) => !v && setEditingExpense(null)}
               title="Edit expense"
-              fields={expenseFields}
+              fields={[
+                ...expenseFields,
+                { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
+                {
+                  name: "audit_status",
+                  label: "Verification status",
+                  type: "select",
+                  options: [
+                    { value: "verified", label: "Verified" },
+                    { value: "pending_verification", label: "Pending Verification" },
+                    { value: "corrected", label: "Corrected Entry" },
+                  ],
+                },
+              ]}
               submitting={saveExpense.isPending}
               initial={{
                 expense_date: editingExpense.expense_date,
@@ -615,21 +628,29 @@ function AccountsPage() {
                 payment_method: editingExpense.payment_method ?? "cash",
                 amount: editingExpense.amount,
                 description: editingExpense.description ?? "",
+                edit_reason: "",
+                audit_status: "corrected",
               }}
               onSubmit={async (values) => {
+                const reason = String(values["edit_reason"] || "Expense updated");
+                const auditStatus = String(values["audit_status"] || "corrected");
                 const newVals = {
                   ...values,
                   project_id: values["project_id"] || null,
                   material_name: values["material_name"] || null,
                   amount: Number(values["amount"] ?? 0),
                 };
+                delete (newVals as any)["edit_reason"];
+                delete (newVals as any)["audit_status"];
                 await logRecordFieldDiffs(
                   "expenses",
                   editingExpense.id,
                   "expenses",
                   editingExpense as any,
                   newVals,
-                  ["amount", "category", "material_name", "payment_method", "description", "expense_date"]
+                  ["amount", "category", "material_name", "payment_method", "description", "expense_date"],
+                  reason,
+                  auditStatus
                 );
                 await saveExpense.mutateAsync({
                   id: editingExpense.id,
@@ -773,7 +794,20 @@ function AccountsPage() {
               open={!!editingClosing}
               onOpenChange={(v) => !v && setEditingClosing(null)}
               title="Edit cash closing"
-              fields={closingFields}
+              fields={[
+                ...closingFields,
+                { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
+                {
+                  name: "audit_status",
+                  label: "Verification status",
+                  type: "select",
+                  options: [
+                    { value: "verified", label: "Verified" },
+                    { value: "pending_verification", label: "Pending Verification" },
+                    { value: "corrected", label: "Corrected Entry" },
+                  ],
+                },
+              ]}
               submitting={saveClosing.isPending}
               initial={{
                 closing_date: editingClosing.closing_date,
@@ -784,8 +818,12 @@ function AccountsPage() {
                 cash_expenses: editingClosing.cash_expenses,
                 other_transactions: editingClosing.other_transactions,
                 remarks: editingClosing.remarks ?? "",
+                edit_reason: "",
+                audit_status: "corrected",
               }}
               onSubmit={async (values) => {
+                const reason = String(values["edit_reason"] || "Closing updated");
+                const auditStatus = String(values["audit_status"] || "corrected");
                 const opening = Number(values["opening_cash"] ?? 0);
                 const received = Number(values["cash_received"] ?? 0);
                 const spent = Number(values["cash_expenses"] ?? 0);
@@ -803,20 +841,25 @@ function AccountsPage() {
                     cash_expenses: spent,
                     other_transactions: other,
                   },
-                  ["closing_date", "account_type", "opening_cash", "cash_received", "cash_expenses", "other_transactions"]
+                  ["closing_date", "account_type", "opening_cash", "cash_received", "cash_expenses", "other_transactions"],
+                  reason,
+                  auditStatus
                 );
+                const saveVals = {
+                  ...values,
+                  project_id: values["project_id"] || null,
+                  account_type: values["account_type"] || "petty_cash",
+                  opening_cash: opening,
+                  cash_received: received,
+                  cash_expenses: spent,
+                  other_transactions: other,
+                  closing_cash: opening + received - spent + other,
+                };
+                delete (saveVals as any)["edit_reason"];
+                delete (saveVals as any)["audit_status"];
                 await saveClosing.mutateAsync({
                   id: editingClosing.id,
-                  values: {
-                    ...values,
-                    project_id: values["project_id"] || null,
-                    account_type: values["account_type"] || "petty_cash",
-                    opening_cash: opening,
-                    cash_received: received,
-                    cash_expenses: spent,
-                    other_transactions: other,
-                    closing_cash: opening + received - spent + other,
-                  },
+                  values: saveVals,
                 });
                 setEditingClosing(null);
               }}
