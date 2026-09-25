@@ -20,8 +20,12 @@ import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
 import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
-import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 import { IndentItemsSheet } from "@/components/IndentItemsSheet";
+import { PoItemsSheet } from "@/components/PoItemsSheet";
+import { ReceiptItemsSheet } from "@/components/ReceiptItemsSheet";
+import { MultiMaterialIndentDialog } from "@/components/MultiMaterialIndentDialog";
+import { MultiMaterialPoDialog } from "@/components/MultiMaterialPoDialog";
+import { MultiMaterialReceiptDialog } from "@/components/MultiMaterialReceiptDialog";
 
 export const Route = createFileRoute("/_authenticated/materials")({
   head: () => ({
@@ -92,19 +96,24 @@ type SupplierPayment = {
   remarks: string | null;
 };
 
-const docNumber = (prefix: string) => `${prefix}-${Date.now().toString().slice(-8)}`;
-
 function MaterialsPage() {
   const { canWriteSite, canWriteFinance, isMD } = useAuth();
 
-  // Selected for Edit and Delete
+  // Viewing Line Items
   const [viewingRequest, setViewingRequest] = useState<Request | null>(null);
+  const [viewingPo, setViewingPo] = useState<Po | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null);
+
+  // Multi-material Dialog States
+  const [newIndentOpen, setNewIndentOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<Request | null>(null);
 
+  const [newPoOpen, setNewPoOpen] = useState(false);
   const [editingPo, setEditingPo] = useState<Po | null>(null);
   const [deletingPo, setDeletingPo] = useState<Po | null>(null);
 
+  const [newReceiptOpen, setNewReceiptOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [deletingReceipt, setDeletingReceipt] = useState<Receipt | null>(null);
 
@@ -135,15 +144,9 @@ function MaterialsPage() {
     limit: 300,
   });
 
-  const saveRequest = useSaveRow("material_requests", "Material request");
   const deleteRequest = useDeleteRow("material_requests", "Material request");
-
-  const savePo = useSaveRow("purchase_orders", "Purchase order");
   const deletePo = useDeleteRow("purchase_orders", "Purchase order");
-
-  const saveReceipt = useSaveRow("material_receipts", "Material receipt");
   const deleteReceipt = useDeleteRow("material_receipts", "Material receipt");
-
   const savePayment = useSaveRow("supplier_payments", "Supplier payment");
   const deletePayment = useDeleteRow("supplier_payments", "Supplier payment");
 
@@ -151,6 +154,14 @@ function MaterialsPage() {
   const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
   const supplierOptions = (suppliers.data ?? []).map((s) => ({ value: s.id, label: s.name }));
+  const indentOptions = (requests.data ?? []).map((r) => ({
+    value: r.id,
+    label: `${r.request_number} — ${projectName(r.project_id)} (${currency(r.total_amount)})`,
+  }));
+  const poOptions = (pos.data ?? []).map((p) => ({
+    value: p.id,
+    label: `${p.po_number} — ${supplierName(p.supplier_id)} (${currency(p.total_amount)})`,
+  }));
 
   // Permissions
   const canModifySite = canWriteSite || isMD;
@@ -194,7 +205,7 @@ function MaterialsPage() {
       header: "Material / Items",
       cell: (r) => (
         <div className="flex items-center gap-1.5">
-          <span className="font-medium">{r.material_name || "—"}</span>
+          <span className="font-medium">{r.material_name || "Multiple items"}</span>
           <Button
             variant="ghost"
             size="sm"
@@ -212,7 +223,7 @@ function MaterialsPage() {
     { header: "Required", cell: (r) => dateFmt(r.required_date), value: (r) => r.required_date },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
     {
-      header: "Value",
+      header: "Estimated Value",
       cell: (r) => currency(r.total_amount),
       value: (r) => r.total_amount,
       className: "text-right",
@@ -228,7 +239,7 @@ function MaterialsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-7 text-primary hover:text-primary"
-                  title="View / edit line items"
+                  title="View line items"
                   onClick={() => setViewingRequest(r)}
                 >
                   <ListPlus className="size-3.5" />
@@ -242,6 +253,7 @@ function MaterialsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-7"
+                  title="Edit indent"
                   onClick={() => setEditingRequest(r)}
                 >
                   <Pencil className="size-3.5" />
@@ -250,6 +262,7 @@ function MaterialsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-7 text-destructive hover:text-destructive"
+                  title="Delete indent"
                   onClick={() => setDeletingRequest(r)}
                 >
                   <Trash2 className="size-3.5" />
@@ -277,7 +290,22 @@ function MaterialsPage() {
     { header: "Date", cell: (r) => dateFmt(r.po_date), value: (r) => r.po_date },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
     {
-      header: "Total",
+      header: "Items",
+      cell: (r) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-1.5 text-[11px] text-primary hover:bg-primary/10"
+          title="Inspect PO items"
+          onClick={() => setViewingPo(r)}
+        >
+          <ListPlus className="mr-1 size-3" /> View Items
+        </Button>
+      ),
+      value: (r) => r.po_number,
+    },
+    {
+      header: "Total Value",
       cell: (r) => currency(r.total_amount),
       value: (r) => r.total_amount,
       className: "text-right",
@@ -286,13 +314,28 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-28",
             cell: (r: Po) => (
               <div className="flex items-center justify-end gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-7 text-primary hover:text-primary"
+                  title="View line items"
+                  onClick={() => setViewingPo(r)}
+                >
+                  <ListPlus className="size-3.5" />
+                </Button>
+                <ChangeHistoryDialog
+                  tableName="purchase_orders"
+                  recordId={r.id}
+                  title={`PO Audit History — ${r.po_number}`}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-7"
+                  title="Edit PO"
                   onClick={() => setEditingPo(r)}
                 >
                   <Pencil className="size-3.5" />
@@ -301,6 +344,7 @@ function MaterialsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-7 text-destructive hover:text-destructive"
+                  title="Delete PO"
                   onClick={() => setDeletingPo(r)}
                 >
                   <Trash2 className="size-3.5" />
@@ -326,9 +370,24 @@ function MaterialsPage() {
       value: (r) => supplierName(r.supplier_id),
     },
     { header: "Date", cell: (r) => dateFmt(r.receipt_date), value: (r) => r.receipt_date },
+    {
+      header: "Items",
+      cell: (r) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-1.5 text-[11px] text-primary hover:bg-primary/10"
+          title="Inspect received items"
+          onClick={() => setViewingReceipt(r)}
+        >
+          <ListPlus className="mr-1 size-3" /> View Items
+        </Button>
+      ),
+      value: (r) => r.receipt_number,
+    },
     { header: "Remarks", cell: (r) => r.remarks ?? "—", value: (r) => r.remarks },
     {
-      header: "Value",
+      header: "Received Value",
       cell: (r) => currency(r.total_amount),
       value: (r) => r.total_amount,
       className: "text-right",
@@ -337,13 +396,28 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-28",
             cell: (r: Receipt) => (
               <div className="flex items-center justify-end gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-7 text-primary hover:text-primary"
+                  title="View line items"
+                  onClick={() => setViewingReceipt(r)}
+                >
+                  <ListPlus className="size-3.5" />
+                </Button>
+                <ChangeHistoryDialog
+                  tableName="material_receipts"
+                  recordId={r.id}
+                  title={`GRN Audit History — ${r.receipt_number}`}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-7"
+                  title="Edit GRN"
                   onClick={() => setEditingReceipt(r)}
                 >
                   <Pencil className="size-3.5" />
@@ -352,6 +426,7 @@ function MaterialsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-7 text-destructive hover:text-destructive"
+                  title="Delete GRN"
                   onClick={() => setDeletingReceipt(r)}
                 >
                   <Trash2 className="size-3.5" />
@@ -388,7 +463,7 @@ function MaterialsPage() {
       value: (r) => r.reference_number,
     },
     {
-      header: "Amount",
+      header: "Amount Paid",
       cell: (r) => currency(r.amount),
       value: (r) => r.amount,
       className: "text-right",
@@ -400,6 +475,11 @@ function MaterialsPage() {
             className: "text-right w-24",
             cell: (r: SupplierPayment) => (
               <div className="flex items-center justify-end gap-1">
+                <ChangeHistoryDialog
+                  tableName="supplier_payments"
+                  recordId={r.id}
+                  title={`Payment Audit History — ${currency(r.amount)}`}
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -423,32 +503,6 @@ function MaterialsPage() {
       : []),
   ];
 
-  // Field specs
-  const requestFields: Field[] = [
-    { name: "request_number", label: "Indent number", required: true },
-    {
-      name: "project_id",
-      label: "Project",
-      type: "select",
-      required: true,
-      options: projectOptions,
-    },
-    { name: "request_date", label: "Request date", type: "date", required: true },
-    { name: "required_date", label: "Required by", type: "date" },
-    { name: "material_name", label: "Material name (optional)" },
-    {
-      name: "status",
-      label: "Status",
-      type: "select",
-      options: ["draft", "submitted", "verified", "approved", "rejected", "closed"].map((s) => ({
-        value: s,
-        label: s,
-      })),
-    },
-    { name: "total_amount", label: "Estimated value (₹)", type: "number" },
-    { name: "remarks", label: "Remarks", type: "textarea" },
-  ];
-
   const paymentFields: Field[] = [
     { name: "payment_date", label: "Payment date", type: "date", required: true },
     {
@@ -463,70 +517,16 @@ function MaterialsPage() {
       name: "po_id",
       label: "Against PO (optional)",
       type: "select",
-      options: (pos.data ?? []).map((p) => ({ value: p.id, label: p.po_number })),
+      options: (pos.data ?? []).map((p) => ({ value: p.id, label: `${p.po_number} (${currency(p.total_amount)})` })),
     },
     {
       name: "payment_method",
       label: "Method",
       type: "select",
-      options: ["bank", "cash", "upi", "cheque"].map((m) => ({ value: m, label: m })),
+      options: ["bank", "cash", "upi", "cheque", "neft", "rtgs"].map((m) => ({ value: m, label: m.toUpperCase() })),
     },
     { name: "amount", label: "Amount (₹)", type: "number", required: true },
-    { name: "reference_number", label: "Reference number" },
-    { name: "remarks", label: "Remarks", type: "textarea" },
-  ];
-
-  const poFields: Field[] = [
-    { name: "po_number", label: "PO number", required: true },
-    {
-      name: "project_id",
-      label: "Project",
-      type: "select",
-      required: true,
-      options: projectOptions,
-    },
-    { name: "supplier_id", label: "Supplier", type: "select", options: supplierOptions },
-    {
-      name: "request_id",
-      label: "Against indent",
-      type: "select",
-      options: (requests.data ?? []).map((r) => ({ value: r.id, label: r.request_number })),
-    },
-    { name: "po_date", label: "PO date", type: "date", required: true },
-    {
-      name: "status",
-      label: "Status",
-      type: "select",
-      options: ["draft", "approved", "ordered", "partially_received", "received", "closed"].map(
-        (s) => ({
-          value: s,
-          label: s.replace(/_/g, " "),
-        }),
-      ),
-    },
-    { name: "subtotal", label: "Subtotal (₹)", type: "number", required: true },
-    { name: "tax_percent", label: "Tax %", type: "number" },
-    { name: "terms", label: "Terms", type: "textarea" },
-  ];
-
-  const receiptFields: Field[] = [
-    { name: "receipt_number", label: "GRN number", required: true },
-    {
-      name: "project_id",
-      label: "Project",
-      type: "select",
-      required: true,
-      options: projectOptions,
-    },
-    { name: "supplier_id", label: "Supplier", type: "select", options: supplierOptions },
-    {
-      name: "po_id",
-      label: "Against PO",
-      type: "select",
-      options: (pos.data ?? []).map((p) => ({ value: p.id, label: p.po_number })),
-    },
-    { name: "receipt_date", label: "Receipt date", type: "date", required: true },
-    { name: "total_amount", label: "Received value (₹)", type: "number" },
+    { name: "reference_number", label: "Reference number / UTR" },
     { name: "remarks", label: "Remarks", type: "textarea" },
   ];
 
@@ -534,7 +534,7 @@ function MaterialsPage() {
     <div>
       <PageHeader
         title="Materials"
-        description="Indent → purchase order → site receipt, with approval status."
+        description="Multi-material workflow: Indent → Purchase Order → Site Receipt → Supplier Payment."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -562,43 +562,17 @@ function MaterialsPage() {
         <TabsList className="no-print">
           <TabsTrigger value="requests">Indents</TabsTrigger>
           <TabsTrigger value="pos">Purchase orders</TabsTrigger>
-          <TabsTrigger value="receipts">Receipts</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="receipts">Receipts (GRN)</TabsTrigger>
+          <TabsTrigger value="payments">Supplier Payments</TabsTrigger>
         </TabsList>
-
 
         {/* ================= INDENTS ================= */}
         <TabsContent value="requests" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {canModifySite && (
-              <FormDialog
-                title="Raise material indent"
-                description="Request materials for a project site."
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 size-4" /> New indent
-                  </Button>
-                }
-                submitting={saveRequest.isPending}
-                initial={{
-                  request_number: docNumber("MR"),
-                  request_date: today(),
-                  status: "draft",
-                  total_amount: 0,
-                  material_name: "",
-                }}
-                fields={requestFields}
-                onSubmit={async (values) => {
-                  await saveRequest.mutateAsync({
-                    values: {
-                      ...values,
-                      required_date: values["required_date"] || null,
-                      material_name: values["material_name"] || null,
-                      total_amount: Number(values["total_amount"] ?? 0),
-                    },
-                  });
-                }}
-              />
+              <Button onClick={() => setNewIndentOpen(true)}>
+                <Plus className="mr-2 size-4" /> New Indent (+ Add More Material)
+              </Button>
             )}
 
             {/* Indent Project Filter */}
@@ -631,68 +605,24 @@ function MaterialsPage() {
             </div>
           </div>
 
+          {/* New Indent Dialog with multiple materials */}
+          <MultiMaterialIndentDialog
+            open={newIndentOpen}
+            onOpenChange={setNewIndentOpen}
+            projectOptions={projectOptions}
+            onSuccess={() => requests.refetch()}
+          />
+
+          {/* Edit Indent Dialog */}
           {editingRequest && (
-            <FormDialog
+            <MultiMaterialIndentDialog
               open={!!editingRequest}
               onOpenChange={(v) => !v && setEditingRequest(null)}
-              title="Edit material indent"
-              fields={[
-                ...requestFields,
-                { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
-                {
-                  name: "audit_status",
-                  label: "Verification status",
-                  type: "select",
-                  options: [
-                    { value: "verified", label: "Verified" },
-                    { value: "pending_verification", label: "Pending Verification" },
-                    { value: "corrected", label: "Corrected Entry" },
-                  ],
-                },
-              ]}
-              submitting={saveRequest.isPending}
-              initial={{
-                request_number: editingRequest.request_number,
-                project_id: editingRequest.project_id,
-                request_date: editingRequest.request_date,
-                required_date: editingRequest.required_date ?? "",
-                status: editingRequest.status,
-                total_amount: editingRequest.total_amount,
-                material_name: editingRequest.material_name ?? "",
-                remarks: editingRequest.remarks ?? "",
-                edit_reason: "",
-                audit_status: "corrected",
-              }}
-              onSubmit={async (values) => {
-                const reason = String(values["edit_reason"] || "Indent updated");
-                const auditStatus = String(values["audit_status"] || "corrected");
-                await logRecordFieldDiffs(
-                  "material_requests",
-                  editingRequest.id,
-                  "materials",
-                  editingRequest as Record<string, unknown>,
-                  {
-                    material_name: values["material_name"] || null,
-                    status: values["status"],
-                    total_amount: Number(values["total_amount"] ?? 0),
-                  },
-                  ["material_name", "status", "total_amount"],
-                  reason,
-                  auditStatus
-                );
-                const saveVals = {
-                  ...values,
-                  required_date: values["required_date"] || null,
-                  material_name: values["material_name"] || null,
-                  total_amount: Number(values["total_amount"] ?? 0),
-                };
-                delete (saveVals as any)["edit_reason"];
-                delete (saveVals as any)["audit_status"];
-                await saveRequest.mutateAsync({
-                  id: editingRequest.id,
-                  values: saveVals,
-                });
+              projectOptions={projectOptions}
+              editingIndent={editingRequest}
+              onSuccess={() => {
                 setEditingRequest(null);
+                requests.refetch();
               }}
             />
           )}
@@ -701,16 +631,13 @@ function MaterialsPage() {
             <ConfirmDeleteDialog
               open={!!deletingRequest}
               onOpenChange={(v) => !v && setDeletingRequest(null)}
-              title="Delete indent"
-              description={`Are you sure you want to delete indent "${deletingRequest.request_number}"? This action cannot be undone.`}
+              tableName="material_requests"
+              recordId={deletingRequest.id}
+              recordTitle={`Indent ${deletingRequest.request_number}`}
+              recordData={deletingRequest}
+              title="Delete Indent"
+              description={`Delete indent "${deletingRequest.request_number}" (${currency(deletingRequest.total_amount)})? This action requires MD approval.`}
               onConfirm={async () => {
-                await logAuditEntry({
-                  tableName: "material_requests",
-                  recordId: deletingRequest.id,
-                  action: "delete",
-                  module: "materials",
-                  details: { request_number: deletingRequest.request_number, material_name: deletingRequest.material_name },
-                });
                 await deleteRequest.mutateAsync(deletingRequest.id);
                 setDeletingRequest(null);
               }}
@@ -734,40 +661,9 @@ function MaterialsPage() {
         <TabsContent value="pos" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {canModifyFinance && (
-              <FormDialog
-                title="Create purchase order"
-                description="Issue a purchase order to a supplier."
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 size-4" /> New PO
-                  </Button>
-                }
-                submitting={savePo.isPending}
-                initial={{
-                  po_number: docNumber("PO"),
-                  po_date: today(),
-                  status: "draft",
-                  subtotal: 0,
-                  tax_percent: 18,
-                }}
-                fields={poFields}
-                onSubmit={async (values) => {
-                  const subtotal = Number(values["subtotal"] ?? 0);
-                  const taxPercent = Number(values["tax_percent"] ?? 0);
-                  const taxAmount = Math.round((subtotal * taxPercent) / 100);
-                  await savePo.mutateAsync({
-                    values: {
-                      ...values,
-                      supplier_id: values["supplier_id"] || null,
-                      request_id: values["request_id"] || null,
-                      subtotal,
-                      tax_percent: taxPercent,
-                      tax_amount: taxAmount,
-                      total_amount: subtotal + taxAmount,
-                    },
-                  });
-                }}
-              />
+              <Button onClick={() => setNewPoOpen(true)}>
+                <Plus className="mr-2 size-4" /> New Purchase Order (+ Add More Material)
+              </Button>
             )}
 
             {/* PO Project Filter */}
@@ -800,41 +696,28 @@ function MaterialsPage() {
             </div>
           </div>
 
+          {/* New PO Dialog with multiple materials */}
+          <MultiMaterialPoDialog
+            open={newPoOpen}
+            onOpenChange={setNewPoOpen}
+            projectOptions={projectOptions}
+            supplierOptions={supplierOptions}
+            indentOptions={indentOptions}
+            onSuccess={() => pos.refetch()}
+          />
+
+          {/* Edit PO Dialog */}
           {editingPo && (
-            <FormDialog
+            <MultiMaterialPoDialog
               open={!!editingPo}
               onOpenChange={(v) => !v && setEditingPo(null)}
-              title="Edit purchase order"
-              fields={poFields}
-              submitting={savePo.isPending}
-              initial={{
-                po_number: editingPo.po_number,
-                project_id: editingPo.project_id,
-                supplier_id: editingPo.supplier_id ?? "",
-                request_id: editingPo.request_id ?? "",
-                po_date: editingPo.po_date,
-                status: editingPo.status,
-                subtotal: editingPo.subtotal,
-                tax_percent: editingPo.tax_percent,
-                terms: editingPo.terms ?? "",
-              }}
-              onSubmit={async (values) => {
-                const subtotal = Number(values["subtotal"] ?? 0);
-                const taxPercent = Number(values["tax_percent"] ?? 0);
-                const taxAmount = Math.round((subtotal * taxPercent) / 100);
-                await savePo.mutateAsync({
-                  id: editingPo.id,
-                  values: {
-                    ...values,
-                    supplier_id: values["supplier_id"] || null,
-                    request_id: values["request_id"] || null,
-                    subtotal,
-                    tax_percent: taxPercent,
-                    tax_amount: taxAmount,
-                    total_amount: subtotal + taxAmount,
-                  },
-                });
+              projectOptions={projectOptions}
+              supplierOptions={supplierOptions}
+              indentOptions={indentOptions}
+              editingPo={editingPo}
+              onSuccess={() => {
                 setEditingPo(null);
+                pos.refetch();
               }}
             />
           )}
@@ -843,8 +726,12 @@ function MaterialsPage() {
             <ConfirmDeleteDialog
               open={!!deletingPo}
               onOpenChange={(v) => !v && setDeletingPo(null)}
-              title="Delete purchase order"
-              description={`Are you sure you want to delete PO "${deletingPo.po_number}"? This action cannot be undone.`}
+              tableName="purchase_orders"
+              recordId={deletingPo.id}
+              recordTitle={`PO ${deletingPo.po_number}`}
+              recordData={deletingPo}
+              title="Delete Purchase Order"
+              description={`Delete PO "${deletingPo.po_number}" (${currency(deletingPo.total_amount)})? This action requires MD approval.`}
               onConfirm={async () => {
                 await deletePo.mutateAsync(deletingPo.id);
                 setDeletingPo(null);
@@ -865,36 +752,13 @@ function MaterialsPage() {
           />
         </TabsContent>
 
-        {/* ================= RECEIPTS ================= */}
+        {/* ================= RECEIPTS (GRN) ================= */}
         <TabsContent value="receipts" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {canModifySite && (
-              <FormDialog
-                title="Record material receipt"
-                description="Log materials received at site against a purchase order."
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 size-4" /> New receipt
-                  </Button>
-                }
-                submitting={saveReceipt.isPending}
-                initial={{
-                  receipt_number: docNumber("GRN"),
-                  receipt_date: today(),
-                  total_amount: 0,
-                }}
-                fields={receiptFields}
-                onSubmit={async (values) => {
-                  await saveReceipt.mutateAsync({
-                    values: {
-                      ...values,
-                      supplier_id: values["supplier_id"] || null,
-                      po_id: values["po_id"] || null,
-                      total_amount: Number(values["total_amount"] ?? 0),
-                    },
-                  });
-                }}
-              />
+              <Button onClick={() => setNewReceiptOpen(true)}>
+                <Plus className="mr-2 size-4" /> New Receipt / GRN (+ Add More Material)
+              </Button>
             )}
 
             {/* GRN Project Filter */}
@@ -927,33 +791,28 @@ function MaterialsPage() {
             </div>
           </div>
 
+          {/* New Receipt Dialog with multiple materials */}
+          <MultiMaterialReceiptDialog
+            open={newReceiptOpen}
+            onOpenChange={setNewReceiptOpen}
+            projectOptions={projectOptions}
+            supplierOptions={supplierOptions}
+            poOptions={poOptions}
+            onSuccess={() => receipts.refetch()}
+          />
+
+          {/* Edit Receipt Dialog */}
           {editingReceipt && (
-            <FormDialog
+            <MultiMaterialReceiptDialog
               open={!!editingReceipt}
               onOpenChange={(v) => !v && setEditingReceipt(null)}
-              title="Edit material receipt"
-              fields={receiptFields}
-              submitting={saveReceipt.isPending}
-              initial={{
-                receipt_number: editingReceipt.receipt_number,
-                project_id: editingReceipt.project_id,
-                supplier_id: editingReceipt.supplier_id ?? "",
-                po_id: editingReceipt.po_id ?? "",
-                receipt_date: editingReceipt.receipt_date,
-                total_amount: editingReceipt.total_amount,
-                remarks: editingReceipt.remarks ?? "",
-              }}
-              onSubmit={async (values) => {
-                await saveReceipt.mutateAsync({
-                  id: editingReceipt.id,
-                  values: {
-                    ...values,
-                    supplier_id: values["supplier_id"] || null,
-                    po_id: values["po_id"] || null,
-                    total_amount: Number(values["total_amount"] ?? 0),
-                  },
-                });
+              projectOptions={projectOptions}
+              supplierOptions={supplierOptions}
+              poOptions={poOptions}
+              editingReceipt={editingReceipt}
+              onSuccess={() => {
                 setEditingReceipt(null);
+                receipts.refetch();
               }}
             />
           )}
@@ -962,8 +821,12 @@ function MaterialsPage() {
             <ConfirmDeleteDialog
               open={!!deletingReceipt}
               onOpenChange={(v) => !v && setDeletingReceipt(null)}
-              title="Delete receipt"
-              description={`Are you sure you want to delete GRN "${deletingReceipt.receipt_number}"? This action cannot be undone.`}
+              tableName="material_receipts"
+              recordId={deletingReceipt.id}
+              recordTitle={`GRN ${deletingReceipt.receipt_number}`}
+              recordData={deletingReceipt}
+              title="Delete Material Receipt"
+              description={`Delete GRN "${deletingReceipt.receipt_number}" (${currency(deletingReceipt.total_amount)})? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteReceipt.mutateAsync(deletingReceipt.id);
                 setDeletingReceipt(null);
@@ -990,7 +853,7 @@ function MaterialsPage() {
             {canModifyFinance && (
               <FormDialog
                 title="Record supplier payment"
-                description="Log a payment made to a supplier."
+                description="Log a payment made to a supplier against a Purchase Order or invoice."
                 trigger={
                   <Button>
                     <Plus className="mr-2 size-4" /> New payment
@@ -1064,7 +927,10 @@ function MaterialsPage() {
               open={!!editingPayment}
               onOpenChange={(v) => !v && setEditingPayment(null)}
               title="Edit supplier payment"
-              fields={paymentFields}
+              fields={[
+                ...paymentFields,
+                { name: "edit_reason", label: "Reason for edit *", type: "text", required: true },
+              ]}
               submitting={savePayment.isPending}
               initial={{
                 payment_date: editingPayment.payment_date,
@@ -1075,15 +941,33 @@ function MaterialsPage() {
                 amount: editingPayment.amount,
                 reference_number: editingPayment.reference_number ?? "",
                 remarks: editingPayment.remarks ?? "",
+                edit_reason: "",
               }}
               onSubmit={async (values) => {
+                const reason = String(values["edit_reason"] || "Payment updated");
+                await logRecordFieldDiffs(
+                  "supplier_payments",
+                  editingPayment.id,
+                  "materials",
+                  editingPayment as Record<string, unknown>,
+                  {
+                    amount: Number(values["amount"] ?? 0),
+                    payment_method: values["payment_method"],
+                    reference_number: values["reference_number"] || null,
+                  },
+                  ["amount", "payment_method", "reference_number"],
+                  reason,
+                  "corrected"
+                );
+                const saveVals = {
+                  ...values,
+                  po_id: values["po_id"] || null,
+                  amount: Number(values["amount"] ?? 0),
+                };
+                delete (saveVals as any)["edit_reason"];
                 await savePayment.mutateAsync({
                   id: editingPayment.id,
-                  values: {
-                    ...values,
-                    po_id: values["po_id"] || null,
-                    amount: Number(values["amount"] ?? 0),
-                  },
+                  values: saveVals,
                 });
                 setEditingPayment(null);
               }}
@@ -1094,8 +978,12 @@ function MaterialsPage() {
             <ConfirmDeleteDialog
               open={!!deletingPayment}
               onOpenChange={(v) => !v && setDeletingPayment(null)}
-              title="Delete payment"
-              description={`Are you sure you want to delete this payment of ${currency(deletingPayment.amount)}? This action cannot be undone.`}
+              tableName="supplier_payments"
+              recordId={deletingPayment.id}
+              recordTitle={`Payment of ${currency(deletingPayment.amount)}`}
+              recordData={deletingPayment}
+              title="Delete Supplier Payment"
+              description={`Delete payment of ${currency(deletingPayment.amount)}? This action requires MD approval.`}
               onConfirm={async () => {
                 await deletePayment.mutateAsync(deletingPayment.id);
                 setDeletingPayment(null);
@@ -1120,11 +1008,21 @@ function MaterialsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Phase 2 — Indent line items side sheet */}
+      {/* Line item inspection sheets */}
       <IndentItemsSheet
         indent={viewingRequest}
         canEdit={canModifySite}
         onClose={() => setViewingRequest(null)}
+      />
+
+      <PoItemsSheet
+        po={viewingPo}
+        onClose={() => setViewingPo(null)}
+      />
+
+      <ReceiptItemsSheet
+        receipt={viewingReceipt}
+        onClose={() => setViewingReceipt(null)}
       />
     </div>
   );

@@ -22,6 +22,7 @@ import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
 import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
+import { MultiExpenseDialog } from "@/components/MultiExpenseDialog";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
@@ -83,6 +84,7 @@ function AccountsPage() {
   const [to, setTo] = useState(today());
 
   // Edit / Delete states
+  const [multiExpenseOpen, setMultiExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
 
@@ -526,29 +528,43 @@ function AccountsPage() {
         <TabsContent value="expenses" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {canModify && (
-              <FormDialog
-                title="Add expense"
-                description="Record a site or office expense against a project."
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 size-4" /> Add expense
-                  </Button>
-                }
-                submitting={saveExpense.isPending}
-                initial={{ expense_date: today(), payment_method: "cash", material_name: "" }}
-                fields={expenseFields}
-                onSubmit={async (values) => {
-                  await saveExpense.mutateAsync({
-                    values: {
-                      ...values,
-                      project_id: values["project_id"] || null,
-                      material_name: values["material_name"] || null,
-                      amount: Number(values["amount"] ?? 0),
-                    },
-                  });
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <Button onClick={() => setMultiExpenseOpen(true)} className="bg-primary hover:bg-primary/90">
+                  <Plus className="mr-1.5 size-4" /> + Add More Expenses (Bulk)
+                </Button>
+                <FormDialog
+                  title="Add Single Expense"
+                  description="Record a site or office expense against a project."
+                  trigger={
+                    <Button variant="outline">
+                      <Plus className="mr-1.5 size-4" /> Single Expense
+                    </Button>
+                  }
+                  submitting={saveExpense.isPending}
+                  initial={{ expense_date: today(), payment_method: "cash", material_name: "" }}
+                  fields={expenseFields}
+                  onSubmit={async (values) => {
+                    await saveExpense.mutateAsync({
+                      values: {
+                        ...values,
+                        project_id: values["project_id"] || null,
+                        material_name: values["material_name"] || null,
+                        amount: Number(values["amount"] ?? 0),
+                      },
+                    });
+                  }}
+                />
+              </div>
             )}
+
+            {/* Multi-expense Dialog */}
+            <MultiExpenseDialog
+              open={multiExpenseOpen}
+              onOpenChange={setMultiExpenseOpen}
+              projectOptions={projectOptions}
+              categoryOptions={categoryOptions}
+              onSuccess={() => expenses.refetch()}
+            />
 
             {/* Expense Filters */}
             <div className="no-print flex flex-wrap items-end gap-2">
@@ -665,17 +681,13 @@ function AccountsPage() {
             <ConfirmDeleteDialog
               open={!!deletingExpense}
               onOpenChange={(v) => !v && setDeletingExpense(null)}
-              title="Delete expense"
-              description={`Are you sure you want to delete expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})? This action cannot be undone.`}
+              tableName="expenses"
+              recordId={deletingExpense.id}
+              recordTitle={`Expense: ${deletingExpense.category} (${currency(deletingExpense.amount)})`}
+              recordData={deletingExpense}
+              title="Delete Expense"
+              description={`Delete expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})? This action requires MD approval.`}
               onConfirm={async () => {
-                await logAuditEntry({
-                  tableName: "expenses",
-                  recordId: deletingExpense.id,
-                  action: "delete",
-                  module: "expenses",
-                  oldValue: deletingExpense.amount,
-                  reason: `Deleted expense (${deletingExpense.category})`,
-                });
                 await deleteExpense.mutateAsync(deletingExpense.id);
                 setDeletingExpense(null);
               }}
@@ -870,16 +882,13 @@ function AccountsPage() {
             <ConfirmDeleteDialog
               open={!!deletingClosing}
               onOpenChange={(v) => !v && setDeletingClosing(null)}
-              title="Delete cash closing"
-              description={`Are you sure you want to delete cash closing for ${dateFmt(deletingClosing.closing_date)}? This action cannot be undone.`}
+              tableName="cash_closing"
+              recordId={deletingClosing.id}
+              recordTitle={`Cash Closing: ${dateFmt(deletingClosing.closing_date)} (${deletingClosing.account_type || "Petty Cash"})`}
+              recordData={deletingClosing}
+              title="Delete Cash Closing"
+              description={`Delete cash closing for ${dateFmt(deletingClosing.closing_date)}? This action requires MD approval.`}
               onConfirm={async () => {
-                await logAuditEntry({
-                  tableName: "cash_closing",
-                  recordId: deletingClosing.id,
-                  action: "delete",
-                  module: "accounts",
-                  details: { closing_date: deletingClosing.closing_date, account_type: deletingClosing.account_type },
-                });
                 await deleteClosing.mutateAsync(deletingClosing.id);
                 setDeletingClosing(null);
               }}
@@ -1029,21 +1038,13 @@ function AccountsPage() {
             <ConfirmDeleteDialog
               open={!!deletingTransfer}
               onOpenChange={(v) => !v && setDeletingTransfer(null)}
+              tableName="account_transfers"
+              recordId={deletingTransfer.id}
+              recordTitle={`Transfer: ${currency(deletingTransfer.amount)} (${deletingTransfer.from_account} → ${deletingTransfer.to_account})`}
+              recordData={deletingTransfer}
               title="Delete Transfer"
-              description={`Are you sure you want to delete transfer of ${currency(deletingTransfer.amount)} (${dateFmt(deletingTransfer.transfer_date)})? This action cannot be undone.`}
+              description={`Delete transfer of ${currency(deletingTransfer.amount)} (${dateFmt(deletingTransfer.transfer_date)})? This action requires MD approval.`}
               onConfirm={async () => {
-                await logAuditEntry({
-                  tableName: "account_transfers",
-                  recordId: deletingTransfer.id,
-                  action: "delete",
-                  module: "accounts",
-                  details: {
-                    transfer_date: deletingTransfer.transfer_date,
-                    amount: deletingTransfer.amount,
-                    from_account: deletingTransfer.from_account,
-                    to_account: deletingTransfer.to_account,
-                  },
-                });
                 await deleteTransfer.mutateAsync(deletingTransfer.id);
                 setDeletingTransfer(null);
               }}

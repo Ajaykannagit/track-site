@@ -1,4 +1,5 @@
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
+import { sendEditNotification } from "@/lib/notifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase = typedSupabase as any;
@@ -69,6 +70,18 @@ export async function logAuditEntry(params: LogChangeParams): Promise<void> {
       p_details: details,
     });
 
+    if (action === "update") {
+      await sendEditNotification({
+        tableName,
+        recordId,
+        fieldName: fieldName ?? "Record updated",
+        oldValue,
+        newValue,
+        reason: reason ?? "Edit applied",
+        details,
+      });
+    }
+
     if (!rpcError) return;
 
     // Fallback to direct insert if RPC not deployed yet
@@ -134,3 +147,4 @@ export async function logRecordFieldDiffs(
 
   return changedFields;
 }
+

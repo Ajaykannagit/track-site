@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth, ROLE_LABEL } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -105,6 +106,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               {roles.length ? roles.map((r) => ROLE_LABEL[r]).join(", ") : "No role assigned"}
             </p>
           </div>
+
+          <NotificationCenter />
 
           <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>
             <LogOut className="mr-2 size-4" /> Sign out
