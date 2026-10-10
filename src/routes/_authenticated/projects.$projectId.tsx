@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { Printer, Users, Package, HardHat, FileText } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt } from "@/lib/format";
@@ -72,10 +74,11 @@ function ProjectDetail() {
     status: string;
     calculated_wage: number;
     workforce_count: number | null;
+    remarks: string | null;
   }>("attendance", {
     filters: f,
     order: { col: "attendance_date" },
-    limit: 200,
+    limit: 300,
     enabled: permissions.canEnterAttendance,
   });
 
@@ -84,6 +87,8 @@ function ProjectDetail() {
     receipt_number: string;
     receipt_date: string;
     total_amount: number;
+    material_name: string | null;
+    supplier_id: string | null;
   }>("material_receipts", {
     filters: f,
     order: { col: "receipt_date" },
@@ -96,6 +101,7 @@ function ProjectDetail() {
     bill_date: string;
     net_amount: number;
     status: string;
+    contractor_id: string | null;
   }>("contractor_bills", {
     filters: f,
     order: { col: "bill_date" },
@@ -103,49 +109,175 @@ function ProjectDetail() {
   });
 
   const p = project.data?.[0];
-  const labour = sum(attendance.data ?? [], (a) => a.calculated_wage);
-  const material = sum(receipts.data ?? [], (r) => r.total_amount);
-  const contractor = sum(bills.data ?? [], (b) => b.net_amount);
-  const other = sum(expenses.data ?? [], (e) => e.amount);
-  const cost = labour + material + contractor + other;
-  const value = Number(p?.quotation_amount ?? 0);
-  const profit = value - cost;
+  const labourWage = sum(attendance.data ?? [], (a) => a.calculated_wage);
+  const materialCost = sum(receipts.data ?? [], (r) => r.total_amount);
+  const contractorCost = sum(bills.data ?? [], (b) => b.net_amount);
+  const otherCost = sum(expenses.data ?? [], (e) => e.amount);
+  const totalCost = labourWage + materialCost + contractorCost + otherCost;
+  const contractValue = Number(p?.quotation_amount ?? 0);
+  const profit = contractValue - totalCost;
+
+  const totalHeadcount = sum(attendance.data ?? [], (a) => a.workforce_count ?? 1);
 
   const costBreakdown = [
-    { name: "Labour & wages", value: labour, fill: "var(--chart-1)" },
-    { name: "Materials", value: material, fill: "var(--chart-2)" },
-    { name: "Contractors", value: contractor, fill: "var(--chart-3)" },
-    { name: "Other expenses", value: other, fill: "var(--chart-4)" },
+    { name: "Labour & wages", value: labourWage, fill: "var(--chart-1)" },
+    { name: "Materials", value: materialCost, fill: "var(--chart-2)" },
+    { name: "Contractors", value: contractorCost, fill: "var(--chart-3)" },
+    { name: "Other expenses", value: otherCost, fill: "var(--chart-4)" },
   ];
-  const hasCost = cost > 0;
+  const hasCost = totalCost > 0;
 
   return (
     <div>
+      {/* Header with Print / PDF button */}
       <PageHeader
         title={p?.name ?? "Project"}
         description={p ? `${p.project_code} · ${p.site_address ?? "No site address"}` : "Loading…"}
-        actions={p ? <StatusBadge status={p.status} /> : null}
+        actions={
+          <div className="flex items-center gap-2">
+            {p ? <StatusBadge status={p.status} /> : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="no-print"
+              title="Print / Save Project as PDF"
+            >
+              <Printer className="mr-2 size-4" /> Print / PDF
+            </Button>
+          </div>
+        }
       />
 
+      {/* ========================================================================= */}
+      {/* PRINT-ONLY EXECUTIVE SUMMARY (Shows on window.print / PDF export) */}
+      {/* ========================================================================= */}
+      <div className="hidden print:block mb-6 p-4 border rounded-lg bg-white text-black">
+        <div className="flex justify-between items-start border-b pb-4 mb-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">BRICKWELD PRIVATE LIMITED</h1>
+            <p className="text-xs text-gray-600 uppercase">Civil — Interior — Fabrication</p>
+            <p className="text-sm font-semibold mt-2">{p?.name} ({p?.project_code})</p>
+            <p className="text-xs text-gray-600">{p?.site_address ?? "No site address recorded"}</p>
+          </div>
+          <div className="text-right text-xs">
+            <p className="font-semibold uppercase">Project Report</p>
+            <p>Status: {p?.status.toUpperCase()}</p>
+            <p>Start: {dateFmt(p?.start_date)}</p>
+            <p>Target: {dateFmt(p?.expected_completion_date)}</p>
+          </div>
+        </div>
+
+        {permissions.canViewProjectFinancials && (
+          <div className="grid grid-cols-4 gap-3 border p-3 rounded mb-4 text-xs">
+            <div>
+              <span className="text-gray-500 block">Contract Value</span>
+              <span className="font-bold text-sm">{currency(contractValue)}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 block">Total Spend</span>
+              <span className="font-bold text-sm">{currency(totalCost)}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 block">Labour & Wages</span>
+              <span className="font-bold">{currency(labourWage)}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 block">Materials (GRN)</span>
+              <span className="font-bold">{currency(materialCost)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Financial StatCards: only if role has financial permission */}
-      {permissions.canViewProjectFinancials && (
+      {permissions.canViewProjectFinancials ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Contract value" value={currency(value)} />
-          <StatCard label="Total cost" value={currency(cost)} tone="warning" />
+          <StatCard label="Contract value" value={currency(contractValue)} />
+          <StatCard label="Total cost" value={currency(totalCost)} tone="warning" />
           <StatCard
             label="Profit"
             value={currency(profit)}
             tone={profit >= 0 ? "success" : "destructive"}
-            hint={value ? `${((profit / value) * 100).toFixed(1)}% margin` : "No contract value"}
+            hint={contractValue ? `${((profit / contractValue) * 100).toFixed(1)}% margin` : "No contract value"}
           />
           <StatCard
             label="Budget allotted"
             value={currency(sum(budgets.data ?? [], (b) => b.budget_amount))}
           />
         </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard label="Status" value={p?.status ?? "—"} />
+          <StatCard label="Start date" value={dateFmt(p?.start_date)} />
+          <StatCard label="Target completion" value={dateFmt(p?.expected_completion_date)} />
+        </div>
       )}
 
-      {/* Cost Composition: only for financial view */}
+      {/* Operational Highlights Cards */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {permissions.canEnterAttendance && (
+          <Card className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-md bg-primary/10 text-primary">
+                <Users className="size-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Labour & Attendance</p>
+                <p className="text-sm font-semibold">{(attendance.data ?? []).length} Logs ({totalHeadcount} shifts)</p>
+              </div>
+            </div>
+            {permissions.canViewWagesAndPayments && (
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Wages</p>
+                <p className="text-sm font-bold">{currency(labourWage)}</p>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {permissions.canViewMaterialsAndContractors && (
+          <Card className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-md bg-amber-500/10 text-amber-600">
+                <Package className="size-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Material Receipts</p>
+                <p className="text-sm font-semibold">{(receipts.data ?? []).length} GRNs</p>
+              </div>
+            </div>
+            {permissions.canViewMaterialContractorCosts && (
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Value</p>
+                <p className="text-sm font-bold">{currency(materialCost)}</p>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {permissions.canViewMaterialsAndContractors && (
+          <Card className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-md bg-blue-500/10 text-blue-600">
+                <HardHat className="size-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Contractors</p>
+                <p className="text-sm font-semibold">{(bills.data ?? []).length} Bills</p>
+              </div>
+            </div>
+            {permissions.canViewMaterialContractorCosts && (
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Bills Total</p>
+                <p className="text-sm font-bold">{currency(contractorCost)}</p>
+              </div>
+            )}
+          </Card>
+        )}
+      </div>
+
+      {/* Cost Composition Chart: only for financial view */}
       {permissions.canViewProjectFinancials && (
         <Card className="mt-4">
           <CardHeader>
@@ -154,10 +286,10 @@ function ProjectDetail() {
           <CardContent>
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
-                <StatCard label="Labour & wages" value={currency(labour)} />
-                <StatCard label="Materials" value={currency(material)} />
-                <StatCard label="Contractors" value={currency(contractor)} />
-                <StatCard label="Other expenses" value={currency(other)} />
+                <StatCard label="Labour & wages" value={currency(labourWage)} />
+                <StatCard label="Materials" value={currency(materialCost)} />
+                <StatCard label="Contractors" value={currency(contractorCost)} />
+                <StatCard label="Other expenses" value={currency(otherCost)} />
               </div>
               <div className="flex h-56 flex-col items-center justify-center rounded-lg border bg-card/50 p-2">
                 {!hasCost ? (
@@ -192,20 +324,29 @@ function ProjectDetail() {
         </Card>
       )}
 
+      {/* Tabbed details */}
       <Tabs defaultValue="info" className="mt-4">
         <TabsList className="no-print flex-wrap">
-          <TabsTrigger value="info">Details</TabsTrigger>
-          {permissions.canViewProjectFinancials && (
-            <TabsTrigger value="budget">Budget</TabsTrigger>
-          )}
+          <TabsTrigger value="info">
+            <FileText className="mr-1.5 size-3.5" /> Details
+          </TabsTrigger>
           {permissions.canEnterAttendance && (
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+            <TabsTrigger value="attendance">
+              <Users className="mr-1.5 size-3.5" /> Labour & Attendance
+            </TabsTrigger>
           )}
           {permissions.canViewMaterialsAndContractors && (
-            <TabsTrigger value="materials">Materials</TabsTrigger>
+            <TabsTrigger value="materials">
+              <Package className="mr-1.5 size-3.5" /> Materials
+            </TabsTrigger>
           )}
           {permissions.canViewMaterialContractorCosts && (
-            <TabsTrigger value="contractors">Contractor bills</TabsTrigger>
+            <TabsTrigger value="contractors">
+              <HardHat className="mr-1.5 size-3.5" /> Contractor Bills
+            </TabsTrigger>
+          )}
+          {permissions.canViewProjectFinancials && (
+            <TabsTrigger value="budget">Budget</TabsTrigger>
           )}
           {permissions.canViewProjectFinancials && (
             <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -225,32 +366,13 @@ function ProjectDetail() {
           </Card>
         </TabsContent>
 
-        {permissions.canViewProjectFinancials && (
-          <TabsContent value="budget">
-            <DataTable
-              rows={budgets.data ?? []}
-              loading={budgets.isLoading}
-              exportName="project-budget"
-              columns={[
-                { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-                {
-                  header: "Budget",
-                  cell: (r) => currency(r.budget_amount),
-                  value: (r) => r.budget_amount,
-                  className: "text-right",
-                },
-                { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
-              ]}
-            />
-          </TabsContent>
-        )}
-
         {permissions.canEnterAttendance && (
           <TabsContent value="attendance">
             <DataTable
               rows={attendance.data ?? []}
               loading={attendance.isLoading}
-              exportName="project-attendance"
+              exportName={`${p?.project_code ?? "project"}-attendance`}
+              exportTitle={`${p?.name} — Labour & Attendance`}
               columns={[
                 {
                   header: "Date",
@@ -278,6 +400,11 @@ function ProjectDetail() {
                       },
                     ]
                   : []),
+                {
+                  header: "Remarks",
+                  cell: (r) => r.remarks ?? "—",
+                  value: (r) => r.remarks,
+                },
               ]}
             />
           </TabsContent>
@@ -288,13 +415,19 @@ function ProjectDetail() {
             <DataTable
               rows={receipts.data ?? []}
               loading={receipts.isLoading}
-              exportName="project-material-receipts"
+              exportName={`${p?.project_code ?? "project"}-materials`}
+              exportTitle={`${p?.name} — Material Receipts`}
               columns={[
-                { header: "Receipt", cell: (r) => r.receipt_number, value: (r) => r.receipt_number },
+                { header: "Receipt No", cell: (r) => r.receipt_number, value: (r) => r.receipt_number },
                 {
                   header: "Date",
                   cell: (r) => dateFmt(r.receipt_date),
                   value: (r) => r.receipt_date,
+                },
+                {
+                  header: "Material / Item",
+                  cell: (r) => r.material_name ?? "General Material Supply",
+                  value: (r) => r.material_name ?? "General Material Supply",
                 },
                 ...(permissions.canViewMaterialContractorCosts
                   ? [
@@ -316,9 +449,10 @@ function ProjectDetail() {
             <DataTable
               rows={bills.data ?? []}
               loading={bills.isLoading}
-              exportName="project-contractor-bills"
+              exportName={`${p?.project_code ?? "project"}-contractors`}
+              exportTitle={`${p?.name} — Contractor Bills`}
               columns={[
-                { header: "Bill", cell: (r) => r.bill_number, value: (r) => r.bill_number },
+                { header: "Bill No", cell: (r) => r.bill_number, value: (r) => r.bill_number },
                 { header: "Date", cell: (r) => dateFmt(r.bill_date), value: (r) => r.bill_date },
                 {
                   header: "Status",
@@ -326,7 +460,7 @@ function ProjectDetail() {
                   value: (r) => r.status,
                 },
                 {
-                  header: "Net",
+                  header: "Net Amount",
                   cell: (r) => currency(r.net_amount),
                   value: (r) => r.net_amount,
                   className: "text-right",
@@ -337,11 +471,33 @@ function ProjectDetail() {
         )}
 
         {permissions.canViewProjectFinancials && (
+          <TabsContent value="budget">
+            <DataTable
+              rows={budgets.data ?? []}
+              loading={budgets.isLoading}
+              exportName={`${p?.project_code ?? "project"}-budget`}
+              exportTitle={`${p?.name} — Budget Allotments`}
+              columns={[
+                { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+                {
+                  header: "Budget",
+                  cell: (r) => currency(r.budget_amount),
+                  value: (r) => r.budget_amount,
+                  className: "text-right",
+                },
+                { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
+              ]}
+            />
+          </TabsContent>
+        )}
+
+        {permissions.canViewProjectFinancials && (
           <TabsContent value="expenses">
             <DataTable
               rows={expenses.data ?? []}
               loading={expenses.isLoading}
-              exportName="project-expenses"
+              exportName={`${p?.project_code ?? "project"}-expenses`}
+              exportTitle={`${p?.name} — Site Expenses`}
               columns={[
                 {
                   header: "Date",
@@ -373,7 +529,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm">{value}</p>
+      <p className="mt-1 text-sm font-medium">{value}</p>
     </div>
   );
 }

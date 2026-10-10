@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Eye, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -54,6 +54,7 @@ type Project = {
 };
 
 function ProjectsPage() {
+  const navigate = useNavigate();
   const { isMD, permissions } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
@@ -150,9 +151,16 @@ function ProjectsPage() {
       header: "Actions",
       className: "text-right w-28",
       cell: (r: Project) => (
-        <div className="flex items-center justify-end gap-1">
+        <div
+          className="flex items-center justify-end gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Button asChild variant="ghost" size="icon" className="size-7" title="View details">
-            <Link to="/projects/$projectId" params={{ projectId: r.id }}>
+            <Link
+              to="/projects/$projectId"
+              params={{ projectId: r.id }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <Eye className="size-3.5" />
             </Link>
           </Button>
@@ -163,7 +171,10 @@ function ProjectsPage() {
                 size="icon"
                 className="size-7"
                 title="Edit project"
-                onClick={() => setEditingProject(r)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingProject(r);
+                }}
               >
                 <Pencil className="size-3.5" />
               </Button>
@@ -172,7 +183,10 @@ function ProjectsPage() {
                 size="icon"
                 className="size-7 text-destructive hover:text-destructive"
                 title="Delete project"
-                onClick={() => setDeletingProject(r)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeletingProject(r);
+                }}
               >
                 <Trash2 className="size-3.5" />
               </Button>
@@ -317,6 +331,7 @@ function ProjectsPage() {
         rows={filteredProjects}
         columns={columns}
         loading={projects.isLoading}
+        onRowClick={(r) => navigate({ to: "/projects/$projectId", params: { projectId: r.id } })}
         exportName="brickweld-projects"
         exportTitle="Projects Report"
         exportDescription="Construction Project Control System — Projects Report"
