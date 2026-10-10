@@ -35,7 +35,15 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart } from "@/lib/format";
-import { Building2, ChevronRight, DollarSign, PackageCheck, Receipt, ShieldAlert } from "lucide-react";
+import { Building2, ChevronRight, DollarSign, PackageCheck, Receipt, ShieldAlert, Wallet } from "lucide-react";
+
+/** Unified spend-line type used in the full-spend dialog */
+type SpendLine = {
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+};
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -93,7 +101,8 @@ function Dashboard() {
   // Dialog States
   const [activeProjectsDialogOpen, setActiveProjectsDialogOpen] = useState(false);
   const [contractValueDialogOpen, setContractValueDialogOpen] = useState(false);
-  const [materialSpendDialogOpen, setMaterialSpendDialogOpen] = useState(false);
+  const [spendDialogOpen, setSpendDialogOpen] = useState(false);
+  const [cashDialogOpen, setCashDialogOpen] = useState(false);
   const [officeExpensesDialogOpen, setOfficeExpensesDialogOpen] = useState(false);
 
   // Projects query: visible to all authenticated users
@@ -140,10 +149,33 @@ function Dashboard() {
     limit: 8,
     enabled: permissions.canViewMaterialsAndContractors,
   });
+  // Latest cash closing for the stat card (1 record)
   const cash = useRows<{ closing_cash: number; closing_date: string }>("cash_closing", {
     select: "closing_cash,closing_date",
     order: { col: "closing_date" },
     limit: 1,
+    enabled: permissions.canViewCompanyFinancials,
+  });
+
+  // Full cash closing history for the cash dialog
+  const cashHistory = useRows<{ closing_cash: number; closing_date: string; notes?: string }>(
+    "cash_closing",
+    {
+      select: "closing_cash,closing_date,notes",
+      order: { col: "closing_date" },
+      enabled: permissions.canViewCompanyFinancials,
+    },
+  );
+
+  // Labour wages for the past 6M (for spend dialog)
+  const labourWages = useRows<{
+    calculated_wage: number;
+    attendance_date: string;
+    employee_id: string | null;
+  }>("attendance", {
+    select: "calculated_wage,attendance_date,employee_id",
+    filters: [{ col: "attendance_date", op: "gte", value: from }],
+    order: { col: "attendance_date" },
     enabled: permissions.canViewCompanyFinancials,
   });
 
@@ -243,6 +275,27 @@ function Dashboard() {
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
 
+  // Unified spend lines for the full-spend dialog (6M window)
+  const spendLines: SpendLine[] = [
+    ...(labourWages.data ?? [])
+      .filter((a) => Number(a.calculated_wage ?? 0) > 0)
+      .map((a) => ({
+        date: a.attendance_date ?? "",
+        category: "Labour / Wages",
+        description: a.employee_id ? `Worker attendance (ID: ${a.employee_id.slice(0, 8)}…)` : "Worker attendance",
+        amount: Number(a.calculated_wage ?? 0),
+      })),
+    ...(expenses.data ?? []).map((e) => ({
+      date: e.expense_date ?? "",
+      category: e.category ?? "Expense",
+      description: e.description || e.material_name || "—",
+      amount: Number(e.amount ?? 0),
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  const totalSpend6M = sum(spendLines, (s) => s.amount);
+
+
   const byMonth = new Map<string, number>();
   for (const e of expenses.data ?? []) {
     const k = (e.expense_date ?? "").slice(0, 7);
@@ -311,10 +364,10 @@ function Dashboard() {
           <div
             onClick={() => setActiveProjectsDialogOpen(true)}
             className="cursor-pointer transition-transform hover:scale-[1.01]"
-            title="Click to view Active Projects summary"
+            title="View active projects summary"
           >
             <StatCard
-              label="Active projects (Click)"
+              label="Active projects"
               value={String(active.length)}
               hint={`${(projects.data ?? []).length} total projects`}
             />
@@ -323,38 +376,45 @@ function Dashboard() {
           <div
             onClick={() => setContractValueDialogOpen(true)}
             className="cursor-pointer transition-transform hover:scale-[1.01]"
-            title="Click for Project Financial Breakdown"
+            title="View project financial breakdown"
           >
             <StatCard
-              label="Contract value (Click)"
+              label="Contract value"
               value={currency(contractValue)}
               hint="All active & completed projects"
             />
           </div>
 
           <div
-            onClick={() => setMaterialSpendDialogOpen(true)}
+            onClick={() => setSpendDialogOpen(true)}
             className="cursor-pointer transition-transform hover:scale-[1.01]"
-            title="Click for Material Expenditure Breakdown"
+            title="View full spend breakdown"
           >
             <StatCard
-              label="Spend 6M (Click)"
+              label="Spend (6 months)"
               value={currency(spend)}
-              hint="Expenses + site wages"
+              hint="Labour wages + site expenses"
               tone="warning"
             />
           </div>
 
-          <StatCard
-            label="Cash on hand"
-            value={currency(cash.data?.[0]?.closing_cash ?? 0)}
-            hint={
-              cash.data?.[0]
-                ? `As of ${dateFmt(cash.data[0].closing_date)}`
-                : "No closing recorded"
-            }
-            tone="success"
-          />
+          <div
+            onClick={() => setCashDialogOpen(true)}
+            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            title="View cash closing history"
+          >
+            <StatCard
+              label="Cash on hand"
+              value={currency(cash.data?.[0]?.closing_cash ?? 0)}
+              hint={
+                cash.data?.[0]
+                  ? `As of ${dateFmt(cash.data[0].closing_date)}`
+                  : "No closing recorded"
+              }
+              tone="success"
+            />
+          </div>
+
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -644,52 +704,72 @@ function Dashboard() {
       )}
 
       {/* ========================================================================= */}
-      {/* DIALOG 3: Material Spend Breakdown Drawer (MD Only) */}
+      {/* DIALOG 3: Full Spend Breakdown (MD Only) */}
       {/* ========================================================================= */}
       {permissions.canViewCompanyFinancials && (
-        <Dialog open={materialSpendDialogOpen} onOpenChange={setMaterialSpendDialogOpen}>
-          <DialogContent className="max-w-3xl">
+        <Dialog open={spendDialogOpen} onOpenChange={setSpendDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <PackageCheck className="size-5 text-amber-600" /> Material Expenditure Breakdown
+                <PackageCheck className="size-5 text-amber-600" /> Full Spend — Last 6 Months
               </DialogTitle>
               <DialogDescription>
-                Detailed breakdown of material costs grouped by material type and category.
+                All labour wages and site expenses in the last 6 months, newest first.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-2 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border bg-muted/40 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Total Material Receipts (GRN)</p>
-                  <p className="text-lg font-bold">{currency(totalMaterialReceipts)}</p>
+                  <p className="text-xs font-medium text-muted-foreground">Total Spend (6M)</p>
+                  <p className="text-lg font-bold">{currency(totalSpend6M)}</p>
                 </div>
                 <div className="rounded-lg border bg-muted/40 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Unique Material Line-Items</p>
-                  <p className="text-lg font-bold">{materialCategories.length} Categories</p>
+                  <p className="text-xs font-medium text-muted-foreground">Labour / Wages</p>
+                  <p className="text-lg font-bold">
+                    {currency(sum(spendLines.filter((s) => s.category === "Labour / Wages"), (s) => s.amount))}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Site Expenses</p>
+                  <p className="text-lg font-bold">
+                    {currency(sum(spendLines.filter((s) => s.category !== "Labour / Wages"), (s) => s.amount))}
+                  </p>
                 </div>
               </div>
 
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Material / Item Name</TableHead>
-                    <TableHead className="text-right">Total Expenditure</TableHead>
-                    <TableHead className="text-right">% of Material Spend</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description / Details</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materialCategories.map((c, idx) => {
-                    const pct = totalMaterialReceipts ? (c.amount / totalMaterialReceipts) * 100 : 0;
-                    return (
+                  {spendLines.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        No spend recorded in the last 6 months.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    spendLines.map((s, idx) => (
                       <TableRow key={idx}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-right font-semibold">{currency(c.amount)}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {pct.toFixed(1)}%
+                        <TableCell className="text-xs whitespace-nowrap">{dateFmt(s.date)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={s.category === "Labour / Wages" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {s.category}
+                          </Badge>
                         </TableCell>
+                        <TableCell className="text-xs">{s.description}</TableCell>
+                        <TableCell className="text-right font-semibold">{currency(s.amount)}</TableCell>
                       </TableRow>
-                    );
-                  })}
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -745,6 +825,70 @@ function Dashboard() {
                         </TableCell>
                         <TableCell className="text-xs">{e.description || e.material_name || "—"}</TableCell>
                         <TableCell className="text-right font-semibold">{currency(e.amount)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DIALOG 5: Cash on Hand History (MD Only) */}
+      {/* ========================================================================= */}
+      {permissions.canViewCompanyFinancials && (
+        <Dialog open={cashDialogOpen} onOpenChange={setCashDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="size-5 text-emerald-600" /> Cash on Hand — Closing History
+              </DialogTitle>
+              <DialogDescription>
+                All recorded cash closing entries, newest first. Latest entry is shown on the dashboard card.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 space-y-4">
+              {cash.data?.[0] && (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Current Cash on Hand</p>
+                    <p className="text-2xl font-bold text-emerald-700">
+                      {currency(cash.data[0].closing_cash)}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+                    As of {dateFmt(cash.data[0].closing_date)}
+                  </Badge>
+                </div>
+              )}
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Closing Cash</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(cashHistory.data ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        No cash closing records found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (cashHistory.data ?? []).map((c, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs whitespace-nowrap">{dateFmt(c.closing_date)}</TableCell>
+                        <TableCell className="text-right font-semibold font-mono">
+                          {currency(c.closing_cash)}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.notes || "—"}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
