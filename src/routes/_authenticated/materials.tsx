@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
+import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 import { IndentItemsSheet } from "@/components/IndentItemsSheet";
 import { PoItemsSheet } from "@/components/PoItemsSheet";

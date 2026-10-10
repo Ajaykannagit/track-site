@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Bar,
@@ -15,8 +16,26 @@ import { PageHeader } from "@/components/AppShell";
 import { StatCard } from "@/components/DataTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useAuth } from "@/lib/auth";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart } from "@/lib/format";
+import { Building2, ChevronRight, DollarSign, PackageCheck, Receipt, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -43,25 +62,53 @@ type Project = {
   status: string;
   quotation_amount: number;
   start_date: string | null;
+  site_address?: string | null;
+};
+
+type ExpenseRow = {
+  id: string;
+  amount: number;
+  expense_date: string;
+  category: string;
+  material_name?: string | null;
+  description?: string | null;
+  project_id: string | null;
+};
+
+type MaterialReceiptRow = {
+  id: string;
+  receipt_number: string;
+  receipt_date: string;
+  total_amount: number;
+  material_name?: string | null;
+  project_id: string | null;
+  supplier_id?: string | null;
 };
 
 function Dashboard() {
+  const { canViewFinance, isMD } = useAuth();
   const from = monthStart(-5);
+
+  // Dialog States (UPD-01, UPD-04, UPD-05)
+  const [activeProjectsDialogOpen, setActiveProjectsDialogOpen] = useState(false);
+  const [contractValueDialogOpen, setContractValueDialogOpen] = useState(false);
+  const [materialSpendDialogOpen, setMaterialSpendDialogOpen] = useState(false);
+  const [officeExpensesDialogOpen, setOfficeExpensesDialogOpen] = useState(false);
+
   const projects = useRows<Project>("projects", { order: { col: "created_at" } });
-  const expenses = useRows<{
-    amount: number;
-    expense_date: string;
-    category: string;
-    project_id: string | null;
-  }>("expenses", {
-    select: "amount,expense_date,category,project_id",
+  const expenses = useRows<ExpenseRow>("expenses", {
     filters: [{ col: "expense_date", op: "gte", value: from }],
+    order: { col: "expense_date" },
+  });
+  const allExpenses = useRows<ExpenseRow>("expenses", {
+    select: "id,amount,expense_date,category,material_name,description,project_id",
   });
   const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance", {
     select: "calculated_wage,attendance_date",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
   });
   const bills = useRows<{
+    id: string;
     net_amount: number;
     status: string;
     bill_number: string;
@@ -87,26 +134,20 @@ function Dashboard() {
     limit: 1,
   });
 
-  const allExpenses = useRows<{ project_id: string | null; amount: number }>("expenses", {
-    select: "project_id,amount",
-  });
   const allAttendance = useRows<{ project_id: string | null; calculated_wage: number }>(
     "attendance",
     {
       select: "project_id,calculated_wage",
     },
   );
-  const allReceipts = useRows<{ project_id: string | null; total_amount: number }>(
-    "material_receipts",
-    {
-      select: "project_id,total_amount",
-    },
-  );
+  const allReceipts = useRows<MaterialReceiptRow>("material_receipts", {
+    select: "id,receipt_number,receipt_date,total_amount,material_name,project_id,supplier_id",
+  });
   const allBills = useRows<{ project_id: string | null; net_amount: number }>("contractor_bills", {
     select: "project_id,net_amount",
   });
 
-  const projectCost = (projectId: string) => {
+  const projectBreakdown = (projectId: string) => {
     const labour = sum(
       (allAttendance.data ?? []).filter((a) => a.project_id === projectId),
       (a) => a.calculated_wage,
@@ -123,7 +164,8 @@ function Dashboard() {
       (allExpenses.data ?? []).filter((e) => e.project_id === projectId),
       (e) => e.amount,
     );
-    return labour + material + contractor + other;
+    const cost = labour + material + contractor + other;
+    return { labour, material, contractor, other, cost };
   };
 
   const active = (projects.data ?? []).filter((p) => p.status === "active");
@@ -137,6 +179,38 @@ function Dashboard() {
   const pendingRequests = (requests.data ?? []).filter(
     (r) => !["approved", "ordered", "received", "closed", "rejected"].includes(r.status),
   );
+
+  // Office Expenses (UPD-05): project_id === null or category is administrative overhead
+  const officeExpensesList = (allExpenses.data ?? []).filter(
+    (e) =>
+      !e.project_id ||
+      ["Stationery", "Telephone / Internet", "Travel", "Professional Fees", "Bank Charges"].includes(
+        e.category,
+      ),
+  );
+  const totalOfficeExpenses = sum(officeExpensesList, (e) => e.amount);
+
+  // Material Expenditures (UPD-04): Sourced from GRNs and material tagged expenses
+  const materialReceiptsList = allReceipts.data ?? [];
+  const totalMaterialReceipts = sum(materialReceiptsList, (r) => r.total_amount);
+
+  // Category breakdown for Material Spend
+  const materialCategoryMap = new Map<string, number>();
+  for (const r of materialReceiptsList) {
+    const key = r.material_name || "General Material Supply";
+    materialCategoryMap.set(key, (materialCategoryMap.get(key) ?? 0) + Number(r.total_amount ?? 0));
+  }
+  for (const e of allExpenses.data ?? []) {
+    if (e.material_name) {
+      materialCategoryMap.set(
+        e.material_name,
+        (materialCategoryMap.get(e.material_name) ?? 0) + Number(e.amount ?? 0),
+      );
+    }
+  }
+  const materialCategories = [...materialCategoryMap.entries()]
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount);
 
   const byMonth = new Map<string, number>();
   for (const e of expenses.data ?? []) {
@@ -167,36 +241,89 @@ function Dashboard() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Live position across projects, site spend, approvals and cash."
+        description="Live view of active projects, site spend, procurement approvals and corporate cash position."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOfficeExpensesDialogOpen(true)}
+              className="h-9 text-xs"
+            >
+              <Receipt className="mr-1.5 size-3.5" /> Office Expenses
+            </Button>
+          </div>
+        }
       />
 
+      {/* UPD-02: Financial Privacy Banner for Restricted Roles */}
+      {!canViewFinance && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <ShieldAlert className="size-4 shrink-0 text-amber-600" />
+          <span>
+            <strong>Role View Restricted:</strong> Sensitive financial metrics are hidden based on company role-based privacy policies. Showing site operations view.
+          </span>
+        </div>
+      )}
+
+      {/* UPD-01 & UPD-04: StatCards with Click Handlers & Privacy Protection */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Active projects"
-          value={String(active.length)}
-          hint={`${(projects.data ?? []).length} total`}
-        />
-        <StatCard label="Contract value" value={currency(contractValue)} hint="All projects" />
-        <StatCard
-          label="Spend (6 months)"
-          value={currency(spend)}
-          hint="Expenses + site wages"
-          tone="warning"
-        />
+        <div
+          onClick={() => setActiveProjectsDialogOpen(true)}
+          className="cursor-pointer transition-transform hover:scale-[1.01]"
+          title="Click to view Active Projects summary"
+        >
+          <StatCard
+            label="Active projects (Click)"
+            value={String(active.length)}
+            hint={`${(projects.data ?? []).length} total projects`}
+          />
+        </div>
+
+        <div
+          onClick={() => canViewFinance && setContractValueDialogOpen(true)}
+          className={canViewFinance ? "cursor-pointer transition-transform hover:scale-[1.01]" : ""}
+          title={canViewFinance ? "Click for Project Financial Breakdown" : "Restricted Financial Info"}
+        >
+          <StatCard
+            label="Contract value (Click)"
+            value={canViewFinance ? currency(contractValue) : "••••••••"}
+            hint={canViewFinance ? "All active & completed projects" : "Restricted Role"}
+          />
+        </div>
+
+        <div
+          onClick={() => canViewFinance && setMaterialSpendDialogOpen(true)}
+          className={canViewFinance ? "cursor-pointer transition-transform hover:scale-[1.01]" : ""}
+          title={canViewFinance ? "Click for Material Expenditure Breakdown" : "Restricted Financial Info"}
+        >
+          <StatCard
+            label="Spend 6M (Click)"
+            value={canViewFinance ? currency(spend) : "••••••••"}
+            hint={canViewFinance ? "Expenses + site wages" : "Restricted Role"}
+            tone="warning"
+          />
+        </div>
+
         <StatCard
           label="Cash on hand"
-          value={currency(cash.data?.[0]?.closing_cash ?? 0)}
+          value={canViewFinance ? currency(cash.data?.[0]?.closing_cash ?? 0) : "••••••••"}
           hint={
-            cash.data?.[0] ? `As of ${dateFmt(cash.data[0].closing_date)}` : "No closing recorded"
+            canViewFinance
+              ? cash.data?.[0]
+                ? `As of ${dateFmt(cash.data[0].closing_date)}`
+                : "No closing recorded"
+              : "Restricted Role"
           }
           tone="success"
         />
       </div>
 
+      {/* Charts Section */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Monthly site cost</CardTitle>
+            <CardTitle className="text-base">Monthly site cost trend</CardTitle>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -204,7 +331,7 @@ function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis fontSize={12} tickLine={false} axisLine={false} width={70} />
-                <Tooltip formatter={(v: number) => currency(v)} />
+                <Tooltip formatter={(v: number) => (canViewFinance ? currency(v) : "••••")} />
                 <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -223,24 +350,33 @@ function Dashboard() {
                     <Cell key={i} fill={pieColors[i % pieColors.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => currency(v)} />
+                <Tooltip formatter={(v: number) => (canViewFinance ? currency(v) : "••••")} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
+      {/* Lists Section */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Active projects</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Active projects list</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveProjectsDialogOpen(true)}
+              className="h-7 text-xs"
+            >
+              View Summary <ChevronRight className="ml-1 size-3" />
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {active.length === 0 ? (
               <p className="text-sm text-muted-foreground">No active projects.</p>
             ) : (
               active.slice(0, 6).map((p) => {
-                const costSoFar = projectCost(p.id);
+                const breakdown = projectBreakdown(p.id);
                 return (
                   <Link
                     key={p.id}
@@ -255,10 +391,14 @@ function Dashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold">{currency(p.quotation_amount)}</p>
+                      <p className="text-sm font-semibold">
+                        {canViewFinance ? currency(p.quotation_amount) : "••••••••"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Cost:{" "}
-                        <span className="font-medium text-foreground">{currency(costSoFar)}</span>
+                        <span className="font-medium text-foreground">
+                          {canViewFinance ? currency(breakdown.cost) : "••••••••"}
+                        </span>
                       </p>
                     </div>
                   </Link>
@@ -301,7 +441,9 @@ function Dashboard() {
               >
                 <div>
                   <p className="text-sm font-medium">{b.bill_number}</p>
-                  <p className="text-xs text-muted-foreground">{currency(b.net_amount)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {canViewFinance ? currency(b.net_amount) : "••••••••"}
+                  </p>
                 </div>
                 <Badge variant="secondary">{b.status}</Badge>
               </Link>
@@ -309,6 +451,233 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ========================================================================= */}
+      {/* DIALOG 1: Active Projects Summary Modal (UPD-01) */}
+      {/* ========================================================================= */}
+      <Dialog open={activeProjectsDialogOpen} onOpenChange={setActiveProjectsDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="size-5 text-primary" /> Active Projects Overview
+            </DialogTitle>
+            <DialogDescription>
+              Summary of all currently active construction sites and project progress.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-3">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Project Name</TableHead>
+                  <TableHead>Start Date</TableHead>
+                  <TableHead className="text-right">Quotation Amount</TableHead>
+                  <TableHead className="text-right">Cost to Date</TableHead>
+                  <TableHead className="text-center">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {active.map((p) => {
+                  const b = projectBreakdown(p.id);
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono text-xs">{p.project_code}</TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>{dateFmt(p.start_date)}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {canViewFinance ? currency(p.quotation_amount) : "••••••••"}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {canViewFinance ? currency(b.cost) : "••••••••"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link
+                          to="/projects/$projectId"
+                          params={{ projectId: p.id }}
+                          onClick={() => setActiveProjectsDialogOpen(false)}
+                          className="text-xs text-primary underline"
+                        >
+                          View Details
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* DIALOG 2: Contract Value & Financial Breakdown Drawer (UPD-01) */}
+      {/* ========================================================================= */}
+      <Dialog open={contractValueDialogOpen} onOpenChange={setContractValueDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="size-5 text-primary" /> Contract Value & Financial Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Project-wise financial model breakdown: Quotation Value vs Labour, Materials, Contractor, Other site expenses and net profit margins.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead className="text-right">Quotation (Value)</TableHead>
+                  <TableHead className="text-right">Labour Wage</TableHead>
+                  <TableHead className="text-right">Materials (GRN)</TableHead>
+                  <TableHead className="text-right">Contractors</TableHead>
+                  <TableHead className="text-right">Other Exp.</TableHead>
+                  <TableHead className="text-right">Total Cost</TableHead>
+                  <TableHead className="text-right">Net Margin</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(projects.data ?? []).map((p) => {
+                  const b = projectBreakdown(p.id);
+                  const margin = p.quotation_amount - b.cost;
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">
+                        <div>{p.name}</div>
+                        <div className="text-xs text-muted-foreground">{p.project_code}</div>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {currency(p.quotation_amount)}
+                      </TableCell>
+                      <TableCell className="text-right">{currency(b.labour)}</TableCell>
+                      <TableCell className="text-right">{currency(b.material)}</TableCell>
+                      <TableCell className="text-right">{currency(b.contractor)}</TableCell>
+                      <TableCell className="text-right">{currency(b.other)}</TableCell>
+                      <TableCell className="text-right font-medium">{currency(b.cost)}</TableCell>
+                      <TableCell
+                        className={`text-right font-bold ${
+                          margin >= 0 ? "text-emerald-600" : "text-destructive"
+                        }`}
+                      >
+                        {currency(margin)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* DIALOG 3: Material Spend Breakdown Drawer (UPD-04) */}
+      {/* ========================================================================= */}
+      <Dialog open={materialSpendDialogOpen} onOpenChange={setMaterialSpendDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck className="size-5 text-amber-600" /> Material Expenditure Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Detailed breakdown of material costs grouped by material type and category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Total Material Receipts (GRN)</p>
+                <p className="text-lg font-bold">{currency(totalMaterialReceipts)}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Unique Material Line-Items</p>
+                <p className="text-lg font-bold">{materialCategories.length} Categories</p>
+              </div>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Material / Item Name</TableHead>
+                  <TableHead className="text-right">Total Expenditure</TableHead>
+                  <TableHead className="text-right">% of Material Spend</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {materialCategories.map((c, idx) => {
+                  const pct = totalMaterialReceipts ? (c.amount / totalMaterialReceipts) * 100 : 0;
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className="text-right font-semibold">{currency(c.amount)}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {pct.toFixed(1)}%
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* DIALOG 4: Office Expenses View (UPD-05) */}
+      {/* ========================================================================= */}
+      <Dialog open={officeExpensesDialogOpen} onOpenChange={setOfficeExpensesDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="size-5 text-primary" /> Corporate Office Expenses Overview
+            </DialogTitle>
+            <DialogDescription>
+              Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-4">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Total Office Overhead Spend</p>
+                <p className="text-xl font-bold">{currency(totalOfficeExpenses)}</p>
+              </div>
+              <Badge variant="outline">{officeExpensesList.length} Expenses Recorded</Badge>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {officeExpensesList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      No unallocated office expenses recorded yet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  officeExpensesList.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-xs">{dateFmt(e.expense_date)}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{e.category}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">{e.description || e.material_name || "—"}</TableCell>
+                      <TableCell className="text-right font-semibold">{currency(e.amount)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

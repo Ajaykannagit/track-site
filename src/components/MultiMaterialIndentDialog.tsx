@@ -159,12 +159,10 @@ export function MultiMaterialIndentDialog({
   const updateItem = (index: number, field: keyof MaterialLineItem, value: any) => {
     setItems((prev) => {
       const next = [...prev];
-      const item = { ...next[index], [field]: value };
-      if (field === "quantity" || field === "rate") {
-        const qty = field === "quantity" ? Number(value) || 0 : item.quantity;
-        const rate = field === "rate" ? Number(value) || 0 : item.rate;
-        item.amount = Math.round(qty * rate * 100) / 100;
-      }
+      const item = { ...next[index], [field]: value } as MaterialLineItem;
+      const qty = Number(item.quantity ?? 0);
+      const rate = Number(item.rate ?? 0);
+      item.amount = Math.round(qty * rate * 100) / 100;
       next[index] = item;
       return next;
     });

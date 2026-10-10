@@ -91,7 +91,9 @@ export function MultiExpenseDialog({
   const updateRow = (index: number, field: keyof ExpenseLineItem, value: any) => {
     setExpenses((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
+      if (next[index]) {
+        next[index] = { ...next[index], [field]: value } as ExpenseLineItem;
+      }
       return next;
     });
   };

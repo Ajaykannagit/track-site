@@ -192,12 +192,10 @@ export function MultiMaterialReceiptDialog({
   const updateItem = (index: number, field: keyof ReceiptLineItem, value: any) => {
     setItems((prev) => {
       const next = [...prev];
-      const item = { ...next[index], [field]: value };
-      if (field === "received_quantity" || field === "rate") {
-        const qty = field === "received_quantity" ? Number(value) || 0 : item.received_quantity;
-        const rate = field === "rate" ? Number(value) || 0 : item.rate;
-        item.amount = Math.round(qty * rate * 100) / 100;
-      }
+      const item = { ...next[index], [field]: value } as ReceiptLineItem;
+      const qty = Number(item.received_quantity ?? 0);
+      const rate = Number(item.rate ?? 0);
+      item.amount = Math.round(qty * rate * 100) / 100;
       next[index] = item;
       return next;
     });

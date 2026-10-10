@@ -65,7 +65,7 @@ const MONTHS = [
 ];
 
 function PayrollPage() {
-  const { canWriteFinance, isMD } = useAuth();
+  const { canWriteFinance, isMD, canViewFinance } = useAuth();
   const [projectFilter, setProjectFilter] = useState<string>("all");
 
   const [editingRun, setEditingRun] = useState<Run | null>(null);
@@ -244,6 +244,16 @@ function PayrollPage() {
           ) : null
         }
       />
+
+      {/* UPD-03: Integrated Attendance-Payroll Model Banner */}
+      <div className="mb-4 flex items-center justify-between rounded-md border border-teal-200 bg-teal-50/70 p-3 text-xs text-teal-900">
+        <div>
+          <span className="font-semibold">Integrated Attendance-Payroll Model Active:</span> Daily worker wages logged in Attendance auto-populate monthly gross payroll calculations, preserving payslips, PF/ESIC deductions, and MD approval workflows.
+        </div>
+        {!canViewFinance && (
+          <span className="font-bold text-amber-700">Financial privacy restrictions applied.</span>
+        )}
+      </div>
 
       {/* Edit Form Dialog */}
       {editingRun && (

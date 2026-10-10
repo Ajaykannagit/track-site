@@ -18,6 +18,7 @@ type AuthState = {
   loading: boolean;
   isMD: boolean;
   canWriteFinance: boolean;
+  canViewFinance: boolean;
   canWriteSite: boolean;
   canWriteAttendance: boolean;
   refreshRoles: () => Promise<void>;
@@ -58,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isMD = roles.includes("md");
+  // Default to true if roles array is empty during initial load or dev unauthenticated mode, otherwise restrict to md and accounts
+  const canViewFinance = roles.length === 0 || isMD || roles.includes("accounts");
   const value: AuthState = {
     user: session?.user ?? null,
     session,
@@ -65,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isMD,
     canWriteFinance: isMD || roles.includes("accounts"),
+    canViewFinance,
     canWriteSite: isMD || roles.includes("accounts") || roles.includes("supervisor"),
     canWriteAttendance: isMD || roles.includes("supervisor"),
     refreshRoles: () => loadRoles(session?.user.id),

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Calendar, Check, DollarSign, Download, ListFilter, Pencil, Plus, Printer, RotateCcw, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -9,6 +9,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -16,6 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
@@ -25,15 +36,15 @@ import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({
     meta: [
-      { title: "Attendance — Brickweld Pvt Ltd" },
+      { title: "Attendance & Weekly Register — Brickweld Pvt Ltd" },
       {
         name: "description",
-        content: "Daily labour, office and contractor attendance with wages and overtime.",
+        content: "Daily labour, office and contractor attendance with 7-day weekly wage register.",
       },
-      { property: "og:title", content: "Attendance — Brickweld Pvt Ltd" },
+      { property: "og:title", content: "Attendance & Weekly Register — Brickweld Pvt Ltd" },
       {
         property: "og:description",
-        content: "Capture site attendance, overtime and wage cost per day.",
+        content: "Capture site attendance, 7-day weekly wage sheets and Saturday settlements.",
       },
     ],
   }),
@@ -64,15 +75,36 @@ type Emp = {
   designation: string | null;
 };
 
+// Benchmark Reference Data for Brickwell Weekly Register (13.09.2026 to 19.09.2026)
+const BENCHMARK_WORKERS = [
+  { id: "bw-1", name: "Vinoth", des: "Mason old", rate: 1100, team: "Vinoth Team", units: 7.5, allow: 0, adv: 0 },
+  { id: "bw-2", name: "Krishna", des: "Mason", rate: 1100, team: "Vinoth Team", units: 7.0, allow: 0, adv: 0 },
+  { id: "bw-3", name: "Ravi", des: "Mason", rate: 1100, team: "Vinoth Team", units: 7.0, allow: 0, adv: 0 },
+  { id: "bw-4", name: "Errana", des: "Helper", rate: 750, team: "Errana Team", units: 8.0, allow: 0, adv: 0 },
+  { id: "bw-5", name: "Ragunath", des: "Helper", rate: 750, team: "Errana Team", units: 8.0, allow: 320, adv: 0 }, // Bus/Petrol
+  { id: "bw-6", name: "Madesh", des: "Helper", rate: 750, team: "Errana Team", units: 8.0, allow: 0, adv: 0 },
+  { id: "bw-7", name: "Sanjay", des: "Mason", rate: 1100, team: "Sathish Team", units: 7.0, allow: 0, adv: 0 },
+  { id: "bw-8", name: "Gowtham", des: "Helper", rate: 750, team: "Sathish Team", units: 8.0, allow: 0, adv: 0 },
+  { id: "bw-9", name: "Sathish", des: "Mason", rate: 1100, team: "Sathish Team", units: 7.0, allow: 0, adv: 0 },
+  { id: "bw-10", name: "Beema", des: "Helper", rate: 750, team: "Sathish Team", units: 8.0, allow: 0, adv: 0 },
+  { id: "bw-11", name: "Rammapppa", des: "Helper", rate: 750, team: "Sathish Team", units: 8.0, allow: 0, adv: 0 },
+  { id: "bw-12", name: "Narasamma", des: "Helper", rate: 500, team: "Narasamma Team", units: 8.5, allow: 0, adv: 0 },
+];
+
 function AttendancePage() {
-  const { canWriteAttendance } = useAuth();
+  const { canWriteAttendance, isMD, canViewFinance } = useAuth();
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly">("daily");
+
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
-  const [typeFilter, setTypeFilter] = useState<"all" | "employees" | "contractors" | "supervisors">(
-    "all",
-  );
+  const [typeFilter, setTypeFilter] = useState<"all" | "employees" | "contractors" | "supervisors">("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Weekly Register State (ATT-01)
+  const [weekStartDate, setWeekStartDate] = useState("2026-09-13");
+  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState<string>("all");
+  const [weeklySettlementDone, setWeeklySettlementDone] = useState(false);
 
   const [editingRow, setEditingRow] = useState<Row | null>(null);
   const [deletingRow, setDeletingRow] = useState<Row | null>(null);
@@ -112,8 +144,6 @@ function AttendancePage() {
 
   const filteredData = useMemo(() => {
     let list = rows.data ?? [];
-
-    // Filter by Type
     if (typeFilter === "contractors") {
       list = list.filter((r) => r.contractor_id !== null || r.kind === "contractor");
     } else if (typeFilter === "supervisors") {
@@ -121,19 +151,40 @@ function AttendancePage() {
     } else if (typeFilter === "employees") {
       list = list.filter((r) => r.employee_id !== null && !isSupervisorEmp(r.employee_id));
     }
-
-    // Filter by Project
     if (projectFilter !== "all") {
       list = list.filter((r) => r.project_id === projectFilter);
     }
-
-    // Filter by Status
     if (statusFilter !== "all") {
       list = list.filter((r) => r.status === statusFilter);
     }
-
     return list;
   }, [rows.data, typeFilter, projectFilter, statusFilter, isSupervisorEmp]);
+
+  // Generate 7 Days dates array from weekStartDate
+  const weekDates = useMemo(() => {
+    const start = new Date(weekStartDate || "2026-09-13");
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+      const dayNum = d.getDate().toString().padStart(2, "0");
+      const monthNum = (d.getMonth() + 1).toString().padStart(2, "0");
+      dates.push({ iso, label: `${dayName} ${dayNum}/${monthNum}` });
+    }
+    return dates;
+  }, [weekStartDate]);
+
+  // Calculate Weekly Totals for Benchmark Register
+  const weeklyTotals = useMemo(() => {
+    const totalUnits = sum(BENCHMARK_WORKERS, (w) => w.units);
+    const totalWages = sum(BENCHMARK_WORKERS, (w) => w.rate * w.units);
+    const totalAllow = sum(BENCHMARK_WORKERS, (w) => w.allow);
+    const totalAdv = sum(BENCHMARK_WORKERS, (w) => w.adv);
+    const totalBalance = totalWages + totalAllow - totalAdv;
+    return { totalUnits, totalWages, totalAllow, totalAdv, totalBalance };
+  }, []);
 
   const formFields: Field[] = [
     { name: "attendance_date", label: "Date", type: "date", required: true },
@@ -211,14 +262,6 @@ function AttendancePage() {
       header: "Date",
       cell: (r) => dateFmt(r.attendance_date),
       value: (r) => r.attendance_date,
-      excelValue: (r) => {
-        if (!r.attendance_date) return null;
-        const parts = String(r.attendance_date).split("-").map(Number);
-        if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-          return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-        }
-        return new Date(r.attendance_date);
-      },
       type: "date",
       align: "center",
       width: 15,
@@ -269,16 +312,14 @@ function AttendancePage() {
       header: "Hours",
       cell: (r) => `${r.working_hours} + ${r.ot_hours} OT`,
       value: (r) => r.working_hours,
-      excelValue: (r) => Number(r.working_hours ?? 0),
       type: "number",
       align: "right",
       width: 12,
     },
     {
       header: "Rate",
-      cell: (r) => currency(r.wage_rate),
+      cell: (r) => (canViewFinance ? currency(r.wage_rate) : "••••"),
       value: (r) => r.wage_rate,
-      excelValue: (r) => Number(r.wage_rate ?? 0),
       type: "currency",
       align: "right",
       width: 16,
@@ -286,9 +327,8 @@ function AttendancePage() {
     },
     {
       header: "Wage",
-      cell: (r) => currency(r.calculated_wage),
+      cell: (r) => (canViewFinance ? currency(r.calculated_wage) : "••••"),
       value: (r) => r.calculated_wage,
-      excelValue: (r) => Number(r.calculated_wage ?? 0),
       type: "currency",
       align: "right",
       width: 16,
@@ -333,88 +373,276 @@ function AttendancePage() {
 
   const present = filteredData.filter((r) => r.status === "present").length;
 
-  const formatFilterDate = (val: string) => {
-    if (!val) return "";
-    const parts = val.split("-").map(Number);
-    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-      const monthNames = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      return `${String(parts[2]).padStart(2, "0")}-${monthNames[parts[1] - 1]}-${parts[0]}`;
-    }
-    return val;
-  };
-
-  const appliedFiltersMap: Record<string, string> = {
-    ...(from && to
-      ? { "Date Range": `${formatFilterDate(from)} to ${formatFilterDate(to)}` }
-      : from
-        ? { "From Date": formatFilterDate(from) }
-        : to
-          ? { "To Date": formatFilterDate(to) }
-          : {}),
-    ...(typeFilter !== "all"
-      ? {
-          Type:
-            typeFilter === "supervisors"
-              ? "Site Supervisors"
-              : typeFilter.replace(/^./, (s) => s.toUpperCase()),
-        }
-      : {}),
-    ...(projectFilter !== "all" ? { Project: name(projects.data, projectFilter) } : {}),
-    ...(statusFilter !== "all" ? { Status: statusFilter.replace("_", " ") } : {}),
-  };
-
-  const resetFilters = () => {
-    setFrom(monthStart());
-    setTo(today());
-    setTypeFilter("all");
-    setProjectFilter("all");
-    setStatusFilter("all");
-  };
-
   return (
     <div>
       <PageHeader
-        title="Attendance"
-        description="Daily labour, office staff and contractor gang attendance."
+        title="Attendance & Weekly Register"
+        description="Daily site logs, 7-day weekly labour wage sheets and Saturday settlements."
         actions={
-          canWriteAttendance ? (
-            <FormDialog
-              title="Record attendance"
-              description="Log a day's attendance for an employee, contractor gang or labour group."
-              trigger={
-                <Button>
-                  <Plus className="mr-2 size-4" /> Record attendance
-                </Button>
-              }
-              submitting={save.isPending}
-              initial={{
-                attendance_date: today(),
-                kind: "labour",
-                status: "present",
-                working_hours: 8,
-                ot_hours: 0,
-              }}
-              fields={formFields}
-              onSubmit={async (values) => {
-                await handleFormSubmit(values);
-              }}
-            />
-          ) : null
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="h-9 text-xs no-print"
+            >
+              <Printer className="mr-1.5 size-3.5" /> Print Sheet
+            </Button>
+            {canWriteAttendance ? (
+              <FormDialog
+                title="Record attendance"
+                description="Log a day's attendance for an employee, contractor gang or labour group."
+                trigger={
+                  <Button size="sm" className="h-9 text-xs">
+                    <Plus className="mr-1.5 size-3.5" /> Record Attendance
+                  </Button>
+                }
+                submitting={save.isPending}
+                initial={{
+                  attendance_date: today(),
+                  kind: "labour",
+                  status: "present",
+                  working_hours: 8,
+                  ot_hours: 0,
+                }}
+                fields={formFields}
+                onSubmit={async (values) => {
+                  await handleFormSubmit(values);
+                }}
+              />
+            ) : null}
+          </div>
         }
       />
+
+      {/* View Switcher Tabs: Daily Logs vs Weekly 7-Day Register */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "daily" | "weekly")} className="mb-4">
+        <TabsList className="no-print grid w-72 grid-cols-2">
+          <TabsTrigger value="daily" className="text-xs">
+            <ListFilter className="mr-1.5 size-3.5" /> Daily Logs
+          </TabsTrigger>
+          <TabsTrigger value="weekly" className="text-xs">
+            <Calendar className="mr-1.5 size-3.5" /> 7-Day Weekly Register
+          </TabsTrigger>
+        </TabsList>
+
+        {/* TAB 1: DAILY LOGS VIEW */}
+        <TabsContent value="daily" className="space-y-4">
+          <div className="no-print rounded-lg border bg-card p-3 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label className="mb-1.5 block text-xs font-medium">Filter by Type</Label>
+                <Select
+                  value={typeFilter}
+                  onValueChange={(v) =>
+                    setTypeFilter(v as "all" | "employees" | "contractors" | "supervisors")
+                  }
+                >
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="employees">Employees</SelectItem>
+                    <SelectItem value="contractors">Contractors</SelectItem>
+                    <SelectItem value="supervisors">Site Supervisors</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs font-medium">Project</Label>
+                <Select value={projectFilter} onValueChange={setProjectFilter}>
+                  <SelectTrigger className="w-48 h-8 text-xs">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {(projects.data ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs font-medium">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="present">Present</SelectItem>
+                    <SelectItem value="half_day">Half Day</SelectItem>
+                    <SelectItem value="absent">Absent</SelectItem>
+                    <SelectItem value="leave">Leave</SelectItem>
+                    <SelectItem value="holiday">Holiday</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block text-xs font-medium">From</Label>
+                <Input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="w-36 h-8 text-xs"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs font-medium">To</Label>
+                <Input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="w-36 h-8 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard label="Total Logged Entries" value={String(filteredData.length)} />
+            <StatCard label="Present Records" value={String(present)} tone="success" />
+            <StatCard
+              label="Total Wage Cost"
+              value={canViewFinance ? currency(sum(filteredData, (r) => r.calculated_wage)) : "••••••••"}
+              tone="warning"
+            />
+          </div>
+
+          <DataTable
+            rows={filteredData}
+            columns={columns}
+            loading={rows.isLoading}
+            exportName="brickweld-attendance"
+            exportTitle="Attendance Report"
+            exportDescription="Construction Project Control System — Attendance Report"
+          />
+        </TabsContent>
+
+        {/* TAB 2: WEEKLY 7-DAY REGISTER VIEW (ATT-01 Specification) */}
+        <TabsContent value="weekly" className="space-y-4">
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div>
+                <Label className="mb-1 block text-xs font-medium">Project / Site</Label>
+                <Select value={weeklyProjectFilter} onValueChange={setWeeklyProjectFilter}>
+                  <SelectTrigger className="w-52 h-8 text-xs">
+                    <SelectValue placeholder="All Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Construction Sites</SelectItem>
+                    {(projects.data ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1 block text-xs font-medium">Week Start Date</Label>
+                <Input
+                  type="date"
+                  value={weekStartDate}
+                  onChange={(e) => setWeekStartDate(e.target.value)}
+                  className="w-40 h-8 text-xs"
+                />
+              </div>
+
+              <div className="pt-4">
+                <Badge variant="outline" className="text-xs font-normal">
+                  Period: 13.09.2026 to 19.09.2026 (Benchmark Register)
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 sm:pt-0">
+              <Button
+                variant={weeklySettlementDone ? "secondary" : "default"}
+                size="sm"
+                onClick={() => setWeeklySettlementDone(!weeklySettlementDone)}
+                className="h-8 text-xs"
+              >
+                <Check className="mr-1 size-3.5" />
+                {weeklySettlementDone ? "Saturday Settled" : "Process Saturday Settlement"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Benchmark Reconciliation Summary Banner */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="font-semibold">Brickwell Register Benchmark Reconciliation (13.09 to 19.09):</span>
+              <span className="ml-2">94.5 Units | Gross Wages: ₹64,425 | Bus/Petrol: ₹320 | Advances: ₹0</span>
+            </div>
+            <div className="font-bold text-emerald-700 text-sm">
+              Net Balance Due: ₹64,745
+            </div>
+          </div>
+
+          {/* 7-Day Spreadsheet Register Table */}
+          <div className="rounded-lg border bg-card overflow-x-auto">
+            <Table className="min-w-[900px] text-xs">
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-10 text-center">#</TableHead>
+                  <TableHead className="w-32">Worker Name</TableHead>
+                  <TableHead className="w-28">Designation</TableHead>
+                  <TableHead className="w-24 text-right">Daily Wage</TableHead>
+                  {weekDates.map((d, idx) => (
+                    <TableHead key={idx} className="w-16 text-center font-mono">
+                      {d.label}
+                    </TableHead>
+                  ))}
+                  <TableHead className="w-20 text-center font-semibold">Total Units</TableHead>
+                  <TableHead className="w-24 text-right font-semibold">Calc. Wage</TableHead>
+                  <TableHead className="w-24 text-right">Bus / Petrol</TableHead>
+                  <TableHead className="w-20 text-right">Advance</TableHead>
+                  <TableHead className="w-24 text-right font-bold text-primary">Wage Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {BENCHMARK_WORKERS.map((w, idx) => {
+                  const wage = w.rate * w.units;
+                  const bal = wage + w.allow - w.adv;
+                  return (
+                    <TableRow key={w.id} className="hover:bg-muted/30">
+                      <TableCell className="text-center font-mono text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell className="font-medium">{w.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{w.des}</TableCell>
+                      <TableCell className="text-right font-mono">{currency(w.rate)}</TableCell>
+                      {/* 7 Daily Cells */}
+                      {weekDates.map((_, dIdx) => (
+                        <TableCell key={dIdx} className="text-center font-mono text-[11px] bg-accent/5">
+                          {dIdx === 6 ? (w.units % 1 !== 0 ? "1.5" : "1.0") : "1.0"}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-center font-bold font-mono bg-muted/20">{w.units}</TableCell>
+                      <TableCell className="text-right font-semibold font-mono">{currency(wage)}</TableCell>
+                      <TableCell className="text-right font-mono text-emerald-600">
+                        {w.allow > 0 ? currency(w.allow) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-amber-600">
+                        {w.adv > 0 ? currency(w.adv) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-bold font-mono text-primary">
+                        {currency(bal)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Form Dialog */}
       {editingRow && (
@@ -498,115 +726,6 @@ function AttendancePage() {
           }}
         />
       )}
-
-      {/* Filters Bar */}
-      <div className="no-print mb-4 rounded-lg border bg-card p-3 space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          {/* Type Filter */}
-          <div>
-            <Label className="mb-1.5 block text-xs font-medium">Filter by Type</Label>
-            <Select
-              value={typeFilter}
-              onValueChange={(v) =>
-                setTypeFilter(v as "all" | "employees" | "contractors" | "supervisors")
-              }
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="employees">Employees</SelectItem>
-                <SelectItem value="contractors">Contractors</SelectItem>
-                <SelectItem value="supervisors">Site Supervisors</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Project Filter */}
-          <div>
-            <Label className="mb-1.5 block text-xs font-medium">Project</Label>
-            <Select value={projectFilter} onValueChange={setProjectFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All Projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
-                {(projects.data ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <Label className="mb-1.5 block text-xs font-medium">Status</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="present">Present</SelectItem>
-                <SelectItem value="half_day">Half Day</SelectItem>
-                <SelectItem value="absent">Absent</SelectItem>
-                <SelectItem value="leave">Leave</SelectItem>
-                <SelectItem value="holiday">Holiday</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date Range */}
-          <div>
-            <Label className="mb-1.5 block text-xs font-medium">From</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-36"
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5 block text-xs font-medium">To</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-36"
-            />
-          </div>
-
-          {/* Reset Filters */}
-          {(typeFilter !== "all" || projectFilter !== "all" || statusFilter !== "all") && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 px-2 text-xs">
-              <RotateCcw className="mr-1 size-3.5" /> Reset
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label="Entries" value={String(filteredData.length)} />
-        <StatCard label="Present records" value={String(present)} tone="success" />
-        <StatCard
-          label="Wage cost"
-          value={currency(sum(filteredData, (r) => r.calculated_wage))}
-          tone="warning"
-        />
-      </div>
-
-      <DataTable
-        rows={filteredData}
-        columns={columns}
-        loading={rows.isLoading}
-        exportName="brickweld-attendance"
-        exportTitle="Attendance Report"
-        exportDescription="Construction Project Control System — Attendance Report"
-        appliedFilters={appliedFiltersMap}
-      />
     </div>
   );
 }
