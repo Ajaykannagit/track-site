@@ -25,7 +25,6 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/projects", label: "Projects", icon: Building2 },
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { to: "/payroll", label: "Payroll", icon: Wallet },
   { to: "/accounts", label: "Accounts & Cash", icon: Receipt },
   { to: "/materials", label: "Materials", icon: Package },
   { to: "/contractors", label: "Contractors", icon: HardHat },
@@ -40,8 +39,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
   const allowedNav = NAV.filter((item) => {
     if (item.to === "/dashboard" || item.to === "/projects") return permissions.canViewProjects;
-    if (item.to === "/attendance") return permissions.canEnterAttendance;
-    if (item.to === "/payroll") return permissions.canViewWagesAndPayments;
+    if (item.to === "/attendance") return permissions.canEnterAttendance || permissions.canViewWagesAndPayments;
     if (item.to === "/accounts" || item.to === "/reports") return permissions.canViewMaterialContractorCosts;
     if (item.to === "/materials" || item.to === "/contractors" || item.to === "/masters") return permissions.canViewMaterialsAndContractors;
     if (item.to === "/settings") return isMD || permissions.canManageUsers;
