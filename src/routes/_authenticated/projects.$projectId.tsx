@@ -5,6 +5,7 @@ import { DataTable, StatCard } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/lib/auth";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt } from "@/lib/format";
 
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId")({
 
 function ProjectDetail() {
   const { projectId } = Route.useParams();
+  const { permissions } = useAuth();
   const f = [{ col: "project_id", op: "eq" as const, value: projectId }];
 
   const project = useRows<{
@@ -49,14 +51,20 @@ function ProjectDetail() {
     category: string;
     budget_amount: number;
     notes: string | null;
-  }>("project_budgets", { filters: f });
+  }>("project_budgets", { filters: f, enabled: permissions.canViewProjectFinancials });
+
   const expenses = useRows<{
     id: string;
     expense_date: string;
     category: string;
     amount: number;
     description: string | null;
-  }>("expenses", { filters: f, order: { col: "expense_date" } });
+  }>("expenses", {
+    filters: f,
+    order: { col: "expense_date" },
+    enabled: permissions.canViewProjectFinancials,
+  });
+
   const attendance = useRows<{
     id: string;
     attendance_date: string;
@@ -64,20 +72,35 @@ function ProjectDetail() {
     status: string;
     calculated_wage: number;
     workforce_count: number | null;
-  }>("attendance", { filters: f, order: { col: "attendance_date" }, limit: 200 });
+  }>("attendance", {
+    filters: f,
+    order: { col: "attendance_date" },
+    limit: 200,
+    enabled: permissions.canEnterAttendance,
+  });
+
   const receipts = useRows<{
     id: string;
     receipt_number: string;
     receipt_date: string;
     total_amount: number;
-  }>("material_receipts", { filters: f, order: { col: "receipt_date" } });
+  }>("material_receipts", {
+    filters: f,
+    order: { col: "receipt_date" },
+    enabled: permissions.canViewMaterialsAndContractors,
+  });
+
   const bills = useRows<{
     id: string;
     bill_number: string;
     bill_date: string;
     net_amount: number;
     status: string;
-  }>("contractor_bills", { filters: f, order: { col: "bill_date" } });
+  }>("contractor_bills", {
+    filters: f,
+    order: { col: "bill_date" },
+    enabled: permissions.canViewMaterialContractorCosts,
+  });
 
   const p = project.data?.[0];
   const labour = sum(attendance.data ?? [], (a) => a.calculated_wage);
@@ -104,169 +127,90 @@ function ProjectDetail() {
         actions={p ? <StatusBadge status={p.status} /> : null}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Contract value" value={currency(value)} />
-        <StatCard label="Total cost" value={currency(cost)} tone="warning" />
-        <StatCard
-          label="Profit"
-          value={currency(profit)}
-          tone={profit >= 0 ? "success" : "destructive"}
-          hint={value ? `${((profit / value) * 100).toFixed(1)}% margin` : "No contract value"}
-        />
-        <StatCard
-          label="Budget allotted"
-          value={currency(sum(budgets.data ?? [], (b) => b.budget_amount))}
-        />
-      </div>
+      {/* Financial StatCards: only if role has financial permission */}
+      {permissions.canViewProjectFinancials && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Contract value" value={currency(value)} />
+          <StatCard label="Total cost" value={currency(cost)} tone="warning" />
+          <StatCard
+            label="Profit"
+            value={currency(profit)}
+            tone={profit >= 0 ? "success" : "destructive"}
+            hint={value ? `${((profit / value) * 100).toFixed(1)}% margin` : "No contract value"}
+          />
+          <StatCard
+            label="Budget allotted"
+            value={currency(sum(budgets.data ?? [], (b) => b.budget_amount))}
+          />
+        </div>
+      )}
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle className="text-base">Cost composition</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
-              <StatCard label="Labour & wages" value={currency(labour)} />
-              <StatCard label="Materials" value={currency(material)} />
-              <StatCard label="Contractors" value={currency(contractor)} />
-              <StatCard label="Other expenses" value={currency(other)} />
+      {/* Cost Composition: only for financial view */}
+      {permissions.canViewProjectFinancials && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Cost composition</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
+                <StatCard label="Labour & wages" value={currency(labour)} />
+                <StatCard label="Materials" value={currency(material)} />
+                <StatCard label="Contractors" value={currency(contractor)} />
+                <StatCard label="Other expenses" value={currency(other)} />
+              </div>
+              <div className="flex h-56 flex-col items-center justify-center rounded-lg border bg-card/50 p-2">
+                {!hasCost ? (
+                  <p className="text-sm text-muted-foreground">No costs recorded yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={costBreakdown}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={45}
+                        outerRadius={75}
+                        paddingAngle={3}
+                      >
+                        {costBreakdown.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => currency(v)} />
+                      <Legend
+                        verticalAlign="bottom"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
-            <div className="flex h-56 flex-col items-center justify-center rounded-lg border bg-card/50 p-2">
-              {!hasCost ? (
-                <p className="text-sm text-muted-foreground">No costs recorded yet.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={costBreakdown}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={45}
-                      outerRadius={75}
-                      paddingAngle={3}
-                    >
-                      {costBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => currency(v)} />
-                    <Legend
-                      verticalAlign="bottom"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      <Tabs defaultValue="budget" className="mt-4">
+      <Tabs defaultValue="info" className="mt-4">
         <TabsList className="no-print flex-wrap">
-          <TabsTrigger value="budget">Budget</TabsTrigger>
-          <TabsTrigger value="attendance">Attendance</TabsTrigger>
-          <TabsTrigger value="materials">Materials</TabsTrigger>
-          <TabsTrigger value="contractors">Contractor bills</TabsTrigger>
           <TabsTrigger value="info">Details</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          {permissions.canViewProjectFinancials && (
+            <TabsTrigger value="budget">Budget</TabsTrigger>
+          )}
+          {permissions.canEnterAttendance && (
+            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          )}
+          {permissions.canViewMaterialsAndContractors && (
+            <TabsTrigger value="materials">Materials</TabsTrigger>
+          )}
+          {permissions.canViewMaterialContractorCosts && (
+            <TabsTrigger value="contractors">Contractor bills</TabsTrigger>
+          )}
+          {permissions.canViewProjectFinancials && (
+            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          )}
         </TabsList>
-
-        <TabsContent value="budget">
-          <DataTable
-            rows={budgets.data ?? []}
-            loading={budgets.isLoading}
-            exportName="project-budget"
-            columns={[
-              { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-              {
-                header: "Budget",
-                cell: (r) => currency(r.budget_amount),
-                value: (r) => r.budget_amount,
-                className: "text-right",
-              },
-              { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
-            ]}
-          />
-        </TabsContent>
-
-        <TabsContent value="attendance">
-          <DataTable
-            rows={attendance.data ?? []}
-            loading={attendance.isLoading}
-            exportName="project-attendance"
-            columns={[
-              {
-                header: "Date",
-                cell: (r) => dateFmt(r.attendance_date),
-                value: (r) => r.attendance_date,
-              },
-              { header: "Kind", cell: (r) => r.kind, value: (r) => r.kind },
-              {
-                header: "Status",
-                cell: (r) => <StatusBadge status={r.status} />,
-                value: (r) => r.status,
-              },
-              {
-                header: "Headcount",
-                cell: (r) => r.workforce_count ?? 1,
-                value: (r) => r.workforce_count ?? 1,
-              },
-              {
-                header: "Wage",
-                cell: (r) => currency(r.calculated_wage),
-                value: (r) => r.calculated_wage,
-                className: "text-right",
-              },
-            ]}
-          />
-        </TabsContent>
-
-        <TabsContent value="materials">
-          <DataTable
-            rows={receipts.data ?? []}
-            loading={receipts.isLoading}
-            exportName="project-material-receipts"
-            columns={[
-              { header: "Receipt", cell: (r) => r.receipt_number, value: (r) => r.receipt_number },
-              {
-                header: "Date",
-                cell: (r) => dateFmt(r.receipt_date),
-                value: (r) => r.receipt_date,
-              },
-              {
-                header: "Amount",
-                cell: (r) => currency(r.total_amount),
-                value: (r) => r.total_amount,
-                className: "text-right",
-              },
-            ]}
-          />
-        </TabsContent>
-
-        <TabsContent value="contractors">
-          <DataTable
-            rows={bills.data ?? []}
-            loading={bills.isLoading}
-            exportName="project-contractor-bills"
-            columns={[
-              { header: "Bill", cell: (r) => r.bill_number, value: (r) => r.bill_number },
-              { header: "Date", cell: (r) => dateFmt(r.bill_date), value: (r) => r.bill_date },
-              {
-                header: "Status",
-                cell: (r) => <StatusBadge status={r.status} />,
-                value: (r) => r.status,
-              },
-              {
-                header: "Net",
-                cell: (r) => currency(r.net_amount),
-                value: (r) => r.net_amount,
-                className: "text-right",
-              },
-            ]}
-          />
-        </TabsContent>
 
         <TabsContent value="info">
           <Card>
@@ -281,32 +225,145 @@ function ProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="expenses">
-          <DataTable
-            rows={expenses.data ?? []}
-            loading={expenses.isLoading}
-            exportName="project-expenses"
-            columns={[
-              {
-                header: "Date",
-                cell: (r) => dateFmt(r.expense_date),
-                value: (r) => r.expense_date,
-              },
-              { header: "Category", cell: (r) => r.category, value: (r) => r.category },
-              {
-                header: "Description",
-                cell: (r) => r.description ?? "—",
-                value: (r) => r.description,
-              },
-              {
-                header: "Amount",
-                cell: (r) => currency(r.amount),
-                value: (r) => r.amount,
-                className: "text-right",
-              },
-            ]}
-          />
-        </TabsContent>
+        {permissions.canViewProjectFinancials && (
+          <TabsContent value="budget">
+            <DataTable
+              rows={budgets.data ?? []}
+              loading={budgets.isLoading}
+              exportName="project-budget"
+              columns={[
+                { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+                {
+                  header: "Budget",
+                  cell: (r) => currency(r.budget_amount),
+                  value: (r) => r.budget_amount,
+                  className: "text-right",
+                },
+                { header: "Notes", cell: (r) => r.notes ?? "—", value: (r) => r.notes },
+              ]}
+            />
+          </TabsContent>
+        )}
+
+        {permissions.canEnterAttendance && (
+          <TabsContent value="attendance">
+            <DataTable
+              rows={attendance.data ?? []}
+              loading={attendance.isLoading}
+              exportName="project-attendance"
+              columns={[
+                {
+                  header: "Date",
+                  cell: (r) => dateFmt(r.attendance_date),
+                  value: (r) => r.attendance_date,
+                },
+                { header: "Kind", cell: (r) => r.kind, value: (r) => r.kind },
+                {
+                  header: "Status",
+                  cell: (r) => <StatusBadge status={r.status} />,
+                  value: (r) => r.status,
+                },
+                {
+                  header: "Headcount",
+                  cell: (r) => r.workforce_count ?? 1,
+                  value: (r) => r.workforce_count ?? 1,
+                },
+                ...(permissions.canViewWagesAndPayments
+                  ? [
+                      {
+                        header: "Wage",
+                        cell: (r: { calculated_wage: number }) => currency(r.calculated_wage),
+                        value: (r: { calculated_wage: number }) => r.calculated_wage,
+                        className: "text-right",
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </TabsContent>
+        )}
+
+        {permissions.canViewMaterialsAndContractors && (
+          <TabsContent value="materials">
+            <DataTable
+              rows={receipts.data ?? []}
+              loading={receipts.isLoading}
+              exportName="project-material-receipts"
+              columns={[
+                { header: "Receipt", cell: (r) => r.receipt_number, value: (r) => r.receipt_number },
+                {
+                  header: "Date",
+                  cell: (r) => dateFmt(r.receipt_date),
+                  value: (r) => r.receipt_date,
+                },
+                ...(permissions.canViewMaterialContractorCosts
+                  ? [
+                      {
+                        header: "Amount",
+                        cell: (r: { total_amount: number }) => currency(r.total_amount),
+                        value: (r: { total_amount: number }) => r.total_amount,
+                        className: "text-right",
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </TabsContent>
+        )}
+
+        {permissions.canViewMaterialContractorCosts && (
+          <TabsContent value="contractors">
+            <DataTable
+              rows={bills.data ?? []}
+              loading={bills.isLoading}
+              exportName="project-contractor-bills"
+              columns={[
+                { header: "Bill", cell: (r) => r.bill_number, value: (r) => r.bill_number },
+                { header: "Date", cell: (r) => dateFmt(r.bill_date), value: (r) => r.bill_date },
+                {
+                  header: "Status",
+                  cell: (r) => <StatusBadge status={r.status} />,
+                  value: (r) => r.status,
+                },
+                {
+                  header: "Net",
+                  cell: (r) => currency(r.net_amount),
+                  value: (r) => r.net_amount,
+                  className: "text-right",
+                },
+              ]}
+            />
+          </TabsContent>
+        )}
+
+        {permissions.canViewProjectFinancials && (
+          <TabsContent value="expenses">
+            <DataTable
+              rows={expenses.data ?? []}
+              loading={expenses.isLoading}
+              exportName="project-expenses"
+              columns={[
+                {
+                  header: "Date",
+                  cell: (r) => dateFmt(r.expense_date),
+                  value: (r) => r.expense_date,
+                },
+                { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+                {
+                  header: "Description",
+                  cell: (r) => r.description ?? "—",
+                  value: (r) => r.description,
+                },
+                {
+                  header: "Amount",
+                  cell: (r) => currency(r.amount),
+                  value: (r) => r.amount,
+                  className: "text-right",
+                },
+              ]}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

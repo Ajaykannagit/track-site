@@ -1,8 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  type AppRole,
+  type RolePermissions,
+  ROLE_PERMISSIONS,
+  getEffectivePermissions,
+} from "./permissions";
 
-export type AppRole = "md" | "supervisor" | "accounts" | "viewer";
+export type { AppRole, RolePermissions };
 
 export const ROLE_LABEL: Record<AppRole, string> = {
   md: "MD / Administrator",
@@ -17,6 +23,8 @@ type AuthState = {
   roles: AppRole[];
   loading: boolean;
   isMD: boolean;
+  permissions: RolePermissions;
+  // Convenience flags matching permissions
   canWriteFinance: boolean;
   canViewFinance: boolean;
   canWriteSite: boolean;
@@ -58,19 +66,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const permissions = getEffectivePermissions(roles);
   const isMD = roles.includes("md");
-  // Default to true if roles array is empty during initial load or dev unauthenticated mode, otherwise restrict to md and accounts
-  const canViewFinance = roles.length === 0 || isMD || roles.includes("accounts");
+
   const value: AuthState = {
     user: session?.user ?? null,
     session,
     roles,
     loading,
     isMD,
+    permissions,
     canWriteFinance: isMD || roles.includes("accounts"),
-    canViewFinance,
+    canViewFinance: permissions.canViewProjectFinancials,
     canWriteSite: isMD || roles.includes("accounts") || roles.includes("supervisor"),
-    canWriteAttendance: isMD || roles.includes("supervisor"),
+    canWriteAttendance: permissions.canEnterAttendance,
     refreshRoles: () => loadRoles(session?.user.id),
   };
 

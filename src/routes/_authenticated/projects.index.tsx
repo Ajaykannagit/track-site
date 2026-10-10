@@ -54,7 +54,7 @@ type Project = {
 };
 
 function ProjectsPage() {
-  const { isMD } = useAuth();
+  const { isMD, permissions } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
 
@@ -98,7 +98,9 @@ function ProjectsPage() {
         label: s.replace("_", " "),
       })),
     },
-    { name: "quotation_amount", label: "Contract value (₹)", type: "number" },
+    ...(permissions.canViewProjectFinancials
+      ? [{ name: "quotation_amount", label: "Contract value (₹)", type: "number" as const }]
+      : []),
     { name: "start_date", label: "Start date", type: "date" },
     { name: "expected_completion_date", label: "Expected completion", type: "date" },
     { name: "house_number", label: "House / plot number" },
@@ -128,12 +130,16 @@ function ProjectsPage() {
       value: (r) => clientName(r.client_id),
     },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
-    {
-      header: "Contract value",
-      cell: (r) => currency(r.quotation_amount),
-      value: (r) => r.quotation_amount,
-      className: "text-right",
-    },
+    ...(permissions.canViewProjectFinancials
+      ? [
+          {
+            header: "Contract value",
+            cell: (r: Project) => currency(r.quotation_amount),
+            value: (r: Project) => r.quotation_amount,
+            className: "text-right",
+          },
+        ]
+      : []),
     { header: "Start", cell: (r) => dateFmt(r.start_date), value: (r) => r.start_date },
     {
       header: "Target",

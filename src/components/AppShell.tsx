@@ -36,9 +36,21 @@ const NAV = [
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { permissions, isMD } = useAuth();
+
+  const allowedNav = NAV.filter((item) => {
+    if (item.to === "/dashboard" || item.to === "/projects") return permissions.canViewProjects;
+    if (item.to === "/attendance") return permissions.canEnterAttendance;
+    if (item.to === "/payroll") return permissions.canViewWagesAndPayments;
+    if (item.to === "/accounts" || item.to === "/reports") return permissions.canViewMaterialContractorCosts;
+    if (item.to === "/materials" || item.to === "/contractors" || item.to === "/masters") return permissions.canViewMaterialsAndContractors;
+    if (item.to === "/settings") return isMD || permissions.canManageUsers;
+    return true;
+  });
+
   return (
     <nav className="flex flex-col gap-1 p-3">
-      {NAV.map((item) => {
+      {allowedNav.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.to || pathname.startsWith(`${item.to}/`);
         return (
