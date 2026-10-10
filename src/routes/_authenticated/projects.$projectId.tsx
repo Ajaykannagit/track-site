@@ -1,15 +1,19 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
-import { Printer, Users, Package, HardHat, FileText } from "lucide-react";
+import { Printer, Users, Package, HardHat, FileText, Plus, FileSpreadsheet, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { FormDialog, type Field } from "@/components/FormDialog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { useRows, sum } from "@/lib/db";
-import { currency, dateFmt } from "@/lib/format";
+import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
+import { currency, dateFmt, today } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   head: () => ({
@@ -29,10 +33,23 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   component: ProjectDetail,
 });
 
+type ProjectQuotation = {
+  id: string;
+  project_id: string;
+  quotation_number: string | null;
+  title: string;
+  description: string | null;
+  amount: number;
+  quotation_date: string;
+  status: string;
+};
+
 function ProjectDetail() {
   const { projectId } = Route.useParams();
-  const { permissions } = useAuth();
+  const { permissions, isMD } = useAuth();
   const f = [{ col: "project_id", op: "eq" as const, value: projectId }];
+
+  const [deletingQuotation, setDeletingQuotation] = useState<ProjectQuotation | null>(null);
 
   const project = useRows<{
     id: string;
@@ -47,6 +64,16 @@ function ProjectDetail() {
     agreement_details: string | null;
     details: string | null;
   }>("projects", { filters: [{ col: "id", op: "eq", value: projectId }] });
+
+  // Update 4: Project Quotations (mid-project variations & additions)
+  const quotations = useRows<ProjectQuotation>("project_quotations", {
+    filters: f,
+    order: { col: "quotation_date", asc: false },
+    enabled: permissions.canViewProjectFinancials,
+  });
+
+  const saveQuotation = useSaveRow("project_quotations", "Quotation");
+  const deleteQuotation = useDeleteRow("project_quotations", "Quotation");
 
   const budgets = useRows<{
     id: string;
@@ -109,13 +136,16 @@ function ProjectDetail() {
   });
 
   const p = project.data?.[0];
+  const baseContractValue = Number(p?.quotation_amount ?? 0);
+  const extraQuotationsTotal = sum(quotations.data ?? [], (q) => Number(q.amount || 0));
+  const totalContractValue = baseContractValue + extraQuotationsTotal;
+
   const labourWage = sum(attendance.data ?? [], (a) => a.calculated_wage);
   const materialCost = sum(receipts.data ?? [], (r) => r.total_amount);
   const contractorCost = sum(bills.data ?? [], (b) => b.net_amount);
   const otherCost = sum(expenses.data ?? [], (e) => e.amount);
   const totalCost = labourWage + materialCost + contractorCost + otherCost;
-  const contractValue = Number(p?.quotation_amount ?? 0);
-  const profit = contractValue - totalCost;
+  const profit = totalContractValue - totalCost;
 
   const totalHeadcount = sum(attendance.data ?? [], (a) => a.workforce_count ?? 1);
 
@@ -127,15 +157,65 @@ function ProjectDetail() {
   ];
   const hasCost = totalCost > 0;
 
+  const quotationFields: Field[] = [
+    { name: "title", label: "Quotation Title / Scope", required: true, placeholder: "e.g. Extra Bathroom Work, Terrace Waterproofing" },
+    { name: "quotation_number", label: "Quotation Number / Ref", placeholder: "e.g. QTN-002" },
+    { name: "amount", label: "Quotation Amount (₹)", type: "number", required: true },
+    { name: "quotation_date", label: "Quotation Date", type: "date", required: true },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      options: [
+        { value: "approved", label: "Approved / Added to Contract" },
+        { value: "draft", label: "Draft Proposal" },
+        { value: "under_review", label: "Under Client Review" },
+        { value: "rejected", label: "Rejected" },
+      ],
+    },
+    { name: "description", label: "Detailed Scope of Work", type: "textarea" },
+  ];
+
   return (
     <div>
-      {/* Header with Print / PDF button */}
+      {/* Header with Print / PDF and + Quotation button */}
       <PageHeader
         title={p?.name ?? "Project"}
         description={p ? `${p.project_code} · ${p.site_address ?? "No site address"}` : "Loading…"}
         actions={
           <div className="flex items-center gap-2">
             {p ? <StatusBadge status={p.status} /> : null}
+
+            {/* Update 4: + Button inside Project to add mid-project quotation */}
+            {permissions.canManageQuotations && (
+              <FormDialog
+                title="Add Mid-Project Quotation"
+                description={`Add a supplementary quotation or variation to ${p?.name || "this project"}. Approved amount is automatically added to the project's contract value.`}
+                trigger={
+                  <Button size="sm" className="no-print">
+                    <Plus className="mr-1.5 size-4" /> Add Quotation
+                  </Button>
+                }
+                submitting={saveQuotation.isPending}
+                fields={quotationFields}
+                initial={{
+                  project_id: projectId,
+                  quotation_date: today(),
+                  status: "approved",
+                  quotation_number: `QTN-${(quotations.data ?? []).length + 2}`,
+                }}
+                onSubmit={async (values) => {
+                  await saveQuotation.mutateAsync({
+                    values: {
+                      ...values,
+                      project_id: projectId,
+                      amount: Number(values["amount"] ?? 0),
+                    },
+                  });
+                }}
+              />
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -171,8 +251,11 @@ function ProjectDetail() {
         {permissions.canViewProjectFinancials && (
           <div className="grid grid-cols-4 gap-3 border p-3 rounded mb-4 text-xs">
             <div>
-              <span className="text-gray-500 block">Contract Value</span>
-              <span className="font-bold text-sm">{currency(contractValue)}</span>
+              <span className="text-gray-500 block">Total Contract Value</span>
+              <span className="font-bold text-sm">{currency(totalContractValue)}</span>
+              {extraQuotationsTotal > 0 && (
+                <span className="text-[10px] text-gray-500 block">(Base: {currency(baseContractValue)} + Extra: {currency(extraQuotationsTotal)})</span>
+              )}
             </div>
             <div>
               <span className="text-gray-500 block">Total Spend</span>
@@ -190,16 +273,24 @@ function ProjectDetail() {
         )}
       </div>
 
-      {/* Financial StatCards: only if role has financial permission */}
+      {/* Financial StatCards */}
       {permissions.canViewProjectFinancials ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Contract value" value={currency(contractValue)} />
+          <StatCard
+            label="Total Contract Value"
+            value={currency(totalContractValue)}
+            hint={
+              extraQuotationsTotal > 0
+                ? `Base ${currency(baseContractValue)} + ${currency(extraQuotationsTotal)} (${(quotations.data ?? []).length} additions)`
+                : "Base contract value"
+            }
+          />
           <StatCard label="Total cost" value={currency(totalCost)} tone="warning" />
           <StatCard
             label="Profit"
             value={currency(profit)}
             tone={profit >= 0 ? "success" : "destructive"}
-            hint={contractValue ? `${((profit / contractValue) * 100).toFixed(1)}% margin` : "No contract value"}
+            hint={totalContractValue ? `${((profit / totalContractValue) * 100).toFixed(1)}% margin` : "No contract value"}
           />
           <StatCard
             label="Budget allotted"
@@ -277,7 +368,7 @@ function ProjectDetail() {
         )}
       </div>
 
-      {/* Cost Composition Chart: only for financial view */}
+      {/* Cost Composition Chart */}
       {permissions.canViewProjectFinancials && (
         <Card className="mt-4">
           <CardHeader>
@@ -330,6 +421,11 @@ function ProjectDetail() {
           <TabsTrigger value="info">
             <FileText className="mr-1.5 size-3.5" /> Details
           </TabsTrigger>
+          {permissions.canViewProjectFinancials && (
+            <TabsTrigger value="quotations">
+              <FileSpreadsheet className="mr-1.5 size-3.5" /> Quotations ({(quotations.data ?? []).length})
+            </TabsTrigger>
+          )}
           {permissions.canEnterAttendance && (
             <TabsTrigger value="attendance">
               <Users className="mr-1.5 size-3.5" /> Labour & Attendance
@@ -365,6 +461,116 @@ function ProjectDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Update 4: Project Quotations Tab */}
+        {permissions.canViewProjectFinancials && (
+          <TabsContent value="quotations" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">Project Quotations & Variations</h3>
+                <p className="text-xs text-muted-foreground">
+                  Base contract value plus any mid-project additions (e.g. extra bathroom, compound wall).
+                </p>
+              </div>
+
+              {permissions.canManageQuotations && (
+                <FormDialog
+                  title="Add Project Quotation"
+                  description={`Add a supplementary quotation or variation to ${p?.name || "this project"}.`}
+                  trigger={
+                    <Button size="sm">
+                      <Plus className="mr-1.5 size-4" /> Add Quotation
+                    </Button>
+                  }
+                  submitting={saveQuotation.isPending}
+                  fields={quotationFields}
+                  initial={{
+                    project_id: projectId,
+                    quotation_date: today(),
+                    status: "approved",
+                    quotation_number: `QTN-${(quotations.data ?? []).length + 2}`,
+                  }}
+                  onSubmit={async (values) => {
+                    await saveQuotation.mutateAsync({
+                      values: {
+                        ...values,
+                        project_id: projectId,
+                        amount: Number(values["amount"] ?? 0),
+                      },
+                    });
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Base Agreement Card */}
+            <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold">Base Project Agreement Quotation</p>
+                <p className="text-[11px] text-muted-foreground">{p?.agreement_details || "Original agreed contract estimate"}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-muted-foreground block">Base Amount</span>
+                <span className="font-mono text-sm font-bold">{currency(baseContractValue)}</span>
+              </div>
+            </div>
+
+            <DataTable
+              rows={quotations.data ?? []}
+              loading={quotations.isLoading}
+              exportName={`${p?.project_code ?? "project"}-quotations`}
+              exportTitle={`${p?.name} — Supplementary Quotations`}
+              columns={[
+                { header: "Quotation #", cell: (r) => r.quotation_number || "—", value: (r) => r.quotation_number },
+                {
+                  header: "Title / Scope",
+                  cell: (r) => (
+                    <div>
+                      <p className="font-medium text-xs">{r.title}</p>
+                      {r.description && <p className="text-[11px] text-muted-foreground">{r.description}</p>}
+                    </div>
+                  ),
+                  value: (r) => r.title,
+                },
+                {
+                  header: "Date",
+                  cell: (r) => dateFmt(r.quotation_date),
+                  value: (r) => r.quotation_date,
+                },
+                {
+                  header: "Status",
+                  cell: (r) => <Badge variant={r.status === "approved" ? "default" : "secondary"}>{r.status}</Badge>,
+                  value: (r) => r.status,
+                },
+                {
+                  header: "Amount (₹)",
+                  cell: (r) => currency(r.amount),
+                  value: (r) => r.amount,
+                  className: "text-right font-mono font-semibold",
+                },
+                ...(isMD
+                  ? [
+                      {
+                        header: "Actions",
+                        className: "text-right w-16",
+                        cell: (r: ProjectQuotation) => (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeletingQuotation(r)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+              empty="No supplementary quotations added yet. Click '+ Add Quotation' to add mid-project scope variations."
+            />
+          </TabsContent>
+        )}
 
         {permissions.canEnterAttendance && (
           <TabsContent value="attendance">
@@ -521,6 +727,20 @@ function ProjectDetail() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Delete Quotation Dialog */}
+      {deletingQuotation && (
+        <ConfirmDeleteDialog
+          open={!!deletingQuotation}
+          onOpenChange={(open) => !open && setDeletingQuotation(null)}
+          title="Delete Quotation"
+          description={`Are you sure you want to remove quotation "${deletingQuotation.title}" (${currency(deletingQuotation.amount)})? This will reduce the project contract value.`}
+          onConfirm={async () => {
+            await deleteQuotation.mutateAsync(deletingQuotation.id);
+            setDeletingQuotation(null);
+          }}
+        />
+      )}
     </div>
   );
 }

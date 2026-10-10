@@ -64,11 +64,23 @@ function ProjectsPage() {
 
   const projects = useRows<Project>("projects", { order: { col: "created_at" } });
   const clients = useRows<{ id: string; name: string }>("clients", { select: "id,name" });
+  const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
+    select: "project_id,amount",
+    enabled: permissions.canViewProjectFinancials,
+  });
 
   const save = useSaveRow("projects", "Project");
   const deleteProject = useDeleteRow("projects", "Project");
 
   const clientName = (id: string | null) => clients.data?.find((c) => c.id === id)?.name ?? "—";
+
+  const getProjectContractValue = (p: Project) => {
+    const extra = sum(
+      (allQuotations.data ?? []).filter((q) => q.project_id === p.id),
+      (q) => Number(q.amount || 0),
+    );
+    return Number(p.quotation_amount || 0) + extra;
+  };
 
   const filteredProjects = useMemo(() => {
     let list = projects.data ?? [];
@@ -135,9 +147,9 @@ function ProjectsPage() {
       ? [
           {
             header: "Contract value",
-            cell: (r: Project) => currency(r.quotation_amount),
-            value: (r: Project) => r.quotation_amount,
-            className: "text-right",
+            cell: (r: Project) => currency(getProjectContractValue(r)),
+            value: (r: Project) => getProjectContractValue(r),
+            className: "text-right font-mono font-medium",
           },
         ]
       : []),

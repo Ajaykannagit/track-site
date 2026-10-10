@@ -162,6 +162,18 @@ function Dashboard() {
     select: "project_id,net_amount",
     enabled: permissions.canViewProjectFinancials,
   });
+  const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
+    select: "project_id,amount",
+    enabled: permissions.canViewProjectFinancials,
+  });
+
+  const getProjectContractValue = (p: Project) => {
+    const extra = sum(
+      (allQuotations.data ?? []).filter((q) => q.project_id === p.id),
+      (q) => Number(q.amount || 0),
+    );
+    return Number(p.quotation_amount || 0) + extra;
+  };
 
   const projectBreakdown = (projectId: string) => {
     if (!permissions.canViewProjectFinancials) {
@@ -188,7 +200,7 @@ function Dashboard() {
   };
 
   const active = (projects.data ?? []).filter((p) => p.status === "active");
-  const contractValue = sum(projects.data ?? [], (p) => p.quotation_amount);
+  const contractValue = sum(projects.data ?? [], (p) => getProjectContractValue(p));
   const spend =
     sum(expenses.data ?? [], (e) => e.amount) +
     sum(attendance.data ?? [], (a) => a.calculated_wage);
@@ -436,7 +448,7 @@ function Dashboard() {
                     {permissions.canViewProjectFinancials && (
                       <div className="text-right">
                         <p className="text-sm font-semibold">
-                          {currency(p.quotation_amount)}
+                          {currency(getProjectContractValue(p))}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Cost:{" "}
@@ -523,7 +535,7 @@ function Dashboard() {
                   <TableHead>Start Date</TableHead>
                   {permissions.canViewProjectFinancials && (
                     <>
-                      <TableHead className="text-right">Quotation Amount</TableHead>
+                      <TableHead className="text-right">Contract Value</TableHead>
                       <TableHead className="text-right">Cost to Date</TableHead>
                     </>
                   )}
@@ -540,10 +552,10 @@ function Dashboard() {
                       <TableCell>{dateFmt(p.start_date)}</TableCell>
                       {permissions.canViewProjectFinancials && (
                         <>
-                          <TableCell className="text-right font-semibold">
-                            {currency(p.quotation_amount)}
+                          <TableCell className="text-right font-semibold font-mono">
+                            {currency(getProjectContractValue(p))}
                           </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
+                          <TableCell className="text-right text-muted-foreground font-mono">
                             {currency(b.cost)}
                           </TableCell>
                         </>
@@ -598,7 +610,8 @@ function Dashboard() {
                 <TableBody>
                   {(projects.data ?? []).map((p) => {
                     const b = projectBreakdown(p.id);
-                    const margin = p.quotation_amount - b.cost;
+                    const totalVal = getProjectContractValue(p);
+                    const margin = totalVal - b.cost;
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">
@@ -606,7 +619,7 @@ function Dashboard() {
                           <div className="text-xs text-muted-foreground">{p.project_code}</div>
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {currency(p.quotation_amount)}
+                          {currency(totalVal)}
                         </TableCell>
                         <TableCell className="text-right">{currency(b.labour)}</TableCell>
                         <TableCell className="text-right">{currency(b.material)}</TableCell>
