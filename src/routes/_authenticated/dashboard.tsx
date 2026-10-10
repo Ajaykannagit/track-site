@@ -529,11 +529,7 @@ function Dashboard() {
         {!isViewer && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">
-                <Link to="/payroll" className="hover:underline">
-                  Pending approvals
-                </Link>
-              </CardTitle>
+              <CardTitle className="text-base">Pending approvals</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {pendingBills.length === 0 && pendingRequests.length === 0 ? (
@@ -542,7 +538,7 @@ function Dashboard() {
               {pendingRequests.map((r) => (
                 <Link
                   key={r.id}
-                  to="/payroll"
+                  to="/materials"
                   className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-accent/10"
                 >
                   <div>
@@ -556,7 +552,7 @@ function Dashboard() {
                 pendingBills.map((b) => (
                   <Link
                     key={b.bill_number}
-                    to="/payroll"
+                    to="/contractors"
                     className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-accent/10"
                   >
                     <div>
