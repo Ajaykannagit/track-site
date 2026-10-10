@@ -224,6 +224,20 @@ function AttendanceWeeklySheetPage() {
     enabled: permissions.canViewWagesAndPayments,
   });
 
+  // Subcontractor / other payments for this week (from Update 6 table)
+  const subPayments = useRows<{
+    id: string;
+    name: string;
+    work_description: string | null;
+    amount: number;
+    status: string;
+    project_id: string | null;
+  }>("subcontractor_payments", {
+    select: "id,name,work_description,amount,status,project_id",
+    filters: [{ col: "week_start_date", op: "eq", value: weekStartISO }],
+    enabled: permissions.canViewWagesAndPayments,
+  });
+
   const saveAttendance = useSaveRow("attendance", "Attendance");
   const saveAdjustment = useSaveRow("weekly_wage_adjustments", "Weekly Adjustment");
   const saveEmployee = useSaveRow("employees", "Worker");
@@ -755,7 +769,7 @@ function AttendanceWeeklySheetPage() {
             </div>
           </div>
 
-          {/* 3D. Other Payments Placeholder (Subcontractor weekly payments - Update 6) */}
+          {/* 3D. Other Payments — live from subcontractor_payments (Update 6) */}
           <div className="space-y-4">
             <div>
               <h2 className="text-base font-bold flex items-center gap-2">
@@ -763,40 +777,56 @@ function AttendanceWeeklySheetPage() {
               </h2>
               <p className="text-xs text-muted-foreground">
                 Painters, electricians and site-specific vendor vouchers for this week.
+                Manage via <span className="font-medium">Contractors → Other Payments</span>.
               </p>
             </div>
 
-            <Card className="border p-4 bg-muted/20">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b text-xs">
-                  <div>
-                    <p className="font-semibold">Painter Sirenjeev + Arun + Paneer</p>
-                    <p className="text-[11px] text-muted-foreground">Painting Contractor Voucher</p>
+            <Card className="border p-4">
+              {subPayments.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : (subPayments.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No other payments recorded for this week. Add them in Contractors → Other Payments.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {(subPayments.data ?? []).map((sp, idx) => (
+                    <div
+                      key={sp.id}
+                      className={`flex items-center justify-between text-xs ${
+                        idx < (subPayments.data ?? []).length - 1 ? "pb-2 border-b" : ""
+                      }`}
+                    >
+                      <div>
+                        <p className="font-semibold">{sp.name}</p>
+                        {sp.work_description && (
+                          <p className="text-[11px] text-muted-foreground">{sp.work_description}</p>
+                        )}
+                        <span
+                          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium mt-0.5 ${
+                            sp.status === "job_done"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {sp.status === "job_done" ? "Job done" : "Pending"}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold">
+                        ₹{Number(sp.amount).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mt-3 pt-2 border-t flex items-center justify-between text-xs font-semibold">
+                    <span>Total other payments</span>
+                    <span className="font-mono">
+                      ₹{(subPayments.data ?? [])
+                        .reduce((s, p) => s + Number(p.amount), 0)
+                        .toLocaleString("en-IN")}
+                    </span>
                   </div>
-                  <span className="font-mono font-bold">₹12,000</span>
                 </div>
-
-                <div className="flex items-center justify-between pb-2 border-b text-xs">
-                  <div>
-                    <p className="font-semibold">Tamil Electrician</p>
-                    <p className="text-[11px] text-muted-foreground">Electrical work settlement</p>
-                  </div>
-                  <span className="font-mono font-bold">₹1,475</span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-semibold">Kelamangalam Site Petty Cash</p>
-                    <p className="text-[11px] text-muted-foreground">Site operational disbursement</p>
-                  </div>
-                  <span className="font-mono font-bold">₹2,200</span>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t text-[11px] text-muted-foreground flex items-center gap-1.5">
-                <Info className="size-3.5 shrink-0" />
-                <span>Linked to Subcontractor & Vendor settlements ledger (Update 6).</span>
-              </div>
+              )}
             </Card>
           </div>
         </div>

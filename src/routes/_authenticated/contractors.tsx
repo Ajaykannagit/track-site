@@ -93,6 +93,18 @@ type Payment = {
   remarks?: string | null;
 };
 
+type SubPay = {
+  id: string;
+  name: string;
+  work_description: string | null;
+  amount: number;
+  payment_date: string;
+  week_start_date: string;
+  project_id: string | null;
+  status: string;
+  remarks: string | null;
+};
+
 const docNumber = (prefix: string) => `${prefix}-${Date.now().toString().slice(-8)}`;
 
 function ContractorsPage() {
@@ -111,6 +123,9 @@ function ContractorsPage() {
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<Payment | null>(null);
 
+  const [editingSubPay, setEditingSubPay] = useState<SubPay | null>(null);
+  const [deletingSubPay, setDeletingSubPay] = useState<SubPay | null>(null);
+
   // Common Filters
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [contractorFilter, setContractorFilter] = useState<string>("all");
@@ -122,6 +137,10 @@ function ContractorsPage() {
   const mbs = useRows<Mb>("measurement_books", { order: { col: "mb_date" }, limit: 300 });
   const bills = useRows<Bill>("contractor_bills", { order: { col: "bill_date" }, limit: 300 });
   const payments = useRows<Payment>("contractor_payments", {
+    order: { col: "payment_date" },
+    limit: 300,
+  });
+  const subPays = useRows<SubPay>("subcontractor_payments", {
     order: { col: "payment_date" },
     limit: 300,
   });
@@ -146,6 +165,9 @@ function ContractorsPage() {
 
   const canModifySite = canWriteSite || isMD;
   const canModifyFinance = canWriteFinance || isMD;
+
+  const saveSubPay = useSaveRow("subcontractor_payments", "Subcontractor payment");
+  const deleteSubPay = useDeleteRow("subcontractor_payments", "Subcontractor payment");
 
   // Filtered lists
   const filteredWos = useMemo(() => {
@@ -607,6 +629,7 @@ function ContractorsPage() {
           <TabsTrigger value="bills">Bills</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="flow">Flow</TabsTrigger>
+          {canModifyFinance && <TabsTrigger value="subpay">Other Payments</TabsTrigger>}
         </TabsList>
 
         {/* ================= WORK ORDERS ================= */}
@@ -1093,6 +1116,216 @@ function ContractorsPage() {
             </table>
           </div>
         </TabsContent>
+        {/* ================= OTHER PAYMENTS (SUBCONTRACTORS) ================= */}
+        {canModifyFinance && (
+          <TabsContent value="subpay" className="mt-4 space-y-3">
+            <FormDialog
+              title="Add other payment"
+              description="Record a payment to a painter, electrician, vendor or any ad-hoc subcontractor."
+              trigger={
+                <Button>
+                  <Plus className="mr-2 size-4" /> New other payment
+                </Button>
+              }
+              submitting={saveSubPay.isPending}
+              initial={{ payment_date: today(), status: "pending", week_start_date: today() }}
+              fields={[
+                { name: "name", label: "Name / Description", required: true },
+                { name: "work_description", label: "Work details", type: "textarea" },
+                { name: "payment_date", label: "Payment date", type: "date", required: true },
+                {
+                  name: "week_start_date",
+                  label: "Week start (Monday)",
+                  type: "date",
+                  required: true,
+                },
+                { name: "project_id", label: "Project", type: "select", options: projectOptions },
+                { name: "amount", label: "Amount (₹)", type: "number", required: true },
+                {
+                  name: "status",
+                  label: "Status",
+                  type: "select",
+                  options: [
+                    { value: "pending", label: "Pending" },
+                    { value: "job_done", label: "Job done" },
+                  ],
+                },
+                { name: "remarks", label: "Remarks", type: "textarea" },
+              ]}
+              onSubmit={async (values) => {
+                await saveSubPay.mutateAsync({
+                  values: {
+                    ...values,
+                    project_id: values["project_id"] || null,
+                    amount: Number(values["amount"] ?? 0),
+                  },
+                });
+              }}
+            />
+
+            {editingSubPay && (
+              <FormDialog
+                open={!!editingSubPay}
+                onOpenChange={(v) => !v && setEditingSubPay(null)}
+                title="Edit other payment"
+                submitting={saveSubPay.isPending}
+                fields={[
+                  { name: "name", label: "Name / Description", required: true },
+                  { name: "work_description", label: "Work details", type: "textarea" },
+                  { name: "payment_date", label: "Payment date", type: "date", required: true },
+                  {
+                    name: "week_start_date",
+                    label: "Week start (Monday)",
+                    type: "date",
+                    required: true,
+                  },
+                  {
+                    name: "project_id",
+                    label: "Project",
+                    type: "select",
+                    options: projectOptions,
+                  },
+                  { name: "amount", label: "Amount (₹)", type: "number", required: true },
+                  {
+                    name: "status",
+                    label: "Status",
+                    type: "select",
+                    options: [
+                      { value: "pending", label: "Pending" },
+                      { value: "job_done", label: "Job done" },
+                    ],
+                  },
+                  { name: "remarks", label: "Remarks", type: "textarea" },
+                ]}
+                initial={{
+                  name: editingSubPay.name,
+                  work_description: editingSubPay.work_description ?? "",
+                  payment_date: editingSubPay.payment_date,
+                  week_start_date: editingSubPay.week_start_date,
+                  project_id: editingSubPay.project_id ?? "",
+                  amount: editingSubPay.amount,
+                  status: editingSubPay.status,
+                  remarks: editingSubPay.remarks ?? "",
+                }}
+                onSubmit={async (values) => {
+                  await saveSubPay.mutateAsync({
+                    id: editingSubPay.id,
+                    values: {
+                      ...values,
+                      project_id: values["project_id"] || null,
+                      amount: Number(values["amount"] ?? 0),
+                    },
+                  });
+                  setEditingSubPay(null);
+                }}
+              />
+            )}
+
+            {deletingSubPay && (
+              <ConfirmDeleteDialog
+                open={!!deletingSubPay}
+                onOpenChange={(v) => !v && setDeletingSubPay(null)}
+                title="Delete other payment"
+                description={`Delete payment "${deletingSubPay.name}" (${currency(deletingSubPay.amount)})? This cannot be undone.`}
+                onConfirm={async () => {
+                  await deleteSubPay.mutateAsync(deletingSubPay.id);
+                  setDeletingSubPay(null);
+                }}
+              />
+            )}
+
+            <DataTable
+              rows={subPays.data ?? []}
+              loading={subPays.isLoading}
+              exportName="brickweld-other-payments"
+              exportTitle="Other Payments Report"
+              exportDescription="Subcontractor & vendor ad-hoc payments"
+              columns={[
+                {
+                  header: "Date",
+                  cell: (r: SubPay) => dateFmt(r.payment_date),
+                  value: (r: SubPay) => r.payment_date,
+                },
+                {
+                  header: "Week start",
+                  cell: (r: SubPay) => dateFmt(r.week_start_date),
+                  value: (r: SubPay) => r.week_start_date,
+                },
+                {
+                  header: "Name / Description",
+                  cell: (r: SubPay) => (
+                    <div>
+                      <p className="font-medium">{r.name}</p>
+                      {r.work_description && (
+                        <p className="text-[11px] text-muted-foreground">{r.work_description}</p>
+                      )}
+                    </div>
+                  ),
+                  value: (r: SubPay) => r.name,
+                },
+                {
+                  header: "Project",
+                  cell: (r: SubPay) => projectName(r.project_id),
+                  value: (r: SubPay) => projectName(r.project_id),
+                },
+                {
+                  header: "Status",
+                  cell: (r: SubPay) => (
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        r.status === "job_done"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {r.status === "job_done" ? "Job done" : "Pending"}
+                    </span>
+                  ),
+                  value: (r: SubPay) => r.status,
+                },
+                {
+                  header: "Amount",
+                  cell: (r: SubPay) => currency(r.amount),
+                  value: (r: SubPay) => r.amount,
+                  className: "text-right font-semibold",
+                },
+                {
+                  header: "Actions",
+                  className: "text-right w-24",
+                  cell: (r: SubPay) => (
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => setEditingSubPay(r)}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeletingSubPay(r)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+
+            {(subPays.data ?? []).length > 0 && (
+              <div className="flex justify-end rounded-lg border bg-muted/40 px-4 py-2">
+                <span className="text-sm font-semibold">
+                  Grand total:{" "}
+                  <span className="font-mono">{currency(sum(subPays.data ?? [], (r) => r.amount))}</span>
+                </span>
+              </div>
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
