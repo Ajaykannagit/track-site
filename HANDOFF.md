@@ -14,19 +14,26 @@
   - BUG-01: Added missing `sum` import in `src/routes/_authenticated/projects.index.tsx`.
   - BUG-02: Added `max-h-[85vh] overflow-y-auto` scroll container classes to Office Expenses dialog in `src/routes/_authenticated/dashboard.tsx`.
 
+- **Fix Batch 1b completed and pushed**:
+  - `contractors.tsx`: Protected `subcontractor_payments` query with `enabled: canWriteFinance || isMD`.
+  - `masters.tsx`: Cleaned out legacy `payroll` and `payroll_items` queries, state, and the obsolete Payroll History drawer.
+- **Step 2 (Schema Check Script) completed and pushed**:
+  - Created `supabase/checks/check_tables.sql` for read-only table and `is_demo` verification in Supabase SQL Editor.
+- **Step 3 (Security Check & Proposal) completed and pushed**:
+  - Found that standard RLS operates on rows, so direct PostgREST table queries on `projects` and `employees` return all columns of allowed rows.
+  - Authored proposed migration `supabase/migrations/20261012000000_column_security_proposal.sql` creating `projects_sanitized` and `employees_sanitized` views (unapplied, awaiting review).
+
 ---
 
-## 2. Pending List (Not Done Yet)
-- **a. BUG-03 (Contractors) and BUG-04 (Masters)**:
-  - Find the root cause and real error text of the errors seen as MD before changing any code.
-- **b. Security Check**:
-  - Query the API as Viewer and Supervisor to verify whether `projects.quotation_amount` or employee wage fields are returned over the network.
+## 2. Pending List (Next Steps)
+- **a. Apply Missing Migrations**: Run `supabase/checks/check_tables.sql` to identify unapplied migrations on the hosted database.
+- **b. Review Security SQL**: Review `supabase/migrations/20261012000000_column_security_proposal.sql` before applying.
 - **c. Batch 2 Demo Seed**:
   - Comprehensive demo dataset with no duplicates with earlier seed.
   - `is_demo = true` on every seeded record.
   - Correct foreign-key cleanup order script.
   - Role logins created through Supabase Auth.
-  - Explicit confirmation of which database is targeted.
+  - Explicit confirmation of which database is targeted (`https://bcfirpcfowqaueqayksz.supabase.co`).
 - **d. Optional Demo Polish**:
   - UI refinements, empty state guidance, and mobile table responsiveness.
 
