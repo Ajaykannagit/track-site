@@ -28,12 +28,13 @@
 ## 2. Pending List (Next Steps)
 - **a. Apply Missing Migrations**: Run `supabase/checks/check_tables.sql` to identify unapplied migrations on the hosted database.
 - **b. Review Security SQL**: Review `supabase/migrations/20261012000000_column_security_proposal.sql` before applying.
-- **c. Batch 2 Demo Seed**:
-  - Comprehensive demo dataset with no duplicates with earlier seed.
-  - `is_demo = true` on every seeded record.
-  - Correct foreign-key cleanup order script.
-  - Role logins created through Supabase Auth.
-  - Explicit confirmation of which database is targeted (`https://bcfirpcfowqaueqayksz.supabase.co`).
+- **c. Batch 2 Demo Seed**: ✅ DONE (commit `c6e13e6`)
+  - `supabase/demo/00_prerequisites.sql` — adds missing tables/columns; safe to re-run.
+  - `supabase/demo/01_demo_seed.sql` — full paste-and-run seed (5–10 records per section, is_demo=true, fixed UUIDs, ON CONFLICT DO NOTHING). Role-assignment SQL snippet included at the bottom.
+  - `supabase/demo/02_demo_cleanup.sql` — removes only is_demo rows in correct FK order.
+  - Database targeted: `https://bcfirpcfowqaueqayksz.supabase.co`
+  - **NOT tested against a live Postgres** — review before running.
+  - **Still pending**: Apply missing migrations (run `check_tables.sql` first), create 4 Auth users in Supabase dashboard, then run files in order: `00_prerequisites.sql` → `01_demo_seed.sql` (role snippet at bottom needs real emails filled in).
 - **d. Optional Demo Polish**:
   - UI refinements, empty state guidance, and mobile table responsiveness.
 
