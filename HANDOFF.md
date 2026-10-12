@@ -33,4 +33,35 @@
 ---
 
 ## 3. Section D Benchmark Verification Result
-Status: pending
+Status: verified (matches exactly)
+
+Ran benchmark week (13.09.2026 to 19.09.2026) directly through `src/lib/wageRules.ts` (`calculateSuggestedDayValue` and `calculateWorkerWeeklyWage`):
+
+- **Day value calculations**:
+  - In 6 / Out 6 -> 1.5
+  - In 9 / Out 6 -> 1.0
+  - In 6 / Out 2 -> 1.0
+- **Individual totals**:
+  - Vinoth: Rate 1100, Days 7.5, Wage 8250, Bus 0, Advance 0, Balance 8250
+  - Krishna: Rate 1100, Days 8.0, Wage 8800, Bus 0, Advance 0, Balance 8800
+  - Eranna: Rate 750, Days 9.5, Wage 7125, Bus 320, Advance 0, Balance 7445
+  - Ragunath: Rate 750, Days 8.0, Wage 6000, Bus 0, Advance 0, Balance 6000
+  - Sanjay: Rate 1100, Days 8.0, Wage 8800, Bus 0, Advance 0, Balance 8800
+  - Gowtham: Rate 750, Days 10.0, Wage 7500, Bus 0, Advance 0, Balance 7500
+  - Narasamma: Rate 500, Days 8.5, Wage 4250, Bus 0, Advance 0, Balance 4250
+  - Ravi: Rate 1100, Days 6.0, Wage 6600, Bus 0, Advance 0, Balance 6600
+  - Madesh: Rate 750, Days 6.0, Wage 4500, Bus 0, Advance 0, Balance 4500
+  - Sathish: Rate 1100, Days 1.0, Wage 1100, Bus 0, Advance 0, Balance 1100
+  - Beema: Rate 750, Days 1.0, Wage 750, Bus 0, Advance 0, Balance 750
+  - Rammappa: Rate 750, Days 1.0, Wage 750, Bus 0, Advance 0, Balance 750
+- **Grand totals**:
+  - Total Wage: 64,425
+  - Total Bus/Petrol: 320
+  - Total Advance: 0
+  - Total Wage Balance: 64,745
+- **Team totals**:
+  - Vinoth Team: 26,850
+  - Eranna Team: 11,695
+  - Sathish Team (Kolar): 2,600
+  - Krishna team: 23,600
+
