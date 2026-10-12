@@ -143,6 +143,7 @@ function ContractorsPage() {
   const subPays = useRows<SubPay>("subcontractor_payments", {
     order: { col: "payment_date" },
     limit: 300,
+    enabled: canWriteFinance || isMD,
   });
 
   const saveWo = useSaveRow("work_orders", "Work order");

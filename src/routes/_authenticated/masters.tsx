@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { BarChart2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -122,35 +122,12 @@ function MastersPage() {
 
   const [supStatusFilter, setSupStatusFilter] = useState<string>("all");
 
-  // Payroll history panel — which employee to show
-  const [payrollEmpId, setPayrollEmpId] = useState<string | null>(null);
-
   // Data queries
   const clients = useRows<Client>("clients", { order: { col: "name", asc: true } });
   const employees = useRows<Employee>("employees", { order: { col: "full_name", asc: true } });
   const contractors = useRows<Contractor>("contractors", { order: { col: "name", asc: true } });
   const suppliers = useRows<Supplier>("suppliers", { order: { col: "name", asc: true } });
   const machines = useRows<Machine>("machines", { order: { col: "name", asc: true } });
-  const payrollItems = useRows<{
-    id: string;
-    payroll_id: string;
-    employee_id: string | null;
-    present_days: number;
-    working_days: number;
-    ot_hours: number;
-    wage_rate: number;
-    gross_amount: number;
-    deductions: number;
-    net_amount: number;
-  }>("payroll_items", { order: { col: "created_at" }, limit: 500 });
-  const payrollRuns = useRows<{
-    id: string;
-    period_month: number;
-    period_year: number;
-    status: string;
-  }>("payroll", { order: { col: "period_year" }, limit: 200 });
-
-  const payrollEmpName = employees.data?.find((e) => e.id === payrollEmpId)?.full_name ?? "";
 
   // Mutations
   const saveClient = useSaveRow("clients", "Client");
@@ -274,18 +251,9 @@ function MastersPage() {
     },
     {
       header: "Actions",
-      className: "text-right w-28",
+      className: "text-right w-24",
       cell: (r: Employee) => (
         <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            title="View payroll history"
-            onClick={() => setPayrollEmpId(payrollEmpId === r.id ? null : r.id)}
-          >
-            <BarChart2 className="size-3.5" />
-          </Button>
           {canManageMasters && (
             <>
               <Button
@@ -690,105 +658,6 @@ function MastersPage() {
               ...(empStatusFilter !== "all" ? { Status: empStatusFilter } : {}),
             }}
           />
-
-          {/* ---- Payroll History Panel ---- */}
-          {payrollEmpId && (
-            <div className="rounded-lg border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold text-sm">
-                  Payroll history — {payrollEmpName}
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setPayrollEmpId(null)}
-                >
-                  <X className="size-3.5" />
-                </Button>
-              </div>
-              {payrollItems.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : (() => {
-                const empItems = (payrollItems.data ?? []).filter(
-                  (i) => i.employee_id === payrollEmpId,
-                );
-                if (empItems.length === 0) {
-                  return (
-                    <p className="text-sm text-muted-foreground">
-                      No payroll records found for this employee.
-                    </p>
-                  );
-                }
-                const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                return (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="border-b">
-                        <tr className="text-muted-foreground text-xs">
-                          <th className="pb-2 text-left font-medium">Period</th>
-                          <th className="pb-2 text-right font-medium">Days</th>
-                          <th className="pb-2 text-right font-medium">OT hrs</th>
-                          <th className="pb-2 text-right font-medium">Rate</th>
-                          <th className="pb-2 text-right font-medium">Gross</th>
-                          <th className="pb-2 text-right font-medium">Deductions</th>
-                          <th className="pb-2 text-right font-medium">Net Pay</th>
-                          <th className="pb-2 text-left font-medium pl-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {empItems.map((item) => {
-                          const run = payrollRuns.data?.find((r) => r.id === item.payroll_id);
-                          const period = run
-                            ? `${MONTHS[(run.period_month ?? 1) - 1]} ${run.period_year}`
-                            : "—";
-                          return (
-                            <tr key={item.id} className="hover:bg-muted/30">
-                              <td className="py-2">{period}</td>
-                              <td className="py-2 text-right tabular-nums">
-                                {item.present_days}/{item.working_days}
-                              </td>
-                              <td className="py-2 text-right tabular-nums">{item.ot_hours}</td>
-                              <td className="py-2 text-right tabular-nums">{currency(item.wage_rate)}</td>
-                              <td className="py-2 text-right tabular-nums">{currency(item.gross_amount)}</td>
-                              <td className="py-2 text-right tabular-nums text-destructive">
-                                {item.deductions > 0 ? `-${currency(item.deductions)}` : "—"}
-                              </td>
-                              <td className="py-2 text-right tabular-nums font-semibold">
-                                {currency(item.net_amount)}
-                              </td>
-                              <td className="py-2 pl-3">
-                                {run ? (
-                                  <Badge variant={run.status === "approved" ? "default" : "secondary"}>
-                                    {run.status}
-                                  </Badge>
-                                ) : "—"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="border-t font-semibold">
-                        <tr>
-                          <td colSpan={4} className="pt-2">Total</td>
-                          <td className="pt-2 text-right tabular-nums">
-                            {currency(empItems.reduce((a, i) => a + i.gross_amount, 0))}
-                          </td>
-                          <td className="pt-2 text-right tabular-nums text-destructive">
-                            -{currency(empItems.reduce((a, i) => a + i.deductions, 0))}
-                          </td>
-                          <td className="pt-2 text-right tabular-nums">
-                            {currency(empItems.reduce((a, i) => a + i.net_amount, 0))}
-                          </td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
         </TabsContent>
 
         {/* ================= CONTRACTORS ================= */}
