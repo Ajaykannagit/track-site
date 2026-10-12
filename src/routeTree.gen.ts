@@ -18,7 +18,6 @@ import { Route as AuthenticatedContractorsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedMastersRouteImport } from './routes/_authenticated/masters'
 import { Route as AuthenticatedMaterialsRouteImport } from './routes/_authenticated/materials'
-import { Route as AuthenticatedPayrollRouteImport } from './routes/_authenticated/payroll'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
@@ -69,11 +68,6 @@ const AuthenticatedMaterialsRoute = AuthenticatedMaterialsRouteImport.update({
   path: '/materials',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedPayrollRoute = AuthenticatedPayrollRouteImport.update({
-  id: '/payroll',
-  path: '/payroll',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -106,7 +100,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/masters': typeof AuthenticatedMastersRoute
   '/materials': typeof AuthenticatedMaterialsRoute
-  '/payroll': typeof AuthenticatedPayrollRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
@@ -121,7 +114,6 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/masters': typeof AuthenticatedMastersRoute
   '/materials': typeof AuthenticatedMaterialsRoute
-  '/payroll': typeof AuthenticatedPayrollRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
@@ -138,7 +130,6 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/masters': typeof AuthenticatedMastersRoute
   '/_authenticated/materials': typeof AuthenticatedMaterialsRoute
-  '/_authenticated/payroll': typeof AuthenticatedPayrollRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
@@ -155,7 +146,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/masters'
     | '/materials'
-    | '/payroll'
     | '/reports'
     | '/settings'
     | '/projects/$projectId'
@@ -170,7 +160,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/masters'
     | '/materials'
-    | '/payroll'
     | '/reports'
     | '/settings'
     | '/projects/$projectId'
@@ -186,7 +175,6 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/masters'
     | '/_authenticated/materials'
-    | '/_authenticated/payroll'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
     | '/_authenticated/projects/$projectId'
@@ -264,13 +252,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMaterialsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/payroll': {
-      id: '/_authenticated/payroll'
-      path: '/payroll'
-      fullPath: '/payroll'
-      preLoaderRoute: typeof AuthenticatedPayrollRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/reports': {
       id: '/_authenticated/reports'
       path: '/reports'
@@ -309,7 +290,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedMastersRoute: typeof AuthenticatedMastersRoute
   AuthenticatedMaterialsRoute: typeof AuthenticatedMaterialsRoute
-  AuthenticatedPayrollRoute: typeof AuthenticatedPayrollRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
@@ -323,7 +303,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedMastersRoute: AuthenticatedMastersRoute,
   AuthenticatedMaterialsRoute: AuthenticatedMaterialsRoute,
-  AuthenticatedPayrollRoute: AuthenticatedPayrollRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,

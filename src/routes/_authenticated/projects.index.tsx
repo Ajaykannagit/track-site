@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
-import { useRows, useSaveRow, useDeleteRow } from "@/lib/db";
+import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/projects/")({
