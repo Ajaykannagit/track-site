@@ -28,15 +28,31 @@
 ## 2. Pending List (Next Steps)
 - **a. Apply Missing Migrations**: Run `supabase/checks/check_tables.sql` to identify unapplied migrations on the hosted database.
 - **b. Review Security SQL**: Review `supabase/migrations/20261012000000_column_security_proposal.sql` before applying.
-- **c. Batch 2 Demo Seed**: ✅ DONE (commit `c6e13e6`)
-  - `supabase/demo/00_prerequisites.sql` — adds missing tables/columns; safe to re-run.
-  - `supabase/demo/01_demo_seed.sql` — full paste-and-run seed (5–10 records per section, is_demo=true, fixed UUIDs, ON CONFLICT DO NOTHING). Role-assignment SQL snippet included at the bottom.
-  - `supabase/demo/02_demo_cleanup.sql` — removes only is_demo rows in correct FK order.
-  - Database targeted: `https://bcfirpcfowqaueqayksz.supabase.co`
-  - **NOT tested against a live Postgres** — review before running.
-  - **Still pending**: Apply missing migrations (run `check_tables.sql` first), create 4 Auth users in Supabase dashboard, then run files in order: `00_prerequisites.sql` → `01_demo_seed.sql` (role snippet at bottom needs real emails filled in).
-- **d. Optional Demo Polish**:
-  - UI refinements, empty state guidance, and mobile table responsiveness.
+- **c. Batch 2 Demo Seed**: ✅ FULLY EXECUTED & VERIFIED ON HOSTED DB
+  - All prerequisites and demo seed SQL successfully ran against hosted Supabase (`https://bcfirpcfowqaueqayksz.supabase.co`).
+  - Verified live row counts:
+    - `attendance`: 97
+    - `cash_closing`: 11
+    - `clients`: 4
+    - `contractor_bills`: 5
+    - `contractor_payments`: 5
+    - `contractors`: 5
+    - `employees`: 18
+    - `expenses`: 21
+    - `material_receipts`: 3
+    - `measurement_books`: 4
+    - `project_quotations`: 5
+    - `projects`: 5
+    - `purchase_orders`: 3
+    - `subcontractor_pmts`: 5
+    - `supplier_payments`: 7
+    - `suppliers`: 5
+    - `weekly_wage_adj`: 4
+    - `work_orders`: 5
+  - Cleanup script ready at `supabase/demo/02_demo_cleanup.sql`.
+- **d. Optional Demo Polish & Bug Walkthrough**:
+  - Verification of screens with loaded data (Dashboard, Projects, Attendance, Materials, Suppliers, Contractors, Subcontractors, Masters).
+  - UI refinements, empty states, and layout responsiveness.
 
 ---
 
