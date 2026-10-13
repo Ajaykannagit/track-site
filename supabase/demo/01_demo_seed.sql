@@ -464,7 +464,7 @@ BEGIN
     (employee_id, attendance_date, kind, status, in_time, out_time,
      site_id, site_name, day_value, calculated_wage, wage_rate, working_hours, is_demo)
   VALUES
-    (v_emp_sathsih_err, v_day0,'labour','present','9','6',v_site_klr,'Kolar',1.0,1100,1100,9,true);
+    (v_emp_sathish, v_day0,'labour','present','9','6',v_site_klr,'Kolar',1.0,1100,1100,9,true);
 
   -- Beema  1.0 day x 750 = 750  (1x1.0 at Kolar)
   INSERT INTO public.attendance
