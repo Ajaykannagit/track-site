@@ -523,32 +523,32 @@ function AttendanceWeeklySheetPage() {
           <Table className="text-xs">
             <TableHeader className="bg-muted/60">
               <TableRow>
-                <TableHead className="w-10 text-center font-bold">SNO</TableHead>
-                <TableHead className="min-w-32 font-bold">NAME</TableHead>
-                <TableHead className="min-w-24 font-bold">DESIGNATION</TableHead>
+                <TableHead className="w-10 text-center font-bold print:w-8 print:p-1">SNO</TableHead>
+                <TableHead className="min-w-32 font-bold print:min-w-0 print:w-32 print:p-1">NAME</TableHead>
+                <TableHead className="min-w-24 font-bold print:min-w-0 print:w-20 print:p-1">DESIGNATION</TableHead>
                 {permissions.canViewWagesAndPayments && (
-                  <TableHead className="min-w-20 text-right font-bold">WAGE / DAY</TableHead>
+                  <TableHead className="min-w-20 text-right font-bold print:min-w-0 print:w-16 print:p-1">WAGE / DAY</TableHead>
                 )}
 
                 {/* 7 Days of the Week Columns */}
                 {weekDates.map((d) => {
                   const h = formatDayHeader(d);
                   return (
-                    <TableHead key={h.iso} className="min-w-28 text-center border-l bg-muted/40 p-2">
-                      <div className="font-bold text-foreground">{h.dayName}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground">{h.formatted}</div>
+                    <TableHead key={h.iso} className="min-w-28 text-center border-l bg-muted/40 p-2 print:min-w-0 print:w-20 print:p-1">
+                      <div className="font-bold text-foreground print:text-[10px]">{h.dayName}</div>
+                      <div className="text-[11px] font-mono text-muted-foreground print:text-[9px]">{h.formatted}</div>
                     </TableHead>
                   );
                 })}
 
                 {/* Summary End Columns */}
-                <TableHead className="min-w-16 text-center font-bold border-l bg-muted/80">TOTAL DAYS</TableHead>
+                <TableHead className="min-w-16 text-center font-bold border-l bg-muted/80 print:min-w-0 print:w-14 print:p-1">TOTAL DAYS</TableHead>
                 {permissions.canViewWagesAndPayments && (
                   <>
-                    <TableHead className="min-w-20 text-right font-bold bg-muted/80">WAGE (₹)</TableHead>
-                    <TableHead className="min-w-24 text-right font-bold bg-muted/80">BUS / PETROL</TableHead>
-                    <TableHead className="min-w-20 text-right font-bold bg-muted/80">ADVANCE</TableHead>
-                    <TableHead className="min-w-24 text-right font-bold bg-muted/80 text-primary">WAGE BALANCE</TableHead>
+                    <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">WAGE (₹)</TableHead>
+                    <TableHead className="min-w-24 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">BUS / PETROL</TableHead>
+                    <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">ADVANCE</TableHead>
+                    <TableHead className="min-w-24 text-right font-bold bg-muted/80 text-primary print:min-w-0 print:w-20 print:p-1">WAGE BALANCE</TableHead>
                   </>
                 )}
               </TableRow>
@@ -643,8 +643,11 @@ function AttendanceWeeklySheetPage() {
                           {currency(r.wage).replace("₹", "")}
                         </TableCell>
 
-                        {/* Bus / Petrol (Editable inline) */}
+                        {/* Bus / Petrol (Editable inline on screen, formatted text on print) */}
                         <TableCell className="text-right bg-muted/20 p-1">
+                          <span className="hidden print:inline font-mono">
+                            {r.busPetrol ? r.busPetrol : "0"}
+                          </span>
                           <Input
                             type="number"
                             defaultValue={r.busPetrol || ""}
@@ -655,12 +658,15 @@ function AttendanceWeeklySheetPage() {
                                 void handleSaveAdjustment(r.employee.id, val, r.advance);
                               }
                             }}
-                            className="h-7 w-20 text-right text-xs font-mono ml-auto"
+                            className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
                           />
                         </TableCell>
 
-                        {/* Advance (Editable inline) */}
+                        {/* Advance (Editable inline on screen, formatted text on print) */}
                         <TableCell className="text-right bg-muted/20 p-1">
+                          <span className="hidden print:inline font-mono">
+                            {r.advance ? r.advance : "0"}
+                          </span>
                           <Input
                             type="number"
                             defaultValue={r.advance || ""}
@@ -671,7 +677,7 @@ function AttendanceWeeklySheetPage() {
                                 void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
                               }
                             }}
-                            className="h-7 w-20 text-right text-xs font-mono ml-auto"
+                            className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
                           />
                         </TableCell>
 

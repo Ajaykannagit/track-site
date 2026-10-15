@@ -21,6 +21,12 @@
   - `src/components/FormDialog.tsx`: Added form-level trimming, required check with clear inline error message ("<Field> is required"), positive number validation for required amount fields, and submission blocking until all required fields are valid.
   - Covers create & edit forms across projects, clients, workers, contractors, suppliers, quotations, expenses, and subcontractors.
   - Optional database constraint SQL drafted for `projects.name`.
+- **QA Step 2 verified**:
+  - Confirmed thresholds in `src/lib/wageRules.ts` (<4h=0, 4-8h=0.5, 8-12h=1.0, >=12h=1.5) match client rules and all paper cases (6-6=1.5, 9-6=1.0, 6-2=1.0).
+  - Benchmark week 13.09.2026–19.09.2026 verified: Wage 64,425, Bus/Petrol 320, Advance 0, Balance 64,745; Vinoth 26,850, Eranna 11,695, Sathish 2,600, Krishna 23,600.
+- **QA Step 3 completed and pushed**:
+  - `src/styles.css`: Added full print media rules (`@page { size: landscape; margin: 8mm; }`, unclipping overflow containers, repeating `thead` across pages, preventing row break splits with `break-inside: avoid`).
+  - `src/routes/_authenticated/attendance.tsx`: Optimized print column min-widths (`print:min-w-0`), swapped editable input boxes for formatted text on print (`print:inline`), and verified that all 7 day columns, summary columns, and team settlement tables display without horizontal cutoff. Excel export verified to include all 7 days and totals.
 
 ---
 

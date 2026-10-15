@@ -170,7 +170,81 @@
 }
 
 @media print {
-  .no-print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+
+  /* Hide UI navigation, buttons and chrome */
+  .no-print,
+  aside,
+  header,
+  button,
+  .no-print * {
     display: none !important;
   }
+
+  /* Reset layout constraints and overflow for printing */
+  html,
+  body,
+  #root,
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure card containers and horizontal scroll divs unclip in print */
+  .overflow-x-auto,
+  .overflow-hidden,
+  [class*="overflow-"] {
+    overflow: visible !important;
+  }
+
+  /* Table rules for high-density landscape print */
+  table {
+    width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group !important; /* repeats header on each page */
+  }
+
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important; /* prevents splitting workers across pages */
+  }
+
+  th,
+  td {
+    padding: 2px 4px !important;
+    font-size: 8.5pt !important;
+    line-height: 1.1 !important;
+    border: 1px solid #d1d5db !important;
+  }
+
+  /* Clean up print text representation for inputs */
+  input[type="number"],
+  input[type="text"] {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    font-size: 8.5pt !important;
+    text-align: right !important;
+  }
+
+  /* Page break rules between main grid and team tables */
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
 }
+
