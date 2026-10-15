@@ -136,7 +136,7 @@ function Dashboard() {
   });
 
   // Projects query: visible to all authenticated users
-  const projects = useRows<Project>("projects", {
+  const projects = useRows<Project>("projects_view", {
     order: { col: "created_at" },
     enabled: permissions.canViewProjects,
   });
@@ -152,7 +152,7 @@ function Dashboard() {
     order: { col: "expense_date", asc: false },
     enabled: permissions.canViewCompanyFinancials,
   });
-  const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance", {
+  const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance_view", {
     select: "calculated_wage,attendance_date",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
     enabled: permissions.canViewCompanyFinancials,
@@ -174,7 +174,7 @@ function Dashboard() {
     request_number: string;
     status: string;
     total_amount: number;
-  }>("material_requests", {
+  }>("material_requests_view", {
     select: "id,request_number,status,total_amount",
     order: { col: "request_date" },
     limit: 8,
@@ -203,7 +203,7 @@ function Dashboard() {
     calculated_wage: number;
     attendance_date: string;
     employee_id: string | null;
-  }>("attendance", {
+  }>("attendance_view", {
     select: "calculated_wage,attendance_date,employee_id",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
     order: { col: "attendance_date" },
@@ -211,14 +211,14 @@ function Dashboard() {
   });
 
   const allAttendance = useRows<{ project_id: string | null; calculated_wage: number }>(
-    "attendance",
+    "attendance_view",
     {
       select: "project_id,calculated_wage",
       enabled: permissions.canViewProjectFinancials,
     },
   );
-  const allReceipts = useRows<MaterialReceiptRow>("material_receipts", {
-    select: "id,receipt_number,receipt_date,total_amount,material_name,project_id,supplier_id",
+  const allReceipts = useRows<MaterialReceiptRow>("material_receipts_view", {
+    select: "id,receipt_number,receipt_date,total_amount,project_id,supplier_id",
     enabled: permissions.canViewProjectFinancials,
   });
   const allBills = useRows<{ project_id: string | null; net_amount: number }>("contractor_bills", {

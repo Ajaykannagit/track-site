@@ -74,20 +74,20 @@ function ReportsPage() {
   const [billStatus, setBillStatus] = useState<string>("all");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
-  const projects = useRows<Project>("projects", { order: { col: "name", asc: true } });
+  const projects = useRows<Project>("projects_view", { order: { col: "name", asc: true } });
   const expenses = useRows<Expense>("expenses", {
     filters: [
       { col: "expense_date", op: "gte", value: from },
       { col: "expense_date", op: "lte", value: to },
     ],
   });
-  const attendance = useRows<Attendance>("attendance", {
+  const attendance = useRows<Attendance>("attendance_view", {
     filters: [
       { col: "attendance_date", op: "gte", value: from },
       { col: "attendance_date", op: "lte", value: to },
     ],
   });
-  const receipts = useRows<Receipt>("material_receipts", {
+  const receipts = useRows<Receipt>("material_receipts_view", {
     filters: [
       { col: "receipt_date", op: "gte", value: from },
       { col: "receipt_date", op: "lte", value: to },

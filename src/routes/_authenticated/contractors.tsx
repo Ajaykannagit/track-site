@@ -130,7 +130,7 @@ function ContractorsPage() {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [contractorFilter, setContractorFilter] = useState<string>("all");
 
-  const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
+  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const contractors = useRows<{ id: string; name: string }>("contractors", { select: "id,name" });
 
   const wos = useRows<Wo>("work_orders", { order: { col: "wo_date" }, limit: 300 });

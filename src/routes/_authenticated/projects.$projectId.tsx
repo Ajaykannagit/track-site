@@ -63,7 +63,7 @@ function ProjectDetail() {
     expected_completion_date: string | null;
     agreement_details: string | null;
     details: string | null;
-  }>("projects", { filters: [{ col: "id", op: "eq", value: projectId }] });
+  }>("projects_view", { filters: [{ col: "id", op: "eq", value: projectId }] });
 
   // Update 4: Project Quotations (mid-project variations & additions)
   const quotations = useRows<ProjectQuotation>("project_quotations", {
@@ -102,7 +102,7 @@ function ProjectDetail() {
     calculated_wage: number;
     workforce_count: number | null;
     remarks: string | null;
-  }>("attendance", {
+  }>("attendance_view", {
     filters: f,
     order: { col: "attendance_date" },
     limit: 300,
@@ -114,9 +114,8 @@ function ProjectDetail() {
     receipt_number: string;
     receipt_date: string;
     total_amount: number;
-    material_name: string | null;
     supplier_id: string | null;
-  }>("material_receipts", {
+  }>("material_receipts_view", {
     filters: f,
     order: { col: "receipt_date" },
     enabled: permissions.canViewMaterialsAndContractors,
@@ -632,8 +631,8 @@ function ProjectDetail() {
                 },
                 {
                   header: "Material / Item",
-                  cell: (r) => r.material_name ?? "General Material Supply",
-                  value: (r) => r.material_name ?? "General Material Supply",
+                  cell: () => "General Material Supply",
+                  value: () => "General Material Supply",
                 },
                 ...(permissions.canViewMaterialContractorCosts
                   ? [

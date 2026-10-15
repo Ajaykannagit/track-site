@@ -244,7 +244,7 @@ function AttendanceWeeklySheetPage() {
     return getMonthDates(selectedMonth.year, selectedMonth.month);
   }, [selectedMonth]);
 
-  const employees = useRows<Employee>("employees", {
+  const employees = useRows<Employee>("employees_view", {
     order: { col: "full_name", asc: true },
   });
 
@@ -257,7 +257,7 @@ function AttendanceWeeklySheetPage() {
   });
 
   // Weekly Attendance Query
-  const attendance = useRows<AttendanceRecord>("attendance", {
+  const attendance = useRows<AttendanceRecord>("attendance_view", {
     filters: [
       { col: "attendance_date", op: "gte", value: weekStartISO },
       { col: "attendance_date", op: "lte", value: weekEndISO },
@@ -266,7 +266,7 @@ function AttendanceWeeklySheetPage() {
   });
 
   // Monthly Attendance Query
-  const monthlyAttendance = useRows<AttendanceRecord>("attendance", {
+  const monthlyAttendance = useRows<AttendanceRecord>("attendance_view", {
     filters: [
       { col: "attendance_date", op: "gte", value: monthStartISO },
       { col: "attendance_date", op: "lte", value: monthEndISO },

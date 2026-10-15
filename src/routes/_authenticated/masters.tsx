@@ -124,7 +124,7 @@ function MastersPage() {
 
   // Data queries
   const clients = useRows<Client>("clients", { order: { col: "name", asc: true } });
-  const employees = useRows<Employee>("employees", { order: { col: "full_name", asc: true } });
+  const employees = useRows<Employee>("employees_view", { order: { col: "full_name", asc: true } });
   const contractors = useRows<Contractor>("contractors", { order: { col: "name", asc: true } });
   const suppliers = useRows<Supplier>("suppliers", { order: { col: "name", asc: true } });
   const machines = useRows<Machine>("machines", { order: { col: "name", asc: true } });

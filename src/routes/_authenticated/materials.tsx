@@ -128,15 +128,15 @@ function MaterialsPage() {
   const [payProjectFilter, setPayProjectFilter] = useState<string>("all");
   const [paySupplierFilter, setPaySupplierFilter] = useState<string>("all");
 
-  const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
+  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const suppliers = useRows<{ id: string; name: string }>("suppliers", { select: "id,name" });
 
-  const requests = useRows<Request>("material_requests", {
+  const requests = useRows<Request>("material_requests_view", {
     order: { col: "request_date" },
     limit: 300,
   });
   const pos = useRows<Po>("purchase_orders", { order: { col: "po_date" }, limit: 300 });
-  const receipts = useRows<Receipt>("material_receipts", {
+  const receipts = useRows<Receipt>("material_receipts_view", {
     order: { col: "receipt_date" },
     limit: 300,
   });

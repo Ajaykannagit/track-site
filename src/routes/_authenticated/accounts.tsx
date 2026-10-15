@@ -101,7 +101,7 @@ function AccountsPage() {
   const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
   const [transferProjectFilter, setTransferProjectFilter] = useState<string>("all");
 
-  const projects = useRows<{ id: string; name: string }>("projects", { select: "id,name" });
+  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
     select: "id,name",
   });
