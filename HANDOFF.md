@@ -27,6 +27,12 @@
 - **QA Step 3 completed and pushed**:
   - `src/styles.css`: Added full print media rules (`@page { size: landscape; margin: 8mm; }`, unclipping overflow containers, repeating `thead` across pages, preventing row break splits with `break-inside: avoid`).
   - `src/routes/_authenticated/attendance.tsx`: Optimized print column min-widths (`print:min-w-0`), swapped editable input boxes for formatted text on print (`print:inline`), and verified that all 7 day columns, summary columns, and team settlement tables display without horizontal cutoff. Excel export verified to include all 7 days and totals.
+- **QA Step 4 completed and pushed**:
+  - `src/routes/_authenticated/dashboard.tsx`: Added "+ Add Expense" button (MD only) and per-row Edit and Delete (with confirmation step via `ConfirmDeleteDialog`) for corporate office expenses.
+  - Fields covered: Date, Category (with default office categories merged with DB categories), Description, Amount, Payment Method, and Receipt Reference.
+  - Configured `project_id: null` on insert/update for office expenses.
+  - Added sticky header, scrollable table (`max-h-[50vh]`), and footer showing grand total.
+  - Verified RLS policies: MD can insert, update, and delete expenses with `project_id IS NULL` under `"finance write"`. Identified that to strictly restrict `project_id IS NULL` operations to MD (blocking non-MD write access), an updated write policy SQL has been provided for manual execution.
 
 ---
 

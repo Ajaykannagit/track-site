@@ -28,14 +28,28 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FormDialog, type Field, type FormValues } from "@/components/FormDialog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { useAuth } from "@/lib/auth";
-import { useRows, sum } from "@/lib/db";
+import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart } from "@/lib/format";
-import { Building2, ChevronRight, DollarSign, PackageCheck, Receipt, ShieldAlert, Wallet } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  DollarSign,
+  PackageCheck,
+  Pencil,
+  Plus,
+  Receipt,
+  ShieldAlert,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 
 /** Unified spend-line type used in the full-spend dialog */
 type SpendLine = {
@@ -81,6 +95,8 @@ type ExpenseRow = {
   material_name?: string | null;
   description?: string | null;
   project_id: string | null;
+  payment_method?: string | null;
+  receipt_path?: string | null;
 };
 
 type MaterialReceiptRow = {
@@ -105,6 +121,20 @@ function Dashboard() {
   const [cashDialogOpen, setCashDialogOpen] = useState(false);
   const [officeExpensesDialogOpen, setOfficeExpensesDialogOpen] = useState(false);
 
+  // Office Expense CRUD state & mutations
+  const [expenseFormOpen, setExpenseFormOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null);
+  const [deletingExpense, setDeletingExpense] = useState<ExpenseRow | null>(null);
+
+  const saveExpense = useSaveRow("expenses", "Office Expense");
+  const deleteExpense = useDeleteRow("expenses", "Office Expense");
+
+  // Expense categories query for dropdown
+  const expenseCategories = useRows<{ id: string; name: string }>("expense_categories", {
+    order: { col: "name", asc: true },
+    enabled: permissions.canViewOfficeExpense,
+  });
+
   // Projects query: visible to all authenticated users
   const projects = useRows<Project>("projects", {
     order: { col: "created_at" },
@@ -118,7 +148,8 @@ function Dashboard() {
     enabled: permissions.canViewCompanyFinancials,
   });
   const allExpenses = useRows<ExpenseRow>("expenses", {
-    select: "id,amount,expense_date,category,material_name,description,project_id",
+    select: "id,amount,expense_date,category,material_name,description,project_id,payment_method,receipt_path",
+    order: { col: "expense_date", asc: false },
     enabled: permissions.canViewCompanyFinancials,
   });
   const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance", {
@@ -243,15 +274,117 @@ function Dashboard() {
     (r) => !["approved", "ordered", "received", "closed", "rejected"].includes(r.status),
   );
 
-  // Office Expenses: project_id === null or category is administrative overhead
-  const officeExpensesList = (allExpenses.data ?? []).filter(
-    (e) =>
-      !e.project_id ||
-      ["Stationery", "Telephone / Internet", "Travel", "Professional Fees", "Bank Charges"].includes(
-        e.category,
-      ),
-  );
+  // Office Expenses: have no project (project_id is null)
+  const officeExpensesList = (allExpenses.data ?? []).filter((e) => !e.project_id);
   const totalOfficeExpenses = sum(officeExpensesList, (e) => e.amount);
+
+  const defaultOfficeCategories = [
+    "Stationery",
+    "Telephone / Internet",
+    "Travel",
+    "Professional Fees",
+    "Bank Charges",
+    "Office Rent",
+    "Electricity",
+    "Food / Refreshments",
+    "Pooja / Misc",
+    "Miscellaneous",
+  ];
+  const officeCategoryOptions = Array.from(
+    new Set([
+      ...defaultOfficeCategories,
+      ...(expenseCategories.data ?? []).map((c) => c.name),
+    ]),
+  ).map((c) => ({ value: c, label: c }));
+
+  const officeExpenseFields: Field[] = [
+    { name: "expense_date", label: "Date", type: "date", required: true },
+    {
+      name: "category",
+      label: "Category",
+      type: "select",
+      required: true,
+      options: officeCategoryOptions,
+    },
+    {
+      name: "amount",
+      label: "Amount (₹)",
+      type: "number",
+      required: true,
+      placeholder: "0.00",
+    },
+    {
+      name: "payment_method",
+      label: "Payment method",
+      type: "select",
+      options: [
+        { value: "cash", label: "Cash" },
+        { value: "bank", label: "Bank Transfer" },
+        { value: "upi", label: "UPI" },
+        { value: "cheque", label: "Cheque" },
+        { value: "card", label: "Card" },
+      ],
+    },
+    {
+      name: "receipt_path",
+      label: "Receipt reference",
+      type: "text",
+      placeholder: "Invoice / Bill # / Receipt ref",
+    },
+    {
+      name: "description",
+      label: "Description",
+      type: "textarea",
+      placeholder: "Details or purpose of expense",
+      full: true,
+    },
+  ];
+
+  const initialExpenseValues: FormValues | undefined = editingExpense
+    ? {
+        expense_date: editingExpense.expense_date,
+        category: editingExpense.category,
+        amount: editingExpense.amount,
+        payment_method: editingExpense.payment_method ?? "cash",
+        receipt_path: editingExpense.receipt_path ?? "",
+        description: editingExpense.description ?? "",
+      }
+    : {
+        expense_date: new Date().toISOString().slice(0, 10),
+        payment_method: "cash",
+      };
+
+  const handleOpenAddExpense = () => {
+    setEditingExpense(null);
+    setExpenseFormOpen(true);
+  };
+
+  const handleOpenEditExpense = (item: ExpenseRow) => {
+    setEditingExpense(item);
+    setExpenseFormOpen(true);
+  };
+
+  const handleSaveExpense = async (values: FormValues) => {
+    await saveExpense.mutateAsync({
+      id: editingExpense?.id,
+      values: {
+        expense_date: values["expense_date"],
+        category: values["category"],
+        amount: Number(values["amount"]),
+        payment_method: values["payment_method"] || null,
+        receipt_path: values["receipt_path"] ? String(values["receipt_path"]).trim() : null,
+        description: values["description"] ? String(values["description"]).trim() : null,
+        project_id: null,
+      },
+    });
+    setExpenseFormOpen(false);
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!deletingExpense) return;
+    await deleteExpense.mutateAsync(deletingExpense.id);
+    setDeletingExpense(null);
+  };
 
   // Material Expenditures
   const materialReceiptsList = allReceipts.data ?? [];
@@ -778,14 +911,21 @@ function Dashboard() {
       {/* ========================================================================= */}
       {permissions.canViewOfficeExpense && (
         <Dialog open={officeExpensesDialogOpen} onOpenChange={setOfficeExpensesDialogOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="size-5 text-primary" /> Corporate Office Expenses Overview
-              </DialogTitle>
-              <DialogDescription>
-                Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
-              </DialogDescription>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  <Receipt className="size-5 text-primary" /> Corporate Office Expenses Overview
+                </DialogTitle>
+                <DialogDescription>
+                  Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
+                </DialogDescription>
+              </div>
+              {isMD && (
+                <Button size="sm" onClick={handleOpenAddExpense} className="gap-1.5 shrink-0">
+                  <Plus className="size-4" /> Add Expense
+                </Button>
+              )}
             </DialogHeader>
             <div className="mt-2 space-y-4">
               <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
@@ -796,39 +936,113 @@ function Dashboard() {
                 <Badge variant="outline">{officeExpensesList.length} Expenses Recorded</Badge>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {officeExpensesList.length === 0 ? (
+              <div className="rounded-md border overflow-x-auto max-h-[50vh] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        No unallocated office expenses recorded yet.
-                      </TableCell>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Receipt Ref</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      {isMD && <TableHead className="text-center w-24">Actions</TableHead>}
                     </TableRow>
-                  ) : (
-                    officeExpensesList.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="text-xs">{dateFmt(e.expense_date)}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{e.category}</Badge>
+                  </TableHeader>
+                  <TableBody>
+                    {officeExpensesList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={isMD ? 7 : 6} className="text-center py-6 text-muted-foreground">
+                          No office expenses recorded yet. Click &quot;Add Expense&quot; above to create one.
                         </TableCell>
-                        <TableCell className="text-xs">{e.description || e.material_name || "—"}</TableCell>
-                        <TableCell className="text-right font-semibold">{currency(e.amount)}</TableCell>
                       </TableRow>
-                    ))
+                    ) : (
+                      officeExpensesList.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="text-xs whitespace-nowrap">{dateFmt(e.expense_date)}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{e.category}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[200px] truncate" title={e.description || ""}>
+                            {e.description || e.material_name || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs capitalize">{e.payment_method || "—"}</TableCell>
+                          <TableCell className="text-xs font-mono">{e.receipt_path || "—"}</TableCell>
+                          <TableCell className="text-right font-semibold font-mono">{currency(e.amount)}</TableCell>
+                          {isMD && (
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7"
+                                  title="Edit Expense"
+                                  onClick={() => handleOpenEditExpense(e)}
+                                >
+                                  <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 text-destructive hover:text-destructive"
+                                  title="Delete Expense"
+                                  onClick={() => setDeletingExpense(e)}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                  {officeExpensesList.length > 0 && (
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell colSpan={5} className="font-semibold text-right">
+                          Total:
+                        </TableCell>
+                        <TableCell className="text-right font-bold font-mono">
+                          {currency(totalOfficeExpenses)}
+                        </TableCell>
+                        {isMD && <TableCell />}
+                      </TableRow>
+                    </TableFooter>
                   )}
-                </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Office Expense Add / Edit FormDialog */}
+      <FormDialog
+        title={editingExpense ? "Edit Office Expense" : "Add Office Expense"}
+        description="Record non-project corporate office overhead expenditure."
+        fields={officeExpenseFields}
+        initial={initialExpenseValues}
+        open={expenseFormOpen}
+        onOpenChange={setExpenseFormOpen}
+        submitting={saveExpense.isPending}
+        onSubmit={handleSaveExpense}
+      />
+
+      {/* Confirm Delete Dialog */}
+      {deletingExpense && (
+        <ConfirmDeleteDialog
+          open={!!deletingExpense}
+          onOpenChange={(open) => {
+            if (!open) setDeletingExpense(null);
+          }}
+          title="Delete Office Expense"
+          description={`Are you sure you want to delete this office expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})?`}
+          tableName="expenses"
+          recordId={deletingExpense.id}
+          recordTitle={`${deletingExpense.category}: ${currency(deletingExpense.amount)}`}
+          onConfirm={handleDeleteExpense}
+        />
       )}
 
       {/* ========================================================================= */}
