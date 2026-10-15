@@ -49,20 +49,13 @@
     - `src/routes/_authenticated/dashboard.tsx`: Added `w-full max-h-[90vh] overflow-y-auto` and horizontal scroll wrappers to Active Projects, Contract Value Breakdown, 6-Month Spend, and Corporate Office Expenses dialogs and tables.
     - `src/routes/_authenticated/masters.tsx`: Wrapped `<TabsList>` in an `overflow-x-auto` container with `w-max min-w-full` so the 5 master tabs (Clients, Employees, Contractors, Suppliers, Machines) scroll smoothly on small screens rather than wrapping or squishing.
     - `src/routes/_authenticated/attendance.tsx`: Added `w-full` and scrolling wrappers to Quick Day Attendance Edit modal and the Monthly Worker Daily Breakdown drilldown dialog.
-- **QA Step 7 (Part A) completed and pushed**:
+- **QA Step 7 (Part A & Part B) completed and pushed**:
   - `Part A SQL` executed on hosted Supabase: created sanitized views (`projects_view`, `employees_view`, `attendance_view`, `material_requests_view`, `material_receipts_view`) and automated wage calculation trigger (`handle_attendance_wage_calc`).
-  - Switched frontend read queries to use sanitized views across all routes:
-    - `src/routes/_authenticated/attendance.tsx`: `employees_view`, `attendance_view`
-    - `src/routes/_authenticated/masters.tsx`: `employees_view`
-    - `src/routes/_authenticated/projects.index.tsx`: `projects_view`
-    - `src/routes/_authenticated/projects.$projectId.tsx`: `projects_view`, `attendance_view`, `material_receipts_view`
-    - `src/routes/_authenticated/dashboard.tsx`: `projects_view`, `attendance_view`, `material_requests_view`, `material_receipts_view`
-    - `src/routes/_authenticated/materials.tsx`: `projects_view`, `material_requests_view`, `material_receipts_view`
-    - `src/routes/_authenticated/contractors.tsx`: `projects_view`
-    - `src/routes/_authenticated/accounts.tsx`: `projects_view`
-    - `src/routes/_authenticated/reports.tsx`: `projects_view`, `attendance_view`, `material_receipts_view`
+  - `Part B SQL` executed on hosted Supabase: revoked direct SELECT on sensitive columns (`quotation_amount`, `wage_rate`, `ot_rate_per_hour`, `calculated_wage`, `total_amount`) from base tables for `anon` and `authenticated`.
+  - Switched frontend read queries to use sanitized views across all routes (`attendance`, `masters`, `projects`, `projects.$projectId`, `dashboard`, `materials`, `contractors`, `accounts`, `reports`).
+  - Direct base table access via API now strictly denies reading restricted financial columns, while views enforce role-based masking (`MD`/`Accounts` see real amounts; `Supervisor`/`Viewer` get 0/null or 0 rows).
   - All writes/mutations continue directly to base tables, with backend triggers computing wages securely.
-  - Verified with `npx tsc --noEmit` and `npm run build`. Ready for Part B (column privilege revoking).
+  - Verified with `npx tsc --noEmit` and `npm run build`.
 
 ---
 
