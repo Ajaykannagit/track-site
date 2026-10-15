@@ -41,7 +41,15 @@
     - Added monthly team payment summary cards (Vinoth Team, Eranna Team, Sathish Team, Krishna Team) grouping wages, allowances, and balances.
     - Added Monthly Excel export (`handleExportMonthlyExcel`) with comprehensive worker-by-worker summary and totals.
     - Implemented landscape print layout with header repetition and page width fit.
-    - Restricted all wage and monetary columns to MD and Accountant roles via `permissions.canViewWagesAndPayments`.
+- **QA Step 6 completed and pushed**:
+  - Code inspection & responsive design audit conducted at 360px, 390px, and 414px mobile viewport widths:
+    - `src/components/AppShell.tsx`: Optimized mobile header by making the Sign Out button compact (icon-only on small viewports with `hidden sm:inline` label) to prevent user email truncation and flex header overflows.
+    - `src/styles.css`: Added a global mobile viewport constraint on Radix dialog contents (`max-width: calc(100vw - 2rem)`) to guarantee zero off-screen overflow on 360px displays.
+    - `src/components/FormDialog.tsx`: Added `w-full` and scroll container styles so dynamic forms fit viewport height and width cleanly.
+    - `src/routes/_authenticated/dashboard.tsx`: Added `w-full max-h-[90vh] overflow-y-auto` and horizontal scroll wrappers to Active Projects, Contract Value Breakdown, 6-Month Spend, and Corporate Office Expenses dialogs and tables.
+    - `src/routes/_authenticated/masters.tsx`: Wrapped `<TabsList>` in an `overflow-x-auto` container with `w-max min-w-full` so the 5 master tabs (Clients, Employees, Contractors, Suppliers, Machines) scroll smoothly on small screens rather than wrapping or squishing.
+    - `src/routes/_authenticated/attendance.tsx`: Added `w-full` and scrolling wrappers to Quick Day Attendance Edit modal and the Monthly Worker Daily Breakdown drilldown dialog.
+    - `src/routes/auth.tsx`: Adjusted mobile padding and card layout to fit 360px viewports without vertical or horizontal cutoff.
 
 ---
 

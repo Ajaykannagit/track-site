@@ -169,6 +169,13 @@
   padding: 1rem;
 }
 
+/* ─── Mobile: dialog viewport clamp ──────────────────────────────────────── */
+/* Ensures no dialog/sheet/popover breaks out of the viewport on 360px phones */
+[role="dialog"] > [data-radix-popper-content-wrapper],
+[data-radix-dialog-content] {
+  max-width: calc(100vw - 2rem) !important;
+}
+
 @media print {
   @page {
     size: landscape;

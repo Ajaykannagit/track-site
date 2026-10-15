@@ -119,8 +119,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <NotificationCenter />
 
-          <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>
-            <LogOut className="mr-2 size-4" /> Sign out
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => supabase.auth.signOut()}
+            className="shrink-0"
+            aria-label="Sign out"
+          >
+            <LogOut className="size-4 sm:mr-2" />
+            <span className="hidden sm:inline">Sign out</span>
           </Button>
         </header>
 

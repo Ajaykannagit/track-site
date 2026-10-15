@@ -1307,7 +1307,7 @@ function AttendanceWeeklySheetPage() {
       {/* QUICK DAY ATTENDANCE EDIT MODAL */}
       {/* ========================================================================= */}
       <Dialog open={!!editCell} onOpenChange={(open) => !open && setEditCell(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="size-4 text-primary" /> Record Day Attendance
@@ -1514,7 +1514,7 @@ function AttendanceWeeklySheetPage() {
       {/* 3F. MONTHLY WORKER DAY-BY-DAY DRILLDOWN DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={!!drilldownWorker} onOpenChange={(open) => !open && setDrilldownWorker(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-3xl max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="size-5 text-primary" /> {drilldownWorker?.full_name} — Daily Breakdown

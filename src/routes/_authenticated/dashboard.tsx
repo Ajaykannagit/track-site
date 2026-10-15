@@ -706,7 +706,7 @@ function Dashboard() {
       {/* DIALOG 1: Active Projects Summary Modal */}
       {/* ========================================================================= */}
       <Dialog open={activeProjectsDialogOpen} onOpenChange={setActiveProjectsDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="size-5 text-primary" /> Active Projects Overview
@@ -715,7 +715,7 @@ function Dashboard() {
               Summary of all currently active construction sites and project progress.
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-2 space-y-3">
+          <div className="mt-2 space-y-3 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -773,7 +773,7 @@ function Dashboard() {
       {/* ========================================================================= */}
       {permissions.canViewCompanyFinancials && (
         <Dialog open={contractValueDialogOpen} onOpenChange={setContractValueDialogOpen}>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <DollarSign className="size-5 text-primary" /> Contract Value & Financial Breakdown
@@ -782,7 +782,7 @@ function Dashboard() {
                 Project-wise financial model breakdown: Quotation Value vs Labour, Materials, Contractor, Other site expenses and net profit margins.
               </DialogDescription>
             </DialogHeader>
-            <div className="mt-2 space-y-4">
+            <div className="mt-2 space-y-4 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -837,7 +837,7 @@ function Dashboard() {
       {/* ========================================================================= */}
       {permissions.canViewCompanyFinancials && (
         <Dialog open={spendDialogOpen} onOpenChange={setSpendDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="w-full max-w-4xl max-h-[85vh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PackageCheck className="size-5 text-amber-600" /> Full Spend — Last 6 Months
@@ -911,8 +911,8 @@ function Dashboard() {
       {/* ========================================================================= */}
       {permissions.canViewOfficeExpense && (
         <Dialog open={officeExpensesDialogOpen} onOpenChange={setOfficeExpensesDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader className="flex flex-row items-center justify-between pb-2">
+          <DialogContent className="w-full max-w-4xl max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+            <DialogHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
               <div>
                 <DialogTitle className="flex items-center gap-2">
                   <Receipt className="size-5 text-primary" /> Corporate Office Expenses Overview
@@ -1050,7 +1050,7 @@ function Dashboard() {
       {/* ========================================================================= */}
       {permissions.canViewCompanyFinancials && (
         <Dialog open={cashDialogOpen} onOpenChange={setCashDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Wallet className="size-5 text-emerald-600" /> Cash on Hand — Closing History

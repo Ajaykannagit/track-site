@@ -163,7 +163,7 @@ function AuthPage() {
         </p>
       </div>
 
-      <div className="flex items-center justify-center p-6">
+      <div className="flex items-start justify-center p-4 pt-8 sm:items-center sm:p-6">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="font-display text-2xl">Welcome back</CardTitle>

@@ -461,13 +461,15 @@ function MastersPage() {
       />
 
       <Tabs defaultValue="clients">
-        <TabsList className="no-print">
-          <TabsTrigger value="clients">Clients</TabsTrigger>
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-          <TabsTrigger value="contractors">Contractors</TabsTrigger>
-          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-          <TabsTrigger value="machines">Machines</TabsTrigger>
-        </TabsList>
+        <div className="no-print overflow-x-auto">
+          <TabsList className="w-max min-w-full">
+            <TabsTrigger value="clients">Clients</TabsTrigger>
+            <TabsTrigger value="employees">Employees</TabsTrigger>
+            <TabsTrigger value="contractors">Contractors</TabsTrigger>
+            <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+            <TabsTrigger value="machines">Machines</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ================= CLIENTS ================= */}
         <TabsContent value="clients" className="mt-4 space-y-3">
