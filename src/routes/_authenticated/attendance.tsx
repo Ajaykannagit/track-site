@@ -157,7 +157,7 @@ function formatDayHeader(d: Date): { dayName: string; formatted: string; iso: st
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return {
-    dayName: days[d.getDay()],
+    dayName: days[d.getDay()] ?? "",
     formatted: `${d.getDate()}/${months[d.getMonth()]}`,
     iso: formatDateISO(d),
   };
@@ -198,7 +198,7 @@ function AttendanceWeeklySheetPage() {
   // Query Data
   const weekStartISO = formatDateISO(weekStartDate);
   const weekDates = useMemo(() => getWeekDates(weekStartDate), [weekStartDate]);
-  const weekEndISO = formatDateISO(weekDates[6]);
+  const weekEndISO = formatDateISO(weekDates[6] || weekStartDate);
 
   const employees = useRows<Employee>("employees", {
     order: { col: "full_name", asc: true },
@@ -267,7 +267,7 @@ function AttendanceWeeklySheetPage() {
       (a) => a.employee_id === emp.id && a.attendance_date === iso,
     );
 
-    setEditCell({ employee: emp, date, existing: rec });
+    setEditCell({ employee: emp, date, existing: rec ?? null });
     if (rec) {
       setInTimeInput(rec.in_time ?? "6");
       setOutTimeInput(rec.out_time ?? "6");
@@ -445,9 +445,10 @@ function AttendanceWeeklySheetPage() {
       { header: "Wage Balance", value: (r: (typeof workerRows)[0]) => r.wageBalance },
     ];
 
+    const lastDay = weekDates[6] ?? weekStartDate;
     await exportToExcel({
       filename,
-      title: `Brickweld Pvt Ltd — Attendance Register (${formatDateDisplay(weekStartDate)} to ${formatDateDisplay(weekDates[6])})`,
+      title: `Brickweld Pvt Ltd — Attendance Register (${formatDateDisplay(weekStartDate)} to ${formatDateDisplay(lastDay)})`,
       description: "Weekly site attendance, day values and team payment calculation",
       rows: workerRows,
       columns,
@@ -463,7 +464,7 @@ function AttendanceWeeklySheetPage() {
             <h1 className="text-xl font-bold tracking-tight">
               Brickweld Pvt Ltd &nbsp;
               <span className="text-primary font-mono">
-                {formatDateDisplay(weekStartDate)} to {formatDateDisplay(weekDates[6])}
+                {formatDateDisplay(weekStartDate)} to {formatDateDisplay(weekDates[6] ?? weekStartDate)}
               </span>
             </h1>
             <Badge variant="outline" className="hidden sm:inline-flex">

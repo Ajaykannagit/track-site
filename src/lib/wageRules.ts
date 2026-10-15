@@ -30,7 +30,7 @@ export function parseHoursBetween(inTimeStr?: string | null, outTimeStr?: string
   const parseHour = (str: string, isPM: boolean): number => {
     const cleaned = str.trim().toLowerCase().replace(/am|pm/g, "");
     const parts = cleaned.split(":");
-    let h = parseFloat(parts[0]);
+    let h = parseFloat(parts[0] || "0");
     const m = parts[1] ? parseFloat(parts[1]) / 60 : 0;
     if (isNaN(h)) return 0;
 

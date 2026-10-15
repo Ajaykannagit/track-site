@@ -17,11 +17,10 @@
 - **Fix Batch 1b completed and pushed**:
   - `contractors.tsx`: Protected `subcontractor_payments` query with `enabled: canWriteFinance || isMD`.
   - `masters.tsx`: Cleaned out legacy `payroll` and `payroll_items` queries, state, and the obsolete Payroll History drawer.
-- **Step 2 (Schema Check Script) completed and pushed**:
-  - Created `supabase/checks/check_tables.sql` for read-only table and `is_demo` verification in Supabase SQL Editor.
-- **Step 3 (Security Check & Proposal) completed and pushed**:
-  - Found that standard RLS operates on rows, so direct PostgREST table queries on `projects` and `employees` return all columns of allowed rows.
-  - Authored proposed migration `supabase/migrations/20261012000000_column_security_proposal.sql` creating `projects_sanitized` and `employees_sanitized` views (unapplied, awaiting review).
+- **QA Step 1 completed and pushed**:
+  - `src/components/FormDialog.tsx`: Added form-level trimming, required check with clear inline error message ("<Field> is required"), positive number validation for required amount fields, and submission blocking until all required fields are valid.
+  - Covers create & edit forms across projects, clients, workers, contractors, suppliers, quotations, expenses, and subcontractors.
+  - Optional database constraint SQL drafted for `projects.name`.
 
 ---
 
