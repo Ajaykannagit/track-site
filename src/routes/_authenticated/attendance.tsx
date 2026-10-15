@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Calendar,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -114,6 +116,7 @@ type AttendanceRecord = {
   site_id?: string | null;
   site_name?: string | null;
   day_value?: number | null;
+  working_hours?: number | null;
   is_leave?: boolean | null;
   calculated_wage: number;
   remarks?: string | null;
@@ -163,6 +166,24 @@ function formatDayHeader(d: Date): { dayName: string; formatted: string; iso: st
   };
 }
 
+// Helpers for Monthly View
+function getMonthDates(year: number, monthIndex: number): Date[] {
+  const dates: Date[] = [];
+  const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+  for (let d = 1; d <= totalDays; d++) {
+    dates.push(new Date(year, monthIndex, d));
+  }
+  return dates;
+}
+
+function getMonthDisplayName(year: number, monthIndex: number): string {
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return `${monthNames[monthIndex] ?? ""} ${year}`;
+}
+
 // Default to week of benchmark data (13.09.2026)
 function getInitialWeekStart(): Date {
   const initial = new Date(2026, 8, 13); // 13 Sep 2026 (Sunday)
@@ -171,6 +192,16 @@ function getInitialWeekStart(): Date {
 
 function AttendanceWeeklySheetPage() {
   const { isMD, permissions } = useAuth();
+
+  // View Mode: 'weekly' or 'monthly'
+  const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly");
+  // Current Month State (default to September 2026 for benchmark data)
+  const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number }>({
+    year: 2026,
+    month: 8, // September (0-indexed)
+  });
+  // Selected Worker for Month day-by-day drilldown dialog
+  const [drilldownWorker, setDrilldownWorker] = useState<Employee | null>(null);
 
   // Current Week Start State (Sunday)
   const [weekStartDate, setWeekStartDate] = useState<Date>(getInitialWeekStart);
@@ -195,10 +226,23 @@ function AttendanceWeeklySheetPage() {
   // Local state for weekly adjustments (bus/petrol and advance) to support instant edits
   const [adjustmentsOverride, setAdjustmentsOverride] = useState<Record<string, { busPetrol: number; advance: number }>>({});
 
-  // Query Data
+  // Query Data (Weekly)
   const weekStartISO = formatDateISO(weekStartDate);
   const weekDates = useMemo(() => getWeekDates(weekStartDate), [weekStartDate]);
   const weekEndISO = formatDateISO(weekDates[6] || weekStartDate);
+
+  // Query Data (Monthly)
+  const monthStartISO = useMemo(() => {
+    const d = new Date(selectedMonth.year, selectedMonth.month, 1);
+    return formatDateISO(d);
+  }, [selectedMonth]);
+  const monthEndISO = useMemo(() => {
+    const d = new Date(selectedMonth.year, selectedMonth.month + 1, 0);
+    return formatDateISO(d);
+  }, [selectedMonth]);
+  const monthDates = useMemo(() => {
+    return getMonthDates(selectedMonth.year, selectedMonth.month);
+  }, [selectedMonth]);
 
   const employees = useRows<Employee>("employees", {
     order: { col: "full_name", asc: true },
@@ -212,16 +256,37 @@ function AttendanceWeeklySheetPage() {
     order: { col: "name", asc: true },
   });
 
+  // Weekly Attendance Query
   const attendance = useRows<AttendanceRecord>("attendance", {
     filters: [
       { col: "attendance_date", op: "gte", value: weekStartISO },
       { col: "attendance_date", op: "lte", value: weekEndISO },
     ],
+    enabled: viewMode === "weekly",
   });
 
+  // Monthly Attendance Query
+  const monthlyAttendance = useRows<AttendanceRecord>("attendance", {
+    filters: [
+      { col: "attendance_date", op: "gte", value: monthStartISO },
+      { col: "attendance_date", op: "lte", value: monthEndISO },
+    ],
+    enabled: viewMode === "monthly",
+  });
+
+  // Weekly adjustments for weekly view
   const weeklyAdjustments = useRows<WeeklyAdjustment>("weekly_wage_adjustments", {
     filters: [{ col: "week_start_date", op: "eq", value: weekStartISO }],
-    enabled: permissions.canViewWagesAndPayments,
+    enabled: permissions.canViewWagesAndPayments && viewMode === "weekly",
+  });
+
+  // Monthly adjustments query (all weekly adjustments within the month)
+  const monthlyAdjustments = useRows<WeeklyAdjustment>("weekly_wage_adjustments", {
+    filters: [
+      { col: "week_start_date", op: "gte", value: monthStartISO },
+      { col: "week_start_date", op: "lte", value: monthEndISO },
+    ],
+    enabled: permissions.canViewWagesAndPayments && viewMode === "monthly",
   });
 
   // Subcontractor / other payments for this week (from Update 6 table)
@@ -235,7 +300,7 @@ function AttendanceWeeklySheetPage() {
   }>("subcontractor_payments", {
     select: "id,name,work_description,amount,status,project_id",
     filters: [{ col: "week_start_date", op: "eq", value: weekStartISO }],
-    enabled: permissions.canViewWagesAndPayments,
+    enabled: permissions.canViewWagesAndPayments && viewMode === "weekly",
   });
 
   const saveAttendance = useSaveRow("attendance", "Attendance");
@@ -397,14 +462,14 @@ function AttendanceWeeklySheetPage() {
     });
   }, [employees.data, attendance.data, weeklyAdjustments.data, weekDates, weekStartISO, teams.data, adjustmentsOverride]);
 
-  // Grand Totals
+  // Grand Totals (Weekly)
   const grandTotalDays = sum(workerRows, (r) => r.totalDays);
   const grandTotalWage = sum(workerRows, (r) => r.wage);
   const grandTotalBusPetrol = sum(workerRows, (r) => r.busPetrol);
   const grandTotalAdvance = sum(workerRows, (r) => r.advance);
   const grandTotalBalance = sum(workerRows, (r) => r.wageBalance);
 
-  // Team-wise payment groupings
+  // Team-wise payment groupings (Weekly)
   const teamPaymentGroups = useMemo(() => {
     const map = new Map<string, { teamName: string; members: typeof workerRows; teamTotal: number }>();
 
@@ -421,7 +486,100 @@ function AttendanceWeeklySheetPage() {
     return [...map.values()];
   }, [workerRows]);
 
-  // Excel Export Handler
+  // Computed Monthly Grid Rows
+  const monthlyWorkerRows = useMemo(() => {
+    const empList = employees.data ?? [];
+    const attList = monthlyAttendance.data ?? [];
+    const adjList = monthlyAdjustments.data ?? [];
+
+    return empList.map((emp, idx) => {
+      const workerRecords = attList.filter((a) => a.employee_id === emp.id);
+
+      let daysPresent = 0;
+      let halfDays = 0;
+      let leaveDays = 0;
+      let totalDays = 0;
+      let totalHours = 0;
+
+      for (const rec of workerRecords) {
+        if (rec.is_leave) {
+          leaveDays += 1;
+        } else {
+          // Use Day-Value from single config function / record
+          const val = Number(rec.day_value ?? 0);
+          totalDays += val;
+          if (val === 0.5) {
+            halfDays += 1;
+          } else if (val > 0) {
+            daysPresent += 1;
+          }
+          const hours = Number(rec.working_hours ?? val * 8);
+          totalHours += hours;
+        }
+      }
+
+      // Sum all adjustments within the month for this worker
+      const workerAdjustments = adjList.filter((a) => a.employee_id === emp.id);
+      const busPetrol = sum(workerAdjustments, (a) => a.bus_petrol);
+      const advance = sum(workerAdjustments, (a) => a.advance_paid);
+
+      const { wage, wageBalance } = calculateWorkerWeeklyWage(
+        totalDays,
+        emp.wage_rate || 0,
+        busPetrol,
+        advance,
+      );
+
+      const team = (teams.data ?? []).find((t) => t.id === emp.team_id)?.name ?? "Unassigned Team";
+
+      return {
+        sno: idx + 1,
+        employee: emp,
+        team,
+        daysPresent,
+        halfDays,
+        leaveDays,
+        totalDays,
+        totalHours,
+        wageRate: emp.wage_rate || 0,
+        wage,
+        busPetrol,
+        advance,
+        wageBalance,
+        records: workerRecords,
+      };
+    });
+  }, [employees.data, monthlyAttendance.data, monthlyAdjustments.data, teams.data]);
+
+  // Grand Totals (Monthly)
+  const monthlyGrandTotalPresent = sum(monthlyWorkerRows, (r) => r.daysPresent);
+  const monthlyGrandTotalHalfDays = sum(monthlyWorkerRows, (r) => r.halfDays);
+  const monthlyGrandTotalLeaveDays = sum(monthlyWorkerRows, (r) => r.leaveDays);
+  const monthlyGrandTotalDays = sum(monthlyWorkerRows, (r) => r.totalDays);
+  const monthlyGrandTotalHours = sum(monthlyWorkerRows, (r) => r.totalHours);
+  const monthlyGrandTotalWage = sum(monthlyWorkerRows, (r) => r.wage);
+  const monthlyGrandTotalBusPetrol = sum(monthlyWorkerRows, (r) => r.busPetrol);
+  const monthlyGrandTotalAdvance = sum(monthlyWorkerRows, (r) => r.advance);
+  const monthlyGrandTotalBalance = sum(monthlyWorkerRows, (r) => r.wageBalance);
+
+  // Team-wise payment groupings (Monthly)
+  const monthlyTeamPaymentGroups = useMemo(() => {
+    const map = new Map<string, { teamName: string; members: typeof monthlyWorkerRows; teamTotal: number }>();
+
+    for (const r of monthlyWorkerRows) {
+      const tName = r.team;
+      if (!map.has(tName)) {
+        map.set(tName, { teamName: tName, members: [], teamTotal: 0 });
+      }
+      const group = map.get(tName)!;
+      group.members.push(r);
+      group.teamTotal += r.wageBalance;
+    }
+
+    return [...map.values()];
+  }, [monthlyWorkerRows]);
+
+  // Excel Export Handler (Weekly)
   const handleExportExcel = async () => {
     const filename = `Brickweld-Attendance-${weekStartISO}-to-${weekEndISO}`;
     const columns = [
@@ -455,47 +613,186 @@ function AttendanceWeeklySheetPage() {
     });
   };
 
+  // Excel Export Handler (Monthly)
+  const handleExportMonthlyExcel = async () => {
+    const monthTitle = getMonthDisplayName(selectedMonth.year, selectedMonth.month);
+    const filename = `Brickweld-Monthly-Attendance-${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, "0")}`;
+    const columns = [
+      { header: "S.No", value: (r: (typeof monthlyWorkerRows)[0]) => r.sno },
+      { header: "Name", value: (r: (typeof monthlyWorkerRows)[0]) => r.employee.full_name },
+      { header: "Designation", value: (r: (typeof monthlyWorkerRows)[0]) => r.employee.designation ?? "—" },
+      { header: "Days Present", value: (r: (typeof monthlyWorkerRows)[0]) => r.daysPresent },
+      { header: "Half Days", value: (r: (typeof monthlyWorkerRows)[0]) => r.halfDays },
+      { header: "Leave Days", value: (r: (typeof monthlyWorkerRows)[0]) => r.leaveDays },
+      { header: "Total Days", value: (r: (typeof monthlyWorkerRows)[0]) => r.totalDays },
+      { header: "Total Hours", value: (r: (typeof monthlyWorkerRows)[0]) => r.totalHours },
+      ...(permissions.canViewWagesAndPayments
+        ? [
+            { header: "Wage / Day (₹)", value: (r: (typeof monthlyWorkerRows)[0]) => r.wageRate },
+            { header: "Monthly Wage (₹)", value: (r: (typeof monthlyWorkerRows)[0]) => r.wage },
+            { header: "Bus/Petrol (₹)", value: (r: (typeof monthlyWorkerRows)[0]) => r.busPetrol },
+            { header: "Advance (₹)", value: (r: (typeof monthlyWorkerRows)[0]) => r.advance },
+            { header: "Wage Balance (₹)", value: (r: (typeof monthlyWorkerRows)[0]) => r.wageBalance },
+          ]
+        : []),
+    ];
+
+    await exportToExcel({
+      filename,
+      title: `Brickweld Pvt Ltd — Monthly Attendance Register (${monthTitle})`,
+      description: "Monthly worker days present, half days, leave, hours, wages and settlements",
+      rows: monthlyWorkerRows,
+      columns,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Title & Navigation Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight">
               Brickweld Pvt Ltd &nbsp;
               <span className="text-primary font-mono">
-                {formatDateDisplay(weekStartDate)} to {formatDateDisplay(weekDates[6] ?? weekStartDate)}
+                {viewMode === "weekly"
+                  ? `${formatDateDisplay(weekStartDate)} to ${formatDateDisplay(weekDates[6] ?? weekStartDate)}`
+                  : getMonthDisplayName(selectedMonth.year, selectedMonth.month)}
               </span>
             </h1>
             <Badge variant="outline" className="hidden sm:inline-flex">
-              7-Day Weekly Sheet
+              {viewMode === "weekly" ? "7-Day Weekly Sheet" : "Monthly Summary Register"}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Weekly worker attendance, site allocations, day values, and team settlement ledger.
+            {viewMode === "weekly"
+              ? "Weekly worker attendance, site allocations, day values, and team settlement ledger."
+              : "Monthly attendance breakdown, day values, work hours, and cumulative team wage balances."}
           </p>
         </div>
 
         {/* Action Controls */}
         <div className="no-print flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-md border bg-card p-1 shadow-xs">
-            <Button variant="ghost" size="icon" onClick={handlePrevWeek} className="size-8" title="Previous Week">
-              <ChevronLeft className="size-4" />
+          {/* Weekly / Monthly Toggle */}
+          <div className="flex items-center rounded-lg border bg-muted p-1">
+            <Button
+              variant={viewMode === "weekly" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("weekly")}
+              className="h-7 text-xs font-medium"
+            >
+              Weekly
             </Button>
             <Button
-              variant="ghost"
+              variant={viewMode === "monthly" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setWeekStartDate(getInitialWeekStart())}
-              className="h-8 px-2.5 text-xs font-mono"
+              onClick={() => setViewMode("monthly")}
+              className="h-7 text-xs font-medium"
             >
-              13.09.2026
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleNextWeek} className="size-8" title="Next Week">
-              <ChevronRight className="size-4" />
+              Monthly
             </Button>
           </div>
 
-          <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-9 text-xs">
+          {/* Date / Month Picker Navigation */}
+          {viewMode === "weekly" ? (
+            <div className="flex items-center rounded-md border bg-card p-1 shadow-xs">
+              <Button variant="ghost" size="icon" onClick={handlePrevWeek} className="size-8" title="Previous Week">
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setWeekStartDate(getInitialWeekStart())}
+                className="h-8 px-2.5 text-xs font-mono"
+              >
+                13.09.2026
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleNextWeek} className="size-8" title="Next Week">
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-md border bg-card p-1 shadow-xs">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() =>
+                  setSelectedMonth((prev) => {
+                    const nextM = prev.month - 1;
+                    if (nextM < 0) return { year: prev.year - 1, month: 11 };
+                    return { year: prev.year, month: nextM };
+                  })
+                }
+                className="size-8"
+                title="Previous Month"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+
+              <Select
+                value={String(selectedMonth.month)}
+                onValueChange={(val) =>
+                  setSelectedMonth((prev) => ({ ...prev, month: parseInt(val, 10) }))
+                }
+              >
+                <SelectTrigger className="h-8 w-28 text-xs font-medium">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December",
+                  ].map((m, idx) => (
+                    <SelectItem key={idx} value={String(idx)} className="text-xs">
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={String(selectedMonth.year)}
+                onValueChange={(val) =>
+                  setSelectedMonth((prev) => ({ ...prev, year: parseInt(val, 10) }))
+                }
+              >
+                <SelectTrigger className="h-8 w-20 text-xs font-medium font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                    <SelectItem key={y} value={String(y)} className="text-xs font-mono">
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() =>
+                  setSelectedMonth((prev) => {
+                    const nextM = prev.month + 1;
+                    if (nextM > 11) return { year: prev.year + 1, month: 0 };
+                    return { year: prev.year, month: nextM };
+                  })
+                }
+                className="size-8"
+                title="Next Month"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Export & Print */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={viewMode === "weekly" ? handleExportExcel : handleExportMonthlyExcel}
+            className="h-9 text-xs"
+          >
             <FileSpreadsheet className="mr-1.5 size-3.5 text-emerald-600" /> Export Excel
           </Button>
 
@@ -516,210 +813,377 @@ function AttendanceWeeklySheetPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 3A. MAIN WEEKLY ATTENDANCE GRID */}
+      {/* 3A. MAIN ATTENDANCE GRID: WEEKLY VIEW */}
       {/* ========================================================================= */}
-      <Card className="overflow-hidden border shadow-xs">
-        <div className="overflow-x-auto">
-          <Table className="text-xs">
-            <TableHeader className="bg-muted/60">
-              <TableRow>
-                <TableHead className="w-10 text-center font-bold print:w-8 print:p-1">SNO</TableHead>
-                <TableHead className="min-w-32 font-bold print:min-w-0 print:w-32 print:p-1">NAME</TableHead>
-                <TableHead className="min-w-24 font-bold print:min-w-0 print:w-20 print:p-1">DESIGNATION</TableHead>
-                {permissions.canViewWagesAndPayments && (
-                  <TableHead className="min-w-20 text-right font-bold print:min-w-0 print:w-16 print:p-1">WAGE / DAY</TableHead>
+      {viewMode === "weekly" ? (
+        <Card className="overflow-hidden border shadow-xs">
+          <div className="overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader className="bg-muted/60">
+                <TableRow>
+                  <TableHead className="w-10 text-center font-bold print:w-8 print:p-1">SNO</TableHead>
+                  <TableHead className="min-w-32 font-bold print:min-w-0 print:w-32 print:p-1">NAME</TableHead>
+                  <TableHead className="min-w-24 font-bold print:min-w-0 print:w-20 print:p-1">DESIGNATION</TableHead>
+                  {permissions.canViewWagesAndPayments && (
+                    <TableHead className="min-w-20 text-right font-bold print:min-w-0 print:w-16 print:p-1">WAGE / DAY</TableHead>
+                  )}
+
+                  {/* 7 Days of the Week Columns */}
+                  {weekDates.map((d) => {
+                    const h = formatDayHeader(d);
+                    return (
+                      <TableHead key={h.iso} className="min-w-28 text-center border-l bg-muted/40 p-2 print:min-w-0 print:w-20 print:p-1">
+                        <div className="font-bold text-foreground print:text-[10px]">{h.dayName}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground print:text-[9px]">{h.formatted}</div>
+                      </TableHead>
+                    );
+                  })}
+
+                  {/* Summary End Columns */}
+                  <TableHead className="min-w-16 text-center font-bold border-l bg-muted/80 print:min-w-0 print:w-14 print:p-1">TOTAL DAYS</TableHead>
+                  {permissions.canViewWagesAndPayments && (
+                    <>
+                      <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">WAGE (₹)</TableHead>
+                      <TableHead className="min-w-24 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">BUS / PETROL</TableHead>
+                      <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">ADVANCE</TableHead>
+                      <TableHead className="min-w-24 text-right font-bold bg-muted/80 text-primary print:min-w-0 print:w-20 print:p-1">WAGE BALANCE</TableHead>
+                    </>
+                  )}
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {workerRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={permissions.canViewWagesAndPayments ? 16 : 11} className="py-12 text-center text-muted-foreground">
+                      No active workers found in database. Add workers in Masters section.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  workerRows.map((r) => (
+                    <TableRow key={r.employee.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-center font-mono text-muted-foreground">{r.sno}</TableCell>
+                      
+                      {/* Worker Name with Profile click */}
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setProfileWorker(r.employee)}
+                          className="text-left font-semibold text-primary hover:underline cursor-pointer flex items-center gap-1.5"
+                          title="Click to view full worker profile & ledger"
+                        >
+                          <User className="size-3.5 text-muted-foreground" />
+                          {r.employee.full_name}
+                        </button>
+                      </TableCell>
+
+                      <TableCell className="text-muted-foreground">
+                        <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">
+                          {r.employee.designation || "Helper"}
+                        </Badge>
+                      </TableCell>
+
+                      {permissions.canViewWagesAndPayments && (
+                        <TableCell className="text-right font-mono font-medium">
+                          {currency(r.wageRate).replace("₹", "")}
+                        </TableCell>
+                      )}
+
+                      {/* 7 Daily Cells */}
+                      {weekDates.map((d) => {
+                        const iso = formatDateISO(d);
+                        const rec = r.dailyMap[iso];
+
+                        return (
+                          <TableCell
+                            key={iso}
+                            onClick={() => handleOpenCellEdit(r.employee, d)}
+                            className="border-l p-1.5 text-center cursor-pointer hover:bg-primary/5 transition-colors align-top"
+                            title="Click to record or edit site, times & day value"
+                          >
+                            {rec ? (
+                              rec.is_leave ? (
+                                <div className="rounded bg-rose-50 border border-rose-200 p-1 text-rose-700">
+                                  <div className="text-[10px] font-bold uppercase">Leave</div>
+                                  <div className="text-[10px] font-mono">0.0</div>
+                                </div>
+                              ) : (
+                                <div className="rounded bg-card border p-1 shadow-2xs space-y-0.5">
+                                  <div className="text-[10px] font-mono font-semibold text-foreground">
+                                    {rec.in_time ?? "6"} - {rec.out_time ?? "6"}
+                                  </div>
+                                  <div className="text-[10px] truncate text-muted-foreground max-w-[90px] mx-auto" title={rec.site_name ?? "Site"}>
+                                    {rec.site_name ?? "Site 637"}
+                                  </div>
+                                  <div className="inline-block px-1 rounded text-[10px] font-bold bg-primary/10 text-primary">
+                                    {Number(rec.day_value ?? 1.0).toFixed(1)}
+                                  </div>
+                                </div>
+                              )
+                            ) : (
+                              <div className="py-2 text-[11px] text-muted-foreground/50 hover:text-primary">
+                                + Log
+                              </div>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+
+                      {/* Total Days */}
+                      <TableCell className="border-l text-center font-bold font-mono bg-muted/20">
+                        {r.totalDays.toFixed(1)}
+                      </TableCell>
+
+                      {/* Wage Calculations (MD / Accountant) */}
+                      {permissions.canViewWagesAndPayments && (
+                        <>
+                          <TableCell className="text-right font-mono font-semibold bg-muted/20">
+                            {currency(r.wage).replace("₹", "")}
+                          </TableCell>
+
+                          {/* Bus / Petrol (Editable inline on screen, formatted text on print) */}
+                          <TableCell className="text-right bg-muted/20 p-1">
+                            <span className="hidden print:inline font-mono">
+                              {r.busPetrol ? r.busPetrol : "0"}
+                            </span>
+                            <Input
+                              type="number"
+                              defaultValue={r.busPetrol || ""}
+                              placeholder="0"
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                if (val !== r.busPetrol) {
+                                  void handleSaveAdjustment(r.employee.id, val, r.advance);
+                                }
+                              }}
+                              className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
+                            />
+                          </TableCell>
+
+                          {/* Advance (Editable inline on screen, formatted text on print) */}
+                          <TableCell className="text-right bg-muted/20 p-1">
+                            <span className="hidden print:inline font-mono">
+                              {r.advance ? r.advance : "0"}
+                            </span>
+                            <Input
+                              type="number"
+                              defaultValue={r.advance || ""}
+                              placeholder="0"
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                if (val !== r.advance) {
+                                  void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
+                                }
+                              }}
+                              className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
+                            />
+                          </TableCell>
+
+                          {/* Wage Balance */}
+                          <TableCell className="text-right font-mono font-bold text-primary bg-muted/30">
+                            {currency(r.wageBalance).replace("₹", "")}
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  ))
                 )}
+              </TableBody>
 
-                {/* 7 Days of the Week Columns */}
-                {weekDates.map((d) => {
-                  const h = formatDayHeader(d);
-                  return (
-                    <TableHead key={h.iso} className="min-w-28 text-center border-l bg-muted/40 p-2 print:min-w-0 print:w-20 print:p-1">
-                      <div className="font-bold text-foreground print:text-[10px]">{h.dayName}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground print:text-[9px]">{h.formatted}</div>
-                    </TableHead>
-                  );
-                })}
-
-                {/* Summary End Columns */}
-                <TableHead className="min-w-16 text-center font-bold border-l bg-muted/80 print:min-w-0 print:w-14 print:p-1">TOTAL DAYS</TableHead>
+              {/* Grand Totals Bottom Row */}
+              <TableRow className="border-t-2 bg-muted font-bold text-xs">
+                <TableCell colSpan={permissions.canViewWagesAndPayments ? 11 : 10} className="text-right uppercase tracking-wider py-3">
+                  Grand Totals:
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3 border-l">
+                  {grandTotalDays.toFixed(1)}
+                </TableCell>
                 {permissions.canViewWagesAndPayments && (
                   <>
-                    <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">WAGE (₹)</TableHead>
-                    <TableHead className="min-w-24 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">BUS / PETROL</TableHead>
-                    <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">ADVANCE</TableHead>
-                    <TableHead className="min-w-24 text-right font-bold bg-muted/80 text-primary print:min-w-0 print:w-20 print:p-1">WAGE BALANCE</TableHead>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(grandTotalWage)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(grandTotalBusPetrol)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(grandTotalAdvance)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
+                      {currency(grandTotalBalance)}
+                    </TableCell>
                   </>
                 )}
               </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {workerRows.length === 0 ? (
+            </Table>
+          </div>
+        </Card>
+      ) : (
+        /* ========================================================================= */
+        /* 3B. MAIN ATTENDANCE GRID: MONTHLY VIEW */
+        /* ========================================================================= */
+        <Card className="overflow-hidden border shadow-xs">
+          <div className="overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader className="bg-muted/60">
                 <TableRow>
-                  <TableCell colSpan={permissions.canViewWagesAndPayments ? 16 : 11} className="py-12 text-center text-muted-foreground">
-                    No active workers found in database. Add workers in Masters section.
-                  </TableCell>
+                  <TableHead className="w-10 text-center font-bold print:w-8 print:p-1">SNO</TableHead>
+                  <TableHead className="min-w-32 font-bold print:min-w-0 print:w-32 print:p-1">WORKER NAME</TableHead>
+                  <TableHead className="min-w-24 font-bold print:min-w-0 print:w-20 print:p-1">DESIGNATION</TableHead>
+                  <TableHead className="min-w-20 text-center font-bold print:min-w-0 print:w-16 print:p-1">DAYS PRESENT</TableHead>
+                  <TableHead className="min-w-16 text-center font-bold print:min-w-0 print:w-14 print:p-1">HALF DAYS</TableHead>
+                  <TableHead className="min-w-16 text-center font-bold print:min-w-0 print:w-14 print:p-1">LEAVE DAYS</TableHead>
+                  <TableHead className="min-w-20 text-center font-bold bg-muted/80 border-l print:min-w-0 print:w-16 print:p-1">TOTAL DAYS</TableHead>
+                  <TableHead className="min-w-20 text-center font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">TOTAL HOURS</TableHead>
+                  {permissions.canViewWagesAndPayments && (
+                    <>
+                      <TableHead className="min-w-20 text-right font-bold print:min-w-0 print:w-16 print:p-1">WAGE / DAY</TableHead>
+                      <TableHead className="min-w-24 text-right font-bold bg-muted/80 print:min-w-0 print:w-20 print:p-1">MONTHLY WAGE</TableHead>
+                      <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">BUS / PETROL</TableHead>
+                      <TableHead className="min-w-20 text-right font-bold bg-muted/80 print:min-w-0 print:w-16 print:p-1">ADVANCE</TableHead>
+                      <TableHead className="min-w-24 text-right font-bold bg-muted/80 text-primary print:min-w-0 print:w-20 print:p-1">WAGE BALANCE</TableHead>
+                    </>
+                  )}
+                  <TableHead className="no-print text-center w-20 font-bold">ACTION</TableHead>
                 </TableRow>
-              ) : (
-                workerRows.map((r) => (
-                  <TableRow key={r.employee.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="text-center font-mono text-muted-foreground">{r.sno}</TableCell>
-                    
-                    {/* Worker Name with Profile click */}
-                    <TableCell className="font-medium">
-                      <button
-                        type="button"
-                        onClick={() => setProfileWorker(r.employee)}
-                        className="text-left font-semibold text-primary hover:underline cursor-pointer flex items-center gap-1.5"
-                        title="Click to view full worker profile & ledger"
-                      >
-                        <User className="size-3.5 text-muted-foreground" />
-                        {r.employee.full_name}
-                      </button>
+              </TableHeader>
+
+              <TableBody>
+                {monthlyWorkerRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={permissions.canViewWagesAndPayments ? 14 : 9} className="py-12 text-center text-muted-foreground">
+                      No active workers found in database.
                     </TableCell>
-
-                    <TableCell className="text-muted-foreground">
-                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">
-                        {r.employee.designation || "Helper"}
-                      </Badge>
-                    </TableCell>
-
-                    {permissions.canViewWagesAndPayments && (
-                      <TableCell className="text-right font-mono font-medium">
-                        {currency(r.wageRate).replace("₹", "")}
-                      </TableCell>
-                    )}
-
-                    {/* 7 Daily Cells */}
-                    {weekDates.map((d) => {
-                      const iso = formatDateISO(d);
-                      const rec = r.dailyMap[iso];
-
-                      return (
-                        <TableCell
-                          key={iso}
-                          onClick={() => handleOpenCellEdit(r.employee, d)}
-                          className="border-l p-1.5 text-center cursor-pointer hover:bg-primary/5 transition-colors align-top"
-                          title="Click to record or edit site, times & day value"
-                        >
-                          {rec ? (
-                            rec.is_leave ? (
-                              <div className="rounded bg-rose-50 border border-rose-200 p-1 text-rose-700">
-                                <div className="text-[10px] font-bold uppercase">Leave</div>
-                                <div className="text-[10px] font-mono">0.0</div>
-                              </div>
-                            ) : (
-                              <div className="rounded bg-card border p-1 shadow-2xs space-y-0.5">
-                                <div className="text-[10px] font-mono font-semibold text-foreground">
-                                  {rec.in_time ?? "6"} - {rec.out_time ?? "6"}
-                                </div>
-                                <div className="text-[10px] truncate text-muted-foreground max-w-[90px] mx-auto" title={rec.site_name ?? "Site"}>
-                                  {rec.site_name ?? "Site 637"}
-                                </div>
-                                <div className="inline-block px-1 rounded text-[10px] font-bold bg-primary/10 text-primary">
-                                  {Number(rec.day_value ?? 1.0).toFixed(1)}
-                                </div>
-                              </div>
-                            )
-                          ) : (
-                            <div className="py-2 text-[11px] text-muted-foreground/50 hover:text-primary">
-                              + Log
-                            </div>
-                          )}
-                        </TableCell>
-                      );
-                    })}
-
-                    {/* Total Days */}
-                    <TableCell className="border-l text-center font-bold font-mono bg-muted/20">
-                      {r.totalDays.toFixed(1)}
-                    </TableCell>
-
-                    {/* Wage Calculations (MD / Accountant) */}
-                    {permissions.canViewWagesAndPayments && (
-                      <>
-                        <TableCell className="text-right font-mono font-semibold bg-muted/20">
-                          {currency(r.wage).replace("₹", "")}
-                        </TableCell>
-
-                        {/* Bus / Petrol (Editable inline on screen, formatted text on print) */}
-                        <TableCell className="text-right bg-muted/20 p-1">
-                          <span className="hidden print:inline font-mono">
-                            {r.busPetrol ? r.busPetrol : "0"}
-                          </span>
-                          <Input
-                            type="number"
-                            defaultValue={r.busPetrol || ""}
-                            placeholder="0"
-                            onBlur={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              if (val !== r.busPetrol) {
-                                void handleSaveAdjustment(r.employee.id, val, r.advance);
-                              }
-                            }}
-                            className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
-                          />
-                        </TableCell>
-
-                        {/* Advance (Editable inline on screen, formatted text on print) */}
-                        <TableCell className="text-right bg-muted/20 p-1">
-                          <span className="hidden print:inline font-mono">
-                            {r.advance ? r.advance : "0"}
-                          </span>
-                          <Input
-                            type="number"
-                            defaultValue={r.advance || ""}
-                            placeholder="0"
-                            onBlur={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              if (val !== r.advance) {
-                                void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
-                              }
-                            }}
-                            className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
-                          />
-                        </TableCell>
-
-                        {/* Wage Balance */}
-                        <TableCell className="text-right font-mono font-bold text-primary bg-muted/30">
-                          {currency(r.wageBalance).replace("₹", "")}
-                        </TableCell>
-                      </>
-                    )}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
+                ) : (
+                  monthlyWorkerRows.map((r) => (
+                    <TableRow key={r.employee.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-center font-mono text-muted-foreground">{r.sno}</TableCell>
+                      
+                      {/* Worker Name with Drilldown click */}
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setDrilldownWorker(r.employee)}
+                          className="text-left font-semibold text-primary hover:underline cursor-pointer flex items-center gap-1.5"
+                          title="Click to view full day-by-day attendance for this month"
+                        >
+                          <User className="size-3.5 text-muted-foreground" />
+                          {r.employee.full_name}
+                        </button>
+                      </TableCell>
 
-            {/* Grand Totals Bottom Row */}
-            <TableRow className="border-t-2 bg-muted font-bold text-xs">
-              <TableCell colSpan={permissions.canViewWagesAndPayments ? 11 : 10} className="text-right uppercase tracking-wider py-3">
-                Grand Totals:
-              </TableCell>
-              <TableCell className="text-center font-mono text-sm py-3 border-l">
-                {grandTotalDays.toFixed(1)}
-              </TableCell>
-              {permissions.canViewWagesAndPayments && (
-                <>
-                  <TableCell className="text-right font-mono text-sm py-3">
-                    {currency(grandTotalWage)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm py-3">
-                    {currency(grandTotalBusPetrol)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm py-3">
-                    {currency(grandTotalAdvance)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
-                    {currency(grandTotalBalance)}
-                  </TableCell>
-                </>
-              )}
-            </TableRow>
-          </Table>
-        </div>
-      </Card>
+                      <TableCell className="text-muted-foreground">
+                        <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">
+                          {r.employee.designation || "Helper"}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Days Present */}
+                      <TableCell className="text-center font-mono font-semibold">
+                        {r.daysPresent}
+                      </TableCell>
+
+                      {/* Half Days */}
+                      <TableCell className="text-center font-mono text-muted-foreground">
+                        {r.halfDays || "—"}
+                      </TableCell>
+
+                      {/* Leave Days */}
+                      <TableCell className="text-center font-mono text-muted-foreground">
+                        {r.leaveDays || "—"}
+                      </TableCell>
+
+                      {/* Total Days */}
+                      <TableCell className="border-l text-center font-bold font-mono text-sm bg-muted/20">
+                        {r.totalDays.toFixed(1)}
+                      </TableCell>
+
+                      {/* Total Hours */}
+                      <TableCell className="text-center font-mono font-medium bg-muted/20">
+                        {r.totalHours.toFixed(0)} hrs
+                      </TableCell>
+
+                      {/* Wage Columns (MD / Accounts Only) */}
+                      {permissions.canViewWagesAndPayments && (
+                        <>
+                          <TableCell className="text-right font-mono font-medium">
+                            {currency(r.wageRate).replace("₹", "")}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold bg-muted/20">
+                            {currency(r.wage).replace("₹", "")}
+                          </TableCell>
+                          <TableCell className="text-right font-mono bg-muted/20">
+                            {r.busPetrol ? currency(r.busPetrol).replace("₹", "") : "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono bg-muted/20 text-muted-foreground">
+                            {r.advance ? currency(r.advance).replace("₹", "") : "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-primary bg-muted/30">
+                            {currency(r.wageBalance).replace("₹", "")}
+                          </TableCell>
+                        </>
+                      )}
+
+                      {/* Drilldown button */}
+                      <TableCell className="no-print text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDrilldownWorker(r.employee)}
+                          className="h-7 px-2 text-xs text-primary"
+                        >
+                          View Days
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+
+              {/* Monthly Grand Totals Bottom Row */}
+              <TableRow className="border-t-2 bg-muted font-bold text-xs">
+                <TableCell colSpan={3} className="text-right uppercase tracking-wider py-3">
+                  Monthly Grand Totals:
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3">
+                  {monthlyGrandTotalPresent}
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3">
+                  {monthlyGrandTotalHalfDays}
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3">
+                  {monthlyGrandTotalLeaveDays}
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3 border-l font-bold">
+                  {monthlyGrandTotalDays.toFixed(1)}
+                </TableCell>
+                <TableCell className="text-center font-mono text-sm py-3 font-bold">
+                  {monthlyGrandTotalHours.toFixed(0)} hrs
+                </TableCell>
+                {permissions.canViewWagesAndPayments && (
+                  <>
+                    <TableCell className="text-right font-mono text-sm py-3">—</TableCell>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(monthlyGrandTotalWage)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(monthlyGrandTotalBusPetrol)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm py-3">
+                      {currency(monthlyGrandTotalAdvance)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
+                      {currency(monthlyGrandTotalBalance)}
+                    </TableCell>
+                  </>
+                )}
+                <TableCell className="no-print" />
+              </TableRow>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {/* ========================================================================= */}
       {/* 3C. TEAM-WISE PAYMENT TABLES & 3D. OTHER PAYMENTS PLACEHOLDER */}
@@ -730,16 +1194,16 @@ function AttendanceWeeklySheetPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold flex items-center gap-2">
-                  <Users className="size-4 text-primary" /> Team-Wise Weekly Wage Settlements
+                  <Users className="size-4 text-primary" /> Team-Wise {viewMode === "weekly" ? "Weekly" : "Monthly"} Wage Settlements
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Aggregated payments per team for group cash distribution.
+                  Aggregated payments per team for group cash distribution ({viewMode === "weekly" ? "Current Week" : getMonthDisplayName(selectedMonth.year, selectedMonth.month)}).
                 </p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {teamPaymentGroups.map((grp) => (
+              {(viewMode === "weekly" ? teamPaymentGroups : monthlyTeamPaymentGroups).map((grp) => (
                 <Card key={grp.teamName} className="border shadow-2xs">
                   <CardHeader className="py-2.5 px-3.5 bg-muted/40 border-b flex flex-row items-center justify-between">
                     <CardTitle className="text-xs font-bold uppercase tracking-wide">
@@ -754,8 +1218,8 @@ function AttendanceWeeklySheetPage() {
                       <TableHeader>
                         <TableRow className="bg-muted/10">
                           <TableHead className="h-7 text-[11px]">Name</TableHead>
+                          <TableHead className="h-7 text-right text-[11px]">Total Days</TableHead>
                           <TableHead className="h-7 text-right text-[11px]">Total (₹)</TableHead>
-                          <TableHead className="h-7 text-right text-[11px]">Adv.</TableHead>
                           <TableHead className="h-7 text-right text-[11px] font-bold">Payment</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -763,8 +1227,8 @@ function AttendanceWeeklySheetPage() {
                         {grp.members.map((m) => (
                           <TableRow key={m.employee.id} className="h-8">
                             <TableCell className="font-medium py-1">{m.employee.full_name}</TableCell>
+                            <TableCell className="text-right font-mono py-1">{m.totalDays.toFixed(1)}</TableCell>
                             <TableCell className="text-right font-mono py-1">{m.wage + m.busPetrol}</TableCell>
-                            <TableCell className="text-right font-mono py-1 text-muted-foreground">{m.advance || "—"}</TableCell>
                             <TableCell className="text-right font-mono font-bold py-1 text-primary">{m.wageBalance}</TableCell>
                           </TableRow>
                         ))}
@@ -1045,6 +1509,126 @@ function AttendanceWeeklySheetPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ========================================================================= */}
+      {/* 3F. MONTHLY WORKER DAY-BY-DAY DRILLDOWN DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog open={!!drilldownWorker} onOpenChange={(open) => !open && setDrilldownWorker(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="size-5 text-primary" /> {drilldownWorker?.full_name} — Daily Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              Day-by-day attendance log for {getMonthDisplayName(selectedMonth.year, selectedMonth.month)} ({drilldownWorker?.designation || "Worker"}).
+            </DialogDescription>
+          </DialogHeader>
+
+          {drilldownWorker && (
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="rounded-lg border bg-muted/40 p-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Days Present</p>
+                  <p className="text-base font-bold">
+                    {monthlyWorkerRows.find((w) => w.employee.id === drilldownWorker.id)?.daysPresent ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Half Days</p>
+                  <p className="text-base font-bold">
+                    {monthlyWorkerRows.find((w) => w.employee.id === drilldownWorker.id)?.halfDays ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Total Days</p>
+                  <p className="text-base font-bold text-primary font-mono">
+                    {(monthlyWorkerRows.find((w) => w.employee.id === drilldownWorker.id)?.totalDays ?? 0).toFixed(1)}
+                  </p>
+                </div>
+                {permissions.canViewWagesAndPayments && (
+                  <div className="rounded-lg border bg-primary/5 p-2.5">
+                    <p className="text-[10px] text-muted-foreground uppercase font-medium">Month Balance</p>
+                    <p className="text-base font-bold text-primary font-mono">
+                      {currency(monthlyWorkerRows.find((w) => w.employee.id === drilldownWorker.id)?.wageBalance ?? 0)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border overflow-x-auto max-h-[50vh] overflow-y-auto">
+                <Table className="text-xs">
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="w-12 text-center font-bold">DATE</TableHead>
+                      <TableHead className="w-20 font-bold">DAY</TableHead>
+                      <TableHead className="font-bold">STATUS</TableHead>
+                      <TableHead className="font-bold">IN TIME</TableHead>
+                      <TableHead className="font-bold">OUT TIME</TableHead>
+                      <TableHead className="font-bold">SITE LOCATION</TableHead>
+                      <TableHead className="text-center font-bold">DAY VALUE</TableHead>
+                      {permissions.canViewWagesAndPayments && (
+                        <TableHead className="text-right font-bold">CALCULATED WAGE</TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {monthDates.map((d) => {
+                      const iso = formatDateISO(d);
+                      const rec = (monthlyAttendance.data ?? []).find(
+                        (a) => a.employee_id === drilldownWorker.id && a.attendance_date === iso,
+                      );
+                      const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+
+                      return (
+                        <TableRow key={iso} className={rec ? "hover:bg-muted/30" : "text-muted-foreground/60"}>
+                          <TableCell className="text-center font-mono font-medium">{d.getDate()}</TableCell>
+                          <TableCell className="font-medium text-xs">{dayName}</TableCell>
+                          <TableCell>
+                            {rec ? (
+                              rec.is_leave ? (
+                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                  Leave
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {Number(rec.day_value ?? 0) === 0 ? "Absent" : "Present"}
+                                </Badge>
+                              )
+                            ) : (
+                              <span className="text-[11px]">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono">{rec?.in_time ? `${rec.in_time} AM` : "—"}</TableCell>
+                          <TableCell className="font-mono">{rec?.out_time ? `${rec.out_time} PM` : "—"}</TableCell>
+                          <TableCell className="text-xs">{rec?.site_name || "—"}</TableCell>
+                          <TableCell className="text-center font-bold font-mono">
+                            {rec ? (
+                              rec.is_leave ? (
+                                <span className="text-destructive">0.0</span>
+                              ) : (
+                                <span className="text-primary">{Number(rec.day_value ?? 0).toFixed(1)}</span>
+                              )
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          {permissions.canViewWagesAndPayments && (
+                            <TableCell className="text-right font-mono font-semibold">
+                              {rec && !rec.is_leave
+                                ? currency(rec.calculated_wage ?? Math.round(Number(rec.day_value ?? 0) * (drilldownWorker.wage_rate || 0)))
+                                : "—"}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

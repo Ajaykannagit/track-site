@@ -32,7 +32,16 @@
   - Fields covered: Date, Category (with default office categories merged with DB categories), Description, Amount, Payment Method, and Receipt Reference.
   - Configured `project_id: null` on insert/update for office expenses.
   - Added sticky header, scrollable table (`max-h-[50vh]`), and footer showing grand total.
-  - Verified RLS policies: MD can insert, update, and delete expenses with `project_id IS NULL` under `"finance write"`. Identified that to strictly restrict `project_id IS NULL` operations to MD (blocking non-MD write access), an updated write policy SQL has been provided for manual execution.
+- **QA Step 5 completed and pushed**:
+  - `src/routes/_authenticated/attendance.tsx`:
+    - Added Weekly / Monthly view toggle and month picker (month name + year with previous/next navigation).
+    - Added monthly aggregation displaying per-worker metrics: Days Present, Half Days, Leave Days, Total Days, Total Hours, Wage, Bus/Petrol, Advance, and Wage Balance. Day values use the Step 2 calculation standard.
+    - Added Grand Total summary row across all workers.
+    - Added interactive Day-by-Day drilldown modal when clicking on any worker row (showing date, day of week, in/out time, site location, day value, and calculated wage).
+    - Added monthly team payment summary cards (Vinoth Team, Eranna Team, Sathish Team, Krishna Team) grouping wages, allowances, and balances.
+    - Added Monthly Excel export (`handleExportMonthlyExcel`) with comprehensive worker-by-worker summary and totals.
+    - Implemented landscape print layout with header repetition and page width fit.
+    - Restricted all wage and monetary columns to MD and Accountant roles via `permissions.canViewWagesAndPayments`.
 
 ---
 
