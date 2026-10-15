@@ -60,8 +60,8 @@
 ---
 
 ## 2. Pending List (Next Steps)
-- **a. Apply Missing Migrations**: Run `supabase/checks/check_tables.sql` to identify unapplied migrations on the hosted database.
-- **b. Review Security SQL**: Review `supabase/migrations/20261012000000_column_security_proposal.sql` before applying.
+- **a. Apply Missing Migrations**: ✅ RESOLVED. `supabase/checks/check_tables.sql` verified against live database schema. All required tables exist.
+- **b. Review Security SQL**: ✅ RESOLVED. Replaced draft `20261012000000_column_security_proposal.sql` by executing Step 7 Part A and Part B directly. File renamed to `.SUPERSEDED.sql`.
 - **c. Batch 2 Demo Seed**: ✅ FULLY EXECUTED & VERIFIED ON HOSTED DB
   - All prerequisites and demo seed SQL successfully ran against hosted Supabase (`https://bcfirpcfowqaueqayksz.supabase.co`).
   - Verified live row counts:
@@ -84,9 +84,10 @@
     - `weekly_wage_adj`: 4
     - `work_orders`: 5
   - Cleanup script ready at `supabase/demo/02_demo_cleanup.sql`.
-- **d. Optional Demo Polish & Bug Walkthrough**:
-  - Verification of screens with loaded data (Dashboard, Projects, Attendance, Materials, Suppliers, Contractors, Subcontractors, Masters).
-  - UI refinements, empty states, and layout responsiveness.
+- **d. Demo Polish & UI Verification**: ✅ VERIFIED
+  - Verified screens with loaded demo data (Dashboard, Projects, Attendance, Materials, Suppliers, Contractors, Subcontractors, Masters, Reports, Accounts).
+  - TypeScript zero-error clean (`npx tsc --noEmit`).
+  - Production build fully succeeds (`npm run build`).
 
 ---
 
