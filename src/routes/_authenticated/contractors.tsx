@@ -326,6 +326,49 @@ function ContractorsPage() {
       header: "Net",
       cell: (r) => currency(r.net_amount),
       value: (r) => r.net_amount,
+      className: "text-right font-medium",
+    },
+    {
+      header: "Paid",
+      cell: (r) => {
+        const paidForBill = (payments.data ?? [])
+          .filter((p) => p.bill_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        return currency(paidForBill);
+      },
+      value: (r) => {
+        return (payments.data ?? [])
+          .filter((p) => p.bill_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+      },
+      className: "text-right tabular-nums text-emerald-700",
+    },
+    {
+      header: "Balance due",
+      cell: (r) => {
+        const paidForBill = (payments.data ?? [])
+          .filter((p) => p.bill_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        const bal = r.net_amount - paidForBill;
+        if (bal <= 0) {
+          return (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              Paid
+            </span>
+          );
+        }
+        return (
+          <span className="font-semibold text-destructive tabular-nums">
+            {currency(bal)}
+          </span>
+        );
+      },
+      value: (r) => {
+        const paidForBill = (payments.data ?? [])
+          .filter((p) => p.bill_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        return r.net_amount - paidForBill;
+      },
       className: "text-right",
     },
     ...(canModifyFinance
@@ -642,6 +685,22 @@ function ContractorsPage() {
           <TabsTrigger value="wo">Work orders</TabsTrigger>
           <TabsTrigger value="mb">Measurement books</TabsTrigger>
           <TabsTrigger value="bills">Bills</TabsTrigger>
+          <TabsTrigger value="pending">
+            Pending payments
+            {(() => {
+              const pendingCount = (bills.data ?? []).filter((b) => {
+                const paid = (payments.data ?? [])
+                  .filter((p) => p.bill_id === b.id)
+                  .reduce((sum, p) => sum + (p.amount || 0), 0);
+                return b.net_amount - paid > 0;
+              }).length;
+              return pendingCount > 0 ? (
+                <span className="ml-1.5 rounded-full bg-destructive/10 px-1.5 py-0.2 text-[10px] font-semibold text-destructive">
+                  {pendingCount}
+                </span>
+              ) : null;
+            })()}
+          </TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="flow">Flow</TabsTrigger>
           {canModifyFinance && <TabsTrigger value="subpay">Other Payments</TabsTrigger>}
@@ -935,6 +994,111 @@ function ContractorsPage() {
             exportTitle="Contractor Bills Report"
             exportDescription="Construction Project Control System — Contractor Bills Report"
             appliedFilters={{
+              ...(projectFilter !== "all" ? { Project: projectName(projectFilter) } : {}),
+              ...(contractorFilter !== "all"
+                ? { Contractor: contractorName(contractorFilter) }
+                : {}),
+            }}
+          />
+        </TabsContent>
+
+        {/* ================= PENDING PAYMENTS ================= */}
+        <TabsContent value="pending" className="mt-4 space-y-3">
+          <div className="rounded-md bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 border border-amber-500/20">
+            Bills with an outstanding balance due, prioritized by age. Showing party name, project, bill details, and age in days.
+          </div>
+          <DataTable
+            rows={(() => {
+              const todayTime = new Date().getTime();
+              return filteredBills
+                .map((bill) => {
+                  const paid = (payments.data ?? [])
+                    .filter((p) => p.bill_id === bill.id)
+                    .reduce((sum, p) => sum + (p.amount || 0), 0);
+                  const balanceDue = bill.net_amount - paid;
+                  const billTime = new Date(bill.bill_date).getTime();
+                  const ageInDays = isNaN(billTime)
+                    ? 0
+                    : Math.max(0, Math.floor((todayTime - billTime) / (1000 * 60 * 60 * 24)));
+                  return {
+                    ...bill,
+                    paidAmount: paid,
+                    balanceDue,
+                    ageInDays,
+                  };
+                })
+                .filter((b) => b.balanceDue > 0)
+                .sort((a, b) => b.ageInDays - a.ageInDays);
+            })()}
+            columns={[
+              {
+                header: "Contractor (Party)",
+                cell: (r) => (
+                  <div>
+                    <span className="font-semibold">{contractorName(r.contractor_id)}</span>
+                    <span className="block text-[11px] text-muted-foreground font-mono">
+                      {r.bill_number}
+                    </span>
+                  </div>
+                ),
+                value: (r) => contractorName(r.contractor_id),
+              },
+              {
+                header: "Project",
+                cell: (r) => projectName(r.project_id),
+                value: (r) => projectName(r.project_id),
+              },
+              {
+                header: "Bill Date",
+                cell: (r) => dateFmt(r.bill_date),
+                value: (r) => r.bill_date,
+              },
+              {
+                header: "Age",
+                cell: (r) => (
+                  <span
+                    className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ${
+                      r.ageInDays > 30
+                        ? "bg-destructive/10 text-destructive"
+                        : r.ageInDays > 14
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {r.ageInDays} {r.ageInDays === 1 ? "day" : "days"}
+                  </span>
+                ),
+                value: (r) => r.ageInDays,
+              },
+              {
+                header: "Net Bill",
+                cell: (r) => currency(r.net_amount),
+                value: (r) => r.net_amount,
+                className: "text-right",
+              },
+              {
+                header: "Paid",
+                cell: (r) => currency(r.paidAmount),
+                value: (r) => r.paidAmount,
+                className: "text-right tabular-nums text-emerald-700",
+              },
+              {
+                header: "Balance Due",
+                cell: (r) => (
+                  <span className="font-bold text-destructive tabular-nums">
+                    {currency(r.balanceDue)}
+                  </span>
+                ),
+                value: (r) => r.balanceDue,
+                className: "text-right",
+              },
+            ]}
+            loading={bills.isLoading}
+            exportName="brickweld-contractor-pending-payments"
+            exportTitle="Pending Contractor Payments Report"
+            exportDescription="Aged outstanding balances due to contractors"
+            appliedFilters={{
+              Status: "Unpaid / Part-paid only",
               ...(projectFilter !== "all" ? { Project: projectName(projectFilter) } : {}),
               ...(contractorFilter !== "all"
                 ? { Contractor: contractorName(contractorFilter) }

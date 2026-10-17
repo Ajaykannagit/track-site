@@ -63,10 +63,23 @@
   - `useDeleteRow` hooked to `soft_delete_record` RPC function with `useRestoreRow` added.
   - Company Cash on Hand gated behind dedicated `canViewCompanyCashOnHand` permission (MD only).
   - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
+- **Client Batch 2, Step 2 completed and pushed**:
+  - `attendance.tsx`: Weekly wage balance styled prominently with `text-destructive font-bold` (red) when balance > 0, and `text-emerald-700` (green) when fully settled.
+  - `contractors.tsx`:
+    - Added "Paid" and "Balance due" columns to Contractor Bills table with real-time payment summation. Balances > 0 displayed in red (`text-destructive font-bold`), or green "Paid" badge when settled.
+    - Added "Pending payments" tab with live count badge, sorting outstanding contractor bills by age in days, displaying Contractor (Party), Project, Bill Date, Age (with color tag), Net Bill, Paid, and Balance Due.
+  - `materials.tsx`:
+    - Added "Paid" and "Balance due" columns to Purchase Orders table with real-time supplier payment summation. Balances > 0 displayed in red (`text-destructive font-bold`), or green "Paid" badge when settled.
+    - Added "Pending supplier payments" tab with live count badge, sorting outstanding purchase orders by age in days, displaying Supplier (Party), Project, PO Date, Age, Total PO, Paid, and Balance Due.
+  - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
 
 ---
 
 ## 2. Pending List (Next Steps)
+- **Step 3 (R4)**: Dedicated multi-line bill entry sheet for material purchases with Add row, Delete row, running total, and subtotals by item.
+- **Step 4 (R2/R7)**: MD Audit log page with restore button & Accountant office expenses.
+- **Step 5 (R8)**: Spend report with date range, category/project/method breakdowns, and exports.
+- **Step 6 (R9)**: Unified ledger in Accounts combining all money movements without double counting.
 - **a. Apply Missing Migrations**: ✅ RESOLVED. `supabase/checks/check_tables.sql` verified against live database schema. All required tables exist.
 - **b. Review Security SQL**: ✅ RESOLVED. Replaced draft `20261012000000_column_security_proposal.sql` by executing Step 7 Part A and Part B directly. File renamed to `.SUPERSEDED.sql`.
 - **c. Batch 2 Demo Seed**: ✅ FULLY EXECUTED & VERIFIED ON HOSTED DB

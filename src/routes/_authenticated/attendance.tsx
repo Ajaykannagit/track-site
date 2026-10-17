@@ -1034,7 +1034,13 @@ function AttendanceWeeklySheetPage() {
                           </TableCell>
 
                           {/* Wage Balance */}
-                          <TableCell className="text-right font-mono font-bold text-primary bg-muted/30">
+                          <TableCell
+                            className={`text-right font-mono font-bold bg-muted/30 ${
+                              r.wageBalance > 0
+                                ? "text-destructive"
+                                : "text-emerald-600 dark:text-emerald-400"
+                            }`}
+                          >
                             {currency(r.wageBalance).replace("₹", "")}
                           </TableCell>
                         </>
@@ -1283,7 +1289,15 @@ function AttendanceWeeklySheetPage() {
                             <TableCell className="font-medium py-1">{m.employee.full_name}</TableCell>
                             <TableCell className="text-right font-mono py-1">{m.totalDays.toFixed(1)}</TableCell>
                             <TableCell className="text-right font-mono py-1">{m.wage + m.busPetrol}</TableCell>
-                            <TableCell className="text-right font-mono font-bold py-1 text-primary">{m.wageBalance}</TableCell>
+                            <TableCell
+                              className={`text-right font-mono font-bold py-1 ${
+                                m.wageBalance > 0
+                                  ? "text-destructive"
+                                  : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {m.wageBalance}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

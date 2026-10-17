@@ -309,6 +309,49 @@ function MaterialsPage() {
       header: "Total Value",
       cell: (r) => currency(r.total_amount),
       value: (r) => r.total_amount,
+      className: "text-right font-medium",
+    },
+    {
+      header: "Paid",
+      cell: (r) => {
+        const paid = (payments.data ?? [])
+          .filter((p) => p.po_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        return currency(paid);
+      },
+      value: (r) => {
+        return (payments.data ?? [])
+          .filter((p) => p.po_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+      },
+      className: "text-right tabular-nums text-emerald-700",
+    },
+    {
+      header: "Balance due",
+      cell: (r) => {
+        const paid = (payments.data ?? [])
+          .filter((p) => p.po_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        const bal = r.total_amount - paid;
+        if (bal <= 0) {
+          return (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              Paid
+            </span>
+          );
+        }
+        return (
+          <span className="font-semibold text-destructive tabular-nums">
+            {currency(bal)}
+          </span>
+        );
+      },
+      value: (r) => {
+        const paid = (payments.data ?? [])
+          .filter((p) => p.po_id === r.id)
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+        return r.total_amount - paid;
+      },
       className: "text-right",
     },
     ...(canModifyFinance
@@ -575,6 +618,22 @@ function MaterialsPage() {
         <TabsList className="no-print">
           <TabsTrigger value="requests">Indents</TabsTrigger>
           <TabsTrigger value="pos">Purchase orders</TabsTrigger>
+          <TabsTrigger value="pending">
+            Pending supplier payments
+            {(() => {
+              const pendingCount = (pos.data ?? []).filter((p) => {
+                const paid = (payments.data ?? [])
+                  .filter((pay) => pay.po_id === p.id)
+                  .reduce((sum, pay) => sum + (pay.amount || 0), 0);
+                return p.total_amount - paid > 0;
+              }).length;
+              return pendingCount > 0 ? (
+                <span className="ml-1.5 rounded-full bg-destructive/10 px-1.5 py-0.2 text-[10px] font-semibold text-destructive">
+                  {pendingCount}
+                </span>
+              ) : null;
+            })()}
+          </TabsTrigger>
           <TabsTrigger value="receipts">Receipts (GRN)</TabsTrigger>
           <TabsTrigger value="payments">Supplier Payments</TabsTrigger>
         </TabsList>
@@ -762,6 +821,108 @@ function MaterialsPage() {
             appliedFilters={
               poProjectFilter !== "all" ? { Project: projectName(poProjectFilter) } : undefined
             }
+          />
+        </TabsContent>
+
+        {/* ================= PENDING SUPPLIER PAYMENTS ================= */}
+        <TabsContent value="pending" className="mt-4 space-y-3">
+          <div className="rounded-md bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 border border-amber-500/20">
+            Purchase orders with an outstanding balance due to suppliers, prioritized by age. Showing supplier name, project, PO details, and age in days.
+          </div>
+          <DataTable
+            rows={(() => {
+              const todayTime = new Date().getTime();
+              return filteredPos
+                .map((po) => {
+                  const paid = (payments.data ?? [])
+                    .filter((p) => p.po_id === po.id)
+                    .reduce((sum, p) => sum + (p.amount || 0), 0);
+                  const balanceDue = po.total_amount - paid;
+                  const poTime = new Date(po.po_date).getTime();
+                  const ageInDays = isNaN(poTime)
+                    ? 0
+                    : Math.max(0, Math.floor((todayTime - poTime) / (1000 * 60 * 60 * 24)));
+                  return {
+                    ...po,
+                    paidAmount: paid,
+                    balanceDue,
+                    ageInDays,
+                  };
+                })
+                .filter((p) => p.balanceDue > 0)
+                .sort((a, b) => b.ageInDays - a.ageInDays);
+            })()}
+            columns={[
+              {
+                header: "Supplier (Party)",
+                cell: (r) => (
+                  <div>
+                    <span className="font-semibold">{supplierName(r.supplier_id)}</span>
+                    <span className="block text-[11px] text-muted-foreground font-mono">
+                      {r.po_number}
+                    </span>
+                  </div>
+                ),
+                value: (r) => supplierName(r.supplier_id),
+              },
+              {
+                header: "Project",
+                cell: (r) => projectName(r.project_id),
+                value: (r) => projectName(r.project_id),
+              },
+              {
+                header: "PO Date",
+                cell: (r) => dateFmt(r.po_date),
+                value: (r) => r.po_date,
+              },
+              {
+                header: "Age",
+                cell: (r) => (
+                  <span
+                    className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ${
+                      r.ageInDays > 30
+                        ? "bg-destructive/10 text-destructive"
+                        : r.ageInDays > 14
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {r.ageInDays} {r.ageInDays === 1 ? "day" : "days"}
+                  </span>
+                ),
+                value: (r) => r.ageInDays,
+              },
+              {
+                header: "Total PO",
+                cell: (r) => currency(r.total_amount),
+                value: (r) => r.total_amount,
+                className: "text-right",
+              },
+              {
+                header: "Paid",
+                cell: (r) => currency(r.paidAmount),
+                value: (r) => r.paidAmount,
+                className: "text-right tabular-nums text-emerald-700",
+              },
+              {
+                header: "Balance Due",
+                cell: (r) => (
+                  <span className="font-bold text-destructive tabular-nums">
+                    {currency(r.balanceDue)}
+                  </span>
+                ),
+                value: (r) => r.balanceDue,
+                className: "text-right",
+              },
+            ]}
+            loading={pos.isLoading}
+            exportName="brickweld-supplier-pending-payments"
+            exportTitle="Pending Supplier Payments Report"
+            exportDescription="Aged outstanding balances due to suppliers for purchase orders"
+            appliedFilters={{
+              Status: "Unpaid / Part-paid only",
+              ...(poProjectFilter !== "all" ? { Project: projectName(poProjectFilter) } : {}),
+            }}
           />
         </TabsContent>
 
