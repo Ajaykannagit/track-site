@@ -72,12 +72,20 @@
     - Added "Paid" and "Balance due" columns to Purchase Orders table with real-time supplier payment summation. Balances > 0 displayed in red (`text-destructive font-bold`), or green "Paid" badge when settled.
     - Added "Pending supplier payments" tab with live count badge, sorting outstanding purchase orders by age in days, displaying Supplier (Party), Project, PO Date, Age, Total PO, Paid, and Balance Due.
   - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
+- **Client Batch 2, Step 3 (R4) audit confirmed**:
+  - Dedicated multi-line bill entry sheets (`MultiMaterialIndentDialog`, `MultiMaterialPoDialog`, `MultiMaterialReceiptDialog`) and drilldown sheets (`IndentItemsSheet`, `PoItemsSheet`, `ReceiptItemsSheet`) verified fully operational with Add row, Delete row, running totals, subtotals per line item, tax calculation, and direct shop purchases (GRN with "Direct Delivery").
+- **Client Batch 2, Step 4 (R2/R7) completed and pushed**:
+  - `src/lib/permissions.ts`: Added `canViewAuditLog` permission flag restricted exclusively to MD.
+  - `src/routes/_authenticated/audit.tsx`: Created MD-only Audit Log route with:
+    - Activity Log tab: date range filters (from/to), table selector, action selector (created/updated/corrected/deleted/restored), user/role search, and expandable raw field details.
+    - Deleted Items tab: tracks soft-deleted records across all money/site tables with inline **Restore** button powered by `supabase.rpc('restore_record')`.
+  - `src/components/AppShell.tsx`: Added "Audit Log" navigation item with `Shield` icon, strictly visible to MD users.
+  - `src/routes/_authenticated/dashboard.tsx`: Allowed Accountant role to add and edit office expenses via `canManageOfficeExpense`, while deletion remains strictly MD-only.
+  - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
 
 ---
 
 ## 2. Pending List (Next Steps)
-- **Step 3 (R4)**: Dedicated multi-line bill entry sheet for material purchases with Add row, Delete row, running total, and subtotals by item.
-- **Step 4 (R2/R7)**: MD Audit log page with restore button & Accountant office expenses.
 - **Step 5 (R8)**: Spend report with date range, category/project/method breakdowns, and exports.
 - **Step 6 (R9)**: Unified ledger in Accounts combining all money movements without double counting.
 - **a. Apply Missing Migrations**: ✅ RESOLVED. `supabase/checks/check_tables.sql` verified against live database schema. All required tables exist.

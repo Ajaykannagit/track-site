@@ -6,6 +6,7 @@ export interface RolePermissions {
   canViewCompanyCashOnHand: boolean; // Company-wide cash on hand & cash balance (MD only)
   canViewOfficeExpense: boolean;     // Office expense details & receipts (Accountant sees own, MD sees all)
   canManageUsers: boolean;           // User and role management in settings
+  canViewAuditLog: boolean;          // MD-only: audit trail and deleted-items restore
 
   // Projects
   canViewProjects: boolean;
@@ -35,6 +36,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewCompanyCashOnHand: true,
     canViewOfficeExpense: true,
     canManageUsers: true,
+    canViewAuditLog: true,
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewCompanyCashOnHand: false, // MD-only company-wide cash balance
     canViewOfficeExpense: true,      // Accountant can view and enter office expenses (own rows enforced by RLS)
     canManageUsers: false,
+    canViewAuditLog: false,
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
@@ -65,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
+    canViewAuditLog: false,
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
@@ -80,6 +84,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
+    canViewAuditLog: false,
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
@@ -104,6 +109,7 @@ export function getEffectivePermissions(roles: AppRole[]): RolePermissions {
     canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
+    canViewAuditLog: false,
     canViewProjects: false,
     canViewProjectFinancials: false,
     canManageQuotations: false,

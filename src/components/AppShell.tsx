@@ -11,6 +11,7 @@ import {
   Users,
   BarChart3,
   Settings,
+  Shield,
   Menu,
   LogOut,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/contractors", label: "Contractors", icon: HardHat },
   { to: "/masters", label: "Masters", icon: Users },
   { to: "/reports", label: "Reports & P&L", icon: BarChart3 },
+  { to: "/audit", label: "Audit Log", icon: Shield },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -43,6 +45,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
     if (item.to === "/accounts" || item.to === "/reports") return permissions.canViewMaterialContractorCosts;
     if (item.to === "/materials" || item.to === "/contractors" || item.to === "/masters") return permissions.canViewMaterialsAndContractors;
     if (item.to === "/settings") return isMD || permissions.canManageUsers;
+    if (item.to === "/audit") return permissions.canViewAuditLog;
     return true;
   });
 
@@ -54,7 +57,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
         return (
           <Link
             key={item.to}
-            to={item.to}
+            to={item.to as never}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

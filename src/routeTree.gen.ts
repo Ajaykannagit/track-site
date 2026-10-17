@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
+import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedContractorsRouteImport } from './routes/_authenticated/contractors'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedMastersRouteImport } from './routes/_authenticated/masters'
@@ -45,6 +46,11 @@ const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
 const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedContractorsRoute =
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/audit': typeof AuthenticatedAuditRoute
   '/contractors': typeof AuthenticatedContractorsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/masters': typeof AuthenticatedMastersRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/audit': typeof AuthenticatedAuditRoute
   '/contractors': typeof AuthenticatedContractorsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/masters': typeof AuthenticatedMastersRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
+  '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/contractors': typeof AuthenticatedContractorsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/masters': typeof AuthenticatedMastersRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/accounts'
     | '/attendance'
+    | '/audit'
     | '/contractors'
     | '/dashboard'
     | '/masters'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/accounts'
     | '/attendance'
+    | '/audit'
     | '/contractors'
     | '/dashboard'
     | '/masters'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/accounts'
     | '/_authenticated/attendance'
+    | '/_authenticated/audit'
     | '/_authenticated/contractors'
     | '/_authenticated/dashboard'
     | '/_authenticated/masters'
@@ -222,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/attendance'
       fullPath: '/attendance'
       preLoaderRoute: typeof AuthenticatedAttendanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/audit': {
+      id: '/_authenticated/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuthenticatedAuditRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/contractors': {
@@ -286,6 +305,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
+  AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedContractorsRoute: typeof AuthenticatedContractorsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedMastersRoute: typeof AuthenticatedMastersRoute
@@ -299,6 +319,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountsRoute: AuthenticatedAccountsRoute,
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
+  AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedContractorsRoute: AuthenticatedContractorsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedMastersRoute: AuthenticatedMastersRoute,

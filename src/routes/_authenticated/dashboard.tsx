@@ -123,8 +123,9 @@ type MaterialReceiptRow = {
 };
 
 function Dashboard() {
-  const { isMD, permissions, roles } = useAuth();
+  const { isMD, permissions, roles, canWriteFinance } = useAuth();
   const isViewer = roles.length === 1 && roles[0] === "viewer";
+  const canManageOfficeExpense = isMD || canWriteFinance;
   const from = monthStart(-5);
 
   // Dialog States
@@ -1080,7 +1081,7 @@ function Dashboard() {
                   Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
                 </DialogDescription>
               </div>
-              {isMD && (
+              {canManageOfficeExpense && (
                 <Button size="sm" onClick={handleOpenAddExpense} className="gap-1.5 shrink-0">
                   <Plus className="size-4" /> Add Expense
                 </Button>
@@ -1105,13 +1106,13 @@ function Dashboard() {
                       <TableHead>Payment Method</TableHead>
                       <TableHead>Receipt Ref</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      {isMD && <TableHead className="text-center w-24">Actions</TableHead>}
+                      {canManageOfficeExpense && <TableHead className="text-center w-24">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {officeExpensesList.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={isMD ? 7 : 6} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={canManageOfficeExpense ? 7 : 6} className="text-center py-6 text-muted-foreground">
                           No office expenses recorded yet. Click &quot;Add Expense&quot; above to create one.
                         </TableCell>
                       </TableRow>
@@ -1132,7 +1133,7 @@ function Dashboard() {
                           </TableCell>
                           <TableCell className="text-xs font-mono">{e.receipt_path || "—"}</TableCell>
                           <TableCell className="text-right font-semibold font-mono">{currency(e.amount)}</TableCell>
-                          {isMD && (
+                          {canManageOfficeExpense && (
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <Button
@@ -1144,15 +1145,17 @@ function Dashboard() {
                                 >
                                   <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 text-destructive hover:text-destructive"
-                                  title="Delete Expense"
-                                  onClick={() => setDeletingExpense(e)}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
+                                {isMD && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7 text-destructive hover:text-destructive"
+                                    title="Delete Expense"
+                                    onClick={() => setDeletingExpense(e)}
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           )}
@@ -1169,7 +1172,7 @@ function Dashboard() {
                         <TableCell className="text-right font-bold font-mono">
                           {currency(totalOfficeExpenses)}
                         </TableCell>
-                        {isMD && <TableCell />}
+                        {canManageOfficeExpense && <TableCell />}
                       </TableRow>
                     </TableFooter>
                   )}
