@@ -102,6 +102,8 @@ type SubPay = {
   week_start_date: string;
   project_id: string | null;
   status: string;
+  payment_method?: string | null;
+  reference_number?: string | null;
   remarks: string | null;
 };
 
@@ -368,11 +370,23 @@ function ContractorsPage() {
       cell: (r) => contractorName(r.contractor_id),
       value: (r) => contractorName(r.contractor_id),
     },
-    { header: "Method", cell: (r) => r.payment_method ?? "—", value: (r) => r.payment_method },
+    {
+      header: "Method",
+      cell: (r) => (
+        <span className={r.payment_method ? "capitalize" : "text-muted-foreground italic text-xs"}>
+          {r.payment_method || "Not recorded"}
+        </span>
+      ),
+      value: (r) => r.payment_method || "Not recorded",
+    },
     {
       header: "Reference",
-      cell: (r) => r.reference_number ?? "—",
-      value: (r) => r.reference_number,
+      cell: (r) => (
+        <span className={r.reference_number ? "font-mono text-xs" : "text-muted-foreground italic text-xs"}>
+          {r.reference_number || "Not recorded"}
+        </span>
+      ),
+      value: (r) => r.reference_number || "Not recorded",
     },
     {
       header: "Amount",
@@ -1143,6 +1157,13 @@ function ContractorsPage() {
                 { name: "project_id", label: "Project", type: "select", options: projectOptions },
                 { name: "amount", label: "Amount (₹)", type: "number", required: true },
                 {
+                  name: "payment_method",
+                  label: "Method",
+                  type: "select",
+                  options: ["cash", "bank", "upi", "cheque", "other"].map((m) => ({ value: m, label: m.toUpperCase() })),
+                },
+                { name: "reference_number", label: "Reference number (Cheque # / UTR)" },
+                {
                   name: "status",
                   label: "Status",
                   type: "select",
@@ -1188,6 +1209,13 @@ function ContractorsPage() {
                   },
                   { name: "amount", label: "Amount (₹)", type: "number", required: true },
                   {
+                    name: "payment_method",
+                    label: "Method",
+                    type: "select",
+                    options: ["cash", "bank", "upi", "cheque", "other"].map((m) => ({ value: m, label: m.toUpperCase() })),
+                  },
+                  { name: "reference_number", label: "Reference number (Cheque # / UTR)" },
+                  {
                     name: "status",
                     label: "Status",
                     type: "select",
@@ -1205,6 +1233,8 @@ function ContractorsPage() {
                   week_start_date: editingSubPay.week_start_date,
                   project_id: editingSubPay.project_id ?? "",
                   amount: editingSubPay.amount,
+                  payment_method: editingSubPay.payment_method ?? "cash",
+                  reference_number: editingSubPay.reference_number ?? "",
                   status: editingSubPay.status,
                   remarks: editingSubPay.remarks ?? "",
                 }}
@@ -1268,6 +1298,24 @@ function ContractorsPage() {
                   header: "Project",
                   cell: (r: SubPay) => projectName(r.project_id),
                   value: (r: SubPay) => projectName(r.project_id),
+                },
+                {
+                  header: "Method",
+                  cell: (r: SubPay) => (
+                    <span className={r.payment_method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
+                      {r.payment_method || "Not recorded"}
+                    </span>
+                  ),
+                  value: (r: SubPay) => r.payment_method || "Not recorded",
+                },
+                {
+                  header: "Reference",
+                  cell: (r: SubPay) => (
+                    <span className={r.reference_number ? "font-mono text-xs" : "text-muted-foreground italic text-xs"}>
+                      {r.reference_number || "Not recorded"}
+                    </span>
+                  ),
+                  value: (r: SubPay) => r.reference_number || "Not recorded",
                 },
                 {
                   header: "Status",

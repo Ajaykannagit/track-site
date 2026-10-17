@@ -2,8 +2,9 @@ export type AppRole = "md" | "supervisor" | "accounts" | "viewer";
 
 export interface RolePermissions {
   // Dashboard & Company Level
-  canViewCompanyFinancials: boolean; // Profit/Loss, Cash on hand, Dashboard contract value & spend
-  canViewOfficeExpense: boolean;     // Office expense details & receipts
+  canViewCompanyFinancials: boolean; // Profit/Loss, Dashboard contract value & spend
+  canViewCompanyCashOnHand: boolean; // Company-wide cash on hand & cash balance (MD only)
+  canViewOfficeExpense: boolean;     // Office expense details & receipts (Accountant sees own, MD sees all)
   canManageUsers: boolean;           // User and role management in settings
 
   // Projects
@@ -31,6 +32,7 @@ export interface RolePermissions {
 export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
   md: {
     canViewCompanyFinancials: true,
+    canViewCompanyCashOnHand: true,
     canViewOfficeExpense: true,
     canManageUsers: true,
     canViewProjects: true,
@@ -44,8 +46,9 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewMaterialContractorCosts: true,
   },
   accounts: {
-    canViewCompanyFinancials: false, // MD-only high-level earnings/spend/cash dashboard
-    canViewOfficeExpense: false,
+    canViewCompanyFinancials: false, // MD-only high-level earnings/spend dashboard
+    canViewCompanyCashOnHand: false, // MD-only company-wide cash balance
+    canViewOfficeExpense: true,      // Accountant can view and enter office expenses (own rows enforced by RLS)
     canManageUsers: false,
     canViewProjects: true,
     canViewProjectFinancials: true,
@@ -59,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
   },
   supervisor: {
     canViewCompanyFinancials: false,
+    canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewProjects: true,
@@ -73,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
   },
   viewer: {
     canViewCompanyFinancials: false,
+    canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewProjects: true,
@@ -96,6 +101,7 @@ export function getEffectivePermissions(roles: AppRole[]): RolePermissions {
   // Combine permissions across all roles the user has (OR logic)
   const combined: RolePermissions = {
     canViewCompanyFinancials: false,
+    canViewCompanyCashOnHand: false,
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewProjects: false,

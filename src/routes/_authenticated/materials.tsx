@@ -457,11 +457,23 @@ function MaterialsPage() {
       cell: (r) => (r.po_id ? (pos.data?.find((p) => p.id === r.po_id)?.po_number ?? "—") : "—"),
       value: (r) => r.po_id,
     },
-    { header: "Method", cell: (r) => r.payment_method ?? "—", value: (r) => r.payment_method },
+    {
+      header: "Method",
+      cell: (r) => (
+        <span className={r.payment_method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
+          {r.payment_method || "Not recorded"}
+        </span>
+      ),
+      value: (r) => r.payment_method || "Not recorded",
+    },
     {
       header: "Reference",
-      cell: (r) => r.reference_number ?? "—",
-      value: (r) => r.reference_number,
+      cell: (r) => (
+        <span className={r.reference_number ? "font-mono text-xs" : "text-muted-foreground italic text-xs"}>
+          {r.reference_number || "Not recorded"}
+        </span>
+      ),
+      value: (r) => r.reference_number || "Not recorded",
     },
     {
       header: "Amount Paid",

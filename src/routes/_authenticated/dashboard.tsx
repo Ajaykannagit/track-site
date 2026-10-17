@@ -193,21 +193,21 @@ function Dashboard() {
     limit: 8,
     enabled: permissions.canViewMaterialsAndContractors,
   });
-  // Latest cash closing for the stat card (1 record)
+  // Latest cash closing for the stat card (1 record) - strictly MD only
   const cash = useRows<{ closing_cash: number; closing_date: string }>("cash_closing", {
     select: "closing_cash,closing_date",
     order: { col: "closing_date" },
     limit: 1,
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: permissions.canViewCompanyCashOnHand,
   });
 
-  // Full cash closing history for the cash dialog
+  // Full cash closing history for the cash dialog - strictly MD only
   const cashHistory = useRows<{ closing_cash: number; closing_date: string; notes?: string }>(
     "cash_closing",
     {
       select: "closing_cash,closing_date,notes",
       order: { col: "closing_date" },
-      enabled: permissions.canViewCompanyFinancials,
+      enabled: permissions.canViewCompanyCashOnHand,
     },
   );
 
@@ -1125,7 +1125,11 @@ function Dashboard() {
                           <TableCell className="text-xs max-w-[200px] truncate" title={e.description || ""}>
                             {e.description || e.material_name || "—"}
                           </TableCell>
-                          <TableCell className="text-xs capitalize">{e.payment_method || "—"}</TableCell>
+                          <TableCell className="text-xs">
+                            <span className={e.payment_method ? "capitalize" : "text-muted-foreground italic"}>
+                              {e.payment_method || "Not recorded"}
+                            </span>
+                          </TableCell>
                           <TableCell className="text-xs font-mono">{e.receipt_path || "—"}</TableCell>
                           <TableCell className="text-right font-semibold font-mono">{currency(e.amount)}</TableCell>
                           {isMD && (

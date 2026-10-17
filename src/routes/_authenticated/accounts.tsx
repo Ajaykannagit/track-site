@@ -245,13 +245,15 @@ function AccountsPage() {
       header: "Method / Ref",
       cell: (r) => (
         <div>
-          <span className="capitalize text-xs font-medium">{r.payment_method}</span>
+          <span className={r.payment_method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
+            {r.payment_method || "Not recorded"}
+          </span>
           {r.reference_number && (
             <span className="block text-[10px] font-mono text-muted-foreground">{r.reference_number}</span>
           )}
         </div>
       ),
-      value: (r) => `${r.payment_method} ${r.reference_number || ""}`,
+      value: (r) => `${r.payment_method || "Not recorded"} ${r.reference_number || ""}`,
     },
     {
       header: "Account",
@@ -290,8 +292,15 @@ function AccountsPage() {
       cell: (r) => r.material_name || "—",
       value: (r) => r.material_name,
     },
-    { header: "Description", cell: (r) => r.description ?? "—", value: (r) => r.description },
-    { header: "Method", cell: (r) => r.payment_method ?? "—", value: (r) => r.payment_method },
+    {
+      header: "Method",
+      cell: (r) => (
+        <span className={r.payment_method ? "capitalize" : "text-muted-foreground italic text-xs"}>
+          {r.payment_method || "Not recorded"}
+        </span>
+      ),
+      value: (r) => r.payment_method || "Not recorded",
+    },
     {
       header: "Amount",
       cell: (r) => currency(r.amount),

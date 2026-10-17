@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   User,
   Users,
+  Wallet,
 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,8 @@ type WeeklyAdjustment = {
   week_start_date: string;
   bus_petrol: number;
   advance_paid: number;
+  payment_method?: string | null;
+  reference_number?: string | null;
   remarks?: string | null;
 };
 
@@ -225,6 +228,16 @@ function AttendanceWeeklySheetPage() {
 
   // Local state for weekly adjustments (bus/petrol and advance) to support instant edits
   const [adjustmentsOverride, setAdjustmentsOverride] = useState<Record<string, { busPetrol: number; advance: number }>>({});
+
+  // Advance Payment Method Dialog state
+  const [advanceModal, setAdvanceModal] = useState<{
+    employeeId: string;
+    employeeName: string;
+    busPetrol: number;
+    advance: number;
+    paymentMethod: string;
+    referenceNumber: string;
+  } | null>(null);
 
   // Query Data (Weekly)
   const weekStartISO = formatDateISO(weekStartDate);
@@ -387,8 +400,14 @@ function AttendanceWeeklySheetPage() {
     setEditCell(null);
   };
 
-  // Save Weekly Adjustment (Bus/Petrol or Advance)
-  const handleSaveAdjustment = async (empId: string, busPetrol: number, advance: number) => {
+  // Save Weekly Adjustment (Bus/Petrol or Advance with Payment Method)
+  const handleSaveAdjustment = async (
+    empId: string,
+    busPetrol: number,
+    advance: number,
+    paymentMethod?: string | null,
+    referenceNumber?: string | null,
+  ) => {
     const existing = (weeklyAdjustments.data ?? []).find(
       (adj) => adj.employee_id === empId && adj.week_start_date === weekStartISO,
     );
@@ -405,6 +424,8 @@ function AttendanceWeeklySheetPage() {
         week_start_date: weekStartISO,
         bus_petrol: busPetrol,
         advance_paid: advance,
+        payment_method: paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null)),
+        reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
       },
     });
   };
@@ -445,6 +466,8 @@ function AttendanceWeeklySheetPage() {
         advance,
       );
 
+      const paymentMethod = existingAdj?.payment_method ?? null;
+      const referenceNumber = existingAdj?.reference_number ?? null;
       const team = (teams.data ?? []).find((t) => t.id === emp.team_id)?.name ?? "Unassigned Team";
 
       return {
@@ -457,6 +480,8 @@ function AttendanceWeeklySheetPage() {
         wage,
         busPetrol,
         advance,
+        paymentMethod,
+        referenceNumber,
         wageBalance,
       };
     });
@@ -600,6 +625,14 @@ function AttendanceWeeklySheetPage() {
       { header: "Wage", value: (r: (typeof workerRows)[0]) => r.wage },
       { header: "Bus/Petrol", value: (r: (typeof workerRows)[0]) => r.busPetrol },
       { header: "Advance", value: (r: (typeof workerRows)[0]) => r.advance },
+      {
+        header: "Advance Method",
+        value: (r: (typeof workerRows)[0]) => (r.advance > 0 ? (r.paymentMethod || "Not recorded") : "—"),
+      },
+      {
+        header: "Advance Reference",
+        value: (r: (typeof workerRows)[0]) => (r.advance > 0 ? (r.referenceNumber || "—") : "—"),
+      },
       { header: "Wage Balance", value: (r: (typeof workerRows)[0]) => r.wageBalance },
     ];
 
@@ -960,23 +993,44 @@ function AttendanceWeeklySheetPage() {
                             />
                           </TableCell>
 
-                          {/* Advance (Editable inline on screen, formatted text on print) */}
+                          {/* Advance (Editable inline on screen, formatted text on print, with Payment Method trigger) */}
                           <TableCell className="text-right bg-muted/20 p-1">
                             <span className="hidden print:inline font-mono">
                               {r.advance ? r.advance : "0"}
                             </span>
-                            <Input
-                              type="number"
-                              defaultValue={r.advance || ""}
-                              placeholder="0"
-                              onBlur={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                if (val !== r.advance) {
-                                  void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
-                                }
-                              }}
-                              className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
-                            />
+                            <div className="no-print flex items-center justify-end gap-1">
+                              <Input
+                                type="number"
+                                defaultValue={r.advance || ""}
+                                placeholder="0"
+                                onBlur={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  if (val !== r.advance) {
+                                    void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
+                                  }
+                                }}
+                                className="h-7 w-20 text-right text-xs font-mono"
+                              />
+                              {r.advance > 0 && (
+                                <button
+                                  type="button"
+                                  title={`Payment Method: ${r.paymentMethod || "Not recorded"}${r.referenceNumber ? ` (${r.referenceNumber})` : ""}. Click to edit.`}
+                                  onClick={() =>
+                                    setAdvanceModal({
+                                      employeeId: r.employee.id,
+                                      employeeName: r.employee.full_name,
+                                      busPetrol: r.busPetrol,
+                                      advance: r.advance,
+                                      paymentMethod: r.paymentMethod || "cash",
+                                      referenceNumber: r.referenceNumber || "",
+                                    })
+                                  }
+                                  className="text-[10px] px-1 py-0.5 rounded border border-muted-foreground/30 bg-background text-muted-foreground hover:bg-muted font-sans uppercase shrink-0"
+                                >
+                                  {r.paymentMethod ? r.paymentMethod.slice(0, 3) : "—"}
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
 
                           {/* Wage Balance */}
@@ -1402,6 +1456,91 @@ function AttendanceWeeklySheetPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* ADVANCE PAYMENT METHOD & REFERENCE MODAL */}
+      {/* ========================================================================= */}
+      <Dialog open={!!advanceModal} onOpenChange={(open) => !open && setAdvanceModal(null)}>
+        <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="size-4 text-primary" /> Advance Payment Details
+            </DialogTitle>
+            <DialogDescription>
+              {advanceModal?.employeeName} — Week starting {dateFmt(weekStartISO)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {advanceModal && (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <p className="text-xs text-muted-foreground uppercase">Advance Amount</p>
+                <p className="font-mono text-lg font-bold text-primary">₹{advanceModal.advance.toLocaleString("en-IN")}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Payment Method</Label>
+                <Select
+                  value={advanceModal.paymentMethod}
+                  onValueChange={(val) => setAdvanceModal((prev) => prev ? { ...prev, paymentMethod: val } : null)}
+                >
+                  <SelectTrigger className="w-full text-xs">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="upi">UPI / Online</SelectItem>
+                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(advanceModal.paymentMethod === "upi" ||
+                advanceModal.paymentMethod === "bank" ||
+                advanceModal.paymentMethod === "cheque" ||
+                advanceModal.paymentMethod === "other") && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Reference Number {advanceModal.paymentMethod === "cheque" ? "(Cheque #)" : "(Transaction ID / UTR)"}
+                  </Label>
+                  <Input
+                    value={advanceModal.referenceNumber}
+                    onChange={(e) =>
+                      setAdvanceModal((prev) => (prev ? { ...prev, referenceNumber: e.target.value } : null))
+                    }
+                    placeholder={advanceModal.paymentMethod === "cheque" ? "e.g. CHQ-448102" : "e.g. UTR-99281923"}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => setAdvanceModal(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await handleSaveAdjustment(
+                      advanceModal.employeeId,
+                      advanceModal.busPetrol,
+                      advanceModal.advance,
+                      advanceModal.paymentMethod,
+                      advanceModal.referenceNumber.trim() || null,
+                    );
+                    setAdvanceModal(null);
+                  }}
+                  disabled={saveAdjustment.isPending}
+                >
+                  Save Details
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

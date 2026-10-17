@@ -56,6 +56,13 @@
   - Direct base table access via API now strictly denies reading restricted financial columns, while views enforce role-based masking (`MD`/`Accounts` see real amounts; `Supervisor`/`Viewer` get 0/null or 0 rows).
   - All writes/mutations continue directly to base tables, with backend triggers computing wages securely.
   - Verified with `npx tsc --noEmit` and `npm run build`.
+- **Client Batch 2, Step 1 completed and pushed**:
+  - Payment method added across all transaction entry forms (Supplier Payments, Contractor Payments, Subcontractor Payments, Office Expenses, Client Receipts, Labour Advance Payments).
+  - Optional Reference Number (Cheque # / Transaction ID) supported on Cheque, UPI and Bank Transfer payments.
+  - Uniform "Not recorded" fallback shown on all tables, lists, and Excel exports when payment method is empty.
+  - `useDeleteRow` hooked to `soft_delete_record` RPC function with `useRestoreRow` added.
+  - Company Cash on Hand gated behind dedicated `canViewCompanyCashOnHand` permission (MD only).
+  - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
 
 ---
 

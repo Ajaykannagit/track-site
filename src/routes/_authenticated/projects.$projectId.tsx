@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import {
@@ -14,6 +14,7 @@ import {
   CreditCard,
   CalendarClock,
   RotateCcw,
+  Receipt,
 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
@@ -23,6 +24,13 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
@@ -1068,7 +1076,9 @@ function ProjectDetail() {
                       header: "Method / Ref",
                       cell: (r) => (
                         <div>
-                          <span className="capitalize font-medium text-xs">{r.payment_method}</span>
+                          <span className={r.payment_method ? "capitalize font-medium text-xs" : "text-muted-foreground italic text-xs"}>
+                            {r.payment_method || "Not recorded"}
+                          </span>
                           {r.reference_number && (
                             <span className="block text-[10px] font-mono text-muted-foreground">
                               {r.reference_number}
@@ -1076,7 +1086,7 @@ function ProjectDetail() {
                           )}
                         </div>
                       ),
-                      value: (r) => `${r.payment_method} ${r.reference_number || ""}`,
+                      value: (r) => `${r.payment_method || "Not recorded"} ${r.reference_number || ""}`,
                     },
                     {
                       header: "Account",
@@ -1259,7 +1269,6 @@ function ProjectDetail() {
                 onOpenChange={(open) => !open && setReversingPayment(null)}
                 title="Post Financial Reversal / Refund"
                 description={`Post an authorized offsetting reversal of ${currency(reversingPayment.amount)} against receipt ${reversingPayment.receipt_number}? The original transaction will be preserved for audit compliance.`}
-                confirmLabel="Post Reversal"
                 onConfirm={async () => {
                   const revNum = `REV-${reversingPayment.receipt_number}-${Date.now().toString().slice(-4)}`;
                   await savePayment.mutateAsync({

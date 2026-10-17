@@ -90,14 +90,37 @@ export function useDeleteRow(table: string, label = "Record") {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table).delete().eq("id", id);
+      const { data, error } = await supabase.rpc("soft_delete_record", {
+        p_table_name: table,
+        p_record_id: id,
+      });
       if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       toast.success(`${label} deleted successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "delete")),
+  });
+}
+
+export function useRestoreRow(table: string, label = "Record") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("restore_record", {
+        p_table_name: table,
+        p_record_id: id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [table] });
+      toast.success(`${label} restored successfully`);
+    },
+    onError: (e: Error) => toast.error(formatDbError(e, "restore")),
   });
 }
 
