@@ -87,12 +87,20 @@
     - Added `byPaymentMethod` breakdown aggregation in real-time respecting the selected date range (`from` to `to`) and project scope.
     - Added a dedicated "Expenses by Payment Method" card with DataTable displaying payment method (CASH, BANK, UPI, CHEQUE, etc.), formatted amounts, and one-click report exports.
     - Enhanced grid layout to accommodate all 3 analytical breakdowns (Category, Payment Method, and Configuration).
+- **Client Batch 2, Step 6 (R9) completed and pushed**:
+  - `src/routes/_authenticated/accounts.tsx`:
+    - Added domain queries for all money movement tables: `supplier_payments`, `contractor_payments`, `subcontractor_payments`, `wage_payments`, `weekly_wage_adjustments`, `contractors`, `suppliers`, `teams`, `employees_view`.
+    - Implemented `rawLedgerTransactions` and `filteredLedger` combining money inflows (Client receipts) and outflows (Supplier payments, Contractor payments, Subcontractor payments, Expenses, Wage payments, and Worker advances).
+    - Calculated true wage cash flow from `wage_payments` and `weekly_wage_adjustments` (advances paid), deliberately omitting theoretical calculated weekly attendance wages to avoid duplication.
+    - Excluded `cash_closing` from ledger entries to prevent double-counting.
+    - Added Summary stat cards (Inflows, Outflows, Net Movement) and filter controls (by Project and Transaction Type).
+    - Added "Unified Ledger" tab as default tab in `<Tabs defaultValue="ledger">`.
   - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
 
 ---
 
 ## 2. Pending List (Next Steps)
-- **Step 6 (R9)**: Unified ledger in Accounts combining all money movements without double counting.
+- All Client Batch 2 requirements (R1–R9) are now completed and verified!
 - **a. Apply Missing Migrations**: ✅ RESOLVED. `supabase/checks/check_tables.sql` verified against live database schema. All required tables exist.
 - **b. Review Security SQL**: ✅ RESOLVED. Replaced draft `20261012000000_column_security_proposal.sql` by executing Step 7 Part A and Part B directly. File renamed to `.SUPERSEDED.sql`.
 - **c. Batch 2 Demo Seed**: ✅ FULLY EXECUTED & VERIFIED ON HOSTED DB

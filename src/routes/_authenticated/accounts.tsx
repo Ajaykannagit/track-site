@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -119,6 +119,8 @@ function AccountsPage() {
   const [transferProjectFilter, setTransferProjectFilter] = useState<string>("all");
   const [paymentProjectFilter, setPaymentProjectFilter] = useState<string>("all");
   const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<string>("all");
+  const [ledgerProjectFilter, setLedgerProjectFilter] = useState<string>("all");
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
@@ -155,6 +157,99 @@ function AccountsPage() {
       { col: "payment_date", op: "lte", value: to },
     ],
     order: { col: "payment_date", asc: false },
+    limit: 500,
+  });
+
+  // Queries for Unified Ledger (R9)
+  const contractors = useRows<{ id: string; name: string }>("contractors", { select: "id,name" });
+  const suppliers = useRows<{ id: string; name: string }>("suppliers", { select: "id,name" });
+  const teams = useRows<{ id: string; name: string }>("teams", { select: "id,name" });
+  const employees = useRows<{ id: string; full_name: string }>("employees_view", { select: "id,full_name" });
+
+  const supplierPayments = useRows<{
+    id: string;
+    project_id: string;
+    supplier_id: string;
+    payment_date: string;
+    amount: number;
+    payment_method: string | null;
+    reference_number: string | null;
+    remarks: string | null;
+  }>("supplier_payments", {
+    filters: [
+      { col: "payment_date", op: "gte", value: from },
+      { col: "payment_date", op: "lte", value: to },
+    ],
+    order: { col: "payment_date", asc: false },
+    limit: 500,
+  });
+
+  const contractorPayments = useRows<{
+    id: string;
+    project_id: string;
+    contractor_id: string;
+    payment_date: string;
+    amount: number;
+    payment_method: string | null;
+    reference_number: string | null;
+    remarks: string | null;
+  }>("contractor_payments", {
+    filters: [
+      { col: "payment_date", op: "gte", value: from },
+      { col: "payment_date", op: "lte", value: to },
+    ],
+    order: { col: "payment_date", asc: false },
+    limit: 500,
+  });
+
+  const subcontractorPayments = useRows<{
+    id: string;
+    name: string;
+    project_id: string | null;
+    payment_date: string;
+    amount: number;
+    payment_method: string | null;
+    reference_number: string | null;
+    remarks: string | null;
+  }>("subcontractor_payments", {
+    filters: [
+      { col: "payment_date", op: "gte", value: from },
+      { col: "payment_date", op: "lte", value: to },
+    ],
+    order: { col: "payment_date", asc: false },
+    limit: 500,
+  });
+
+  const wagePayments = useRows<{
+    id: string;
+    team_id: string;
+    payment_date: string;
+    amount: number;
+    payment_method: string | null;
+    reference_number: string | null;
+    notes: string | null;
+  }>("wage_payments", {
+    filters: [
+      { col: "payment_date", op: "gte", value: from },
+      { col: "payment_date", op: "lte", value: to },
+    ],
+    order: { col: "payment_date", asc: false },
+    limit: 500,
+  });
+
+  const wageAdvances = useRows<{
+    id: string;
+    employee_id: string;
+    week_start_date: string;
+    advance_paid: number;
+    payment_method: string | null;
+    reference_number: string | null;
+  }>("weekly_wage_adjustments", {
+    filters: [
+      { col: "week_start_date", op: "gte", value: from },
+      { col: "week_start_date", op: "lte", value: to },
+    ],
+    order: { col: "week_start_date", asc: false },
     limit: 500,
   });
 
@@ -216,6 +311,252 @@ function AccountsPage() {
     }
     return list;
   }, [clientPayments.data, paymentProjectFilter, paymentCategoryFilter]);
+
+  // ================= UNIFIED LEDGER (R9) =================
+  type LedgerTransaction = {
+    id: string;
+    date: string;
+    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance";
+    direction: "inflow" | "outflow";
+    party: string;
+    project_id: string | null;
+    projectName: string;
+    amount: number;
+    payment_method: string;
+    reference_number: string;
+    description: string;
+  };
+
+  const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
+  const contractorName = (id: string | null) => contractors.data?.find((c) => c.id === id)?.name ?? "—";
+  const teamName = (id: string | null) => teams.data?.find((t) => t.id === id)?.name ?? "—";
+  const employeeName = (id: string | null) => employees.data?.find((e) => e.id === id)?.full_name ?? "—";
+
+  const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
+    const list: LedgerTransaction[] = [];
+
+    // 1. Client Receipts (Inflow)
+    for (const cp of clientPayments.data ?? []) {
+      list.push({
+        id: `cp-${cp.id}`,
+        date: cp.payment_date,
+        type: "Client Receipt",
+        direction: "inflow",
+        party: `Client (${projectName(cp.project_id)})`,
+        project_id: cp.project_id,
+        projectName: projectName(cp.project_id),
+        amount: Number(cp.amount || 0),
+        payment_method: cp.payment_method || "Not recorded",
+        reference_number: cp.receipt_number || cp.reference_number || "—",
+        description: cp.notes || cp.payment_category || "Client milestone payment",
+      });
+    }
+
+    // 2. Supplier Payments (Outflow)
+    for (const sp of supplierPayments.data ?? []) {
+      list.push({
+        id: `sp-${sp.id}`,
+        date: sp.payment_date,
+        type: "Supplier Payment",
+        direction: "outflow",
+        party: supplierName(sp.supplier_id),
+        project_id: sp.project_id,
+        projectName: projectName(sp.project_id),
+        amount: Number(sp.amount || 0),
+        payment_method: sp.payment_method || "Not recorded",
+        reference_number: sp.reference_number || "—",
+        description: sp.remarks || "Material purchase payment",
+      });
+    }
+
+    // 3. Contractor Payments (Outflow)
+    for (const cp of contractorPayments.data ?? []) {
+      list.push({
+        id: `conp-${cp.id}`,
+        date: cp.payment_date,
+        type: "Contractor Payment",
+        direction: "outflow",
+        party: contractorName(cp.contractor_id),
+        project_id: cp.project_id,
+        projectName: projectName(cp.project_id),
+        amount: Number(cp.amount || 0),
+        payment_method: cp.payment_method || "Not recorded",
+        reference_number: cp.reference_number || "—",
+        description: cp.remarks || "Contractor bill settlement",
+      });
+    }
+
+    // 4. Subcontractor Payments (Outflow)
+    for (const scp of subcontractorPayments.data ?? []) {
+      list.push({
+        id: `subp-${scp.id}`,
+        date: scp.payment_date,
+        type: "Subcontractor",
+        direction: "outflow",
+        party: scp.name,
+        project_id: scp.project_id,
+        projectName: projectName(scp.project_id),
+        amount: Number(scp.amount || 0),
+        payment_method: scp.payment_method || "Not recorded",
+        reference_number: scp.reference_number || "—",
+        description: scp.remarks || "Ad-hoc subcontractor work",
+      });
+    }
+
+    // 5. Site & Office Expenses (Outflow)
+    for (const exp of expenses.data ?? []) {
+      list.push({
+        id: `exp-${exp.id}`,
+        date: exp.expense_date,
+        type: "Expense",
+        direction: "outflow",
+        party: exp.project_id ? "Site Expense" : "Office Expense",
+        project_id: exp.project_id,
+        projectName: exp.project_id ? projectName(exp.project_id) : "Corporate / Head Office",
+        amount: Number(exp.amount || 0),
+        payment_method: exp.payment_method || "Not recorded",
+        reference_number: "—",
+        description: `${exp.category}${exp.description ? `: ${exp.description}` : ""}`,
+      });
+    }
+
+    // 6. Wage Payments (Outflow)
+    for (const wp of wagePayments.data ?? []) {
+      list.push({
+        id: `wp-${wp.id}`,
+        date: wp.payment_date,
+        type: "Wage Payment",
+        direction: "outflow",
+        party: `Team: ${teamName(wp.team_id)}`,
+        project_id: null,
+        projectName: "Labour Payroll",
+        amount: Number(wp.amount || 0),
+        payment_method: wp.payment_method || "Not recorded",
+        reference_number: wp.reference_number || "—",
+        description: wp.notes || `Weekly team wages (week: ${dateFmt(wp.payment_date)})`,
+      });
+    }
+
+    // 7. Labour Advance Payments (Outflow)
+    for (const wa of wageAdvances.data ?? []) {
+      if (Number(wa.advance_paid || 0) > 0) {
+        list.push({
+          id: `wa-${wa.id}`,
+          date: wa.week_start_date,
+          type: "Labour Advance",
+          direction: "outflow",
+          party: employeeName(wa.employee_id),
+          project_id: null,
+          projectName: "Labour Payroll",
+          amount: Number(wa.advance_paid),
+          payment_method: wa.payment_method || "Not recorded",
+          reference_number: wa.reference_number || "—",
+          description: `Worker advance deduction (week: ${dateFmt(wa.week_start_date)})`,
+        });
+      }
+    }
+
+    // Sort chronologically descending
+    return list.sort((a, b) => b.date.localeCompare(a.date));
+  }, [
+    clientPayments.data,
+    supplierPayments.data,
+    contractorPayments.data,
+    subcontractorPayments.data,
+    expenses.data,
+    wagePayments.data,
+    wageAdvances.data,
+    projects.data,
+    suppliers.data,
+    contractors.data,
+    teams.data,
+    employees.data,
+  ]);
+
+  const filteredLedger = useMemo(() => {
+    let list = rawLedgerTransactions;
+    if (ledgerProjectFilter !== "all") {
+      list = list.filter((r) => r.project_id === ledgerProjectFilter);
+    }
+    if (ledgerTypeFilter !== "all") {
+      list = list.filter((r) => r.type === ledgerTypeFilter);
+    }
+    return list;
+  }, [rawLedgerTransactions, ledgerProjectFilter, ledgerTypeFilter]);
+
+  const ledgerTotalInflow = useMemo(
+    () => sum(filteredLedger.filter((t) => t.direction === "inflow"), (t) => t.amount),
+    [filteredLedger]
+  );
+  const ledgerTotalOutflow = useMemo(
+    () => sum(filteredLedger.filter((t) => t.direction === "outflow"), (t) => t.amount),
+    [filteredLedger]
+  );
+  const ledgerNetCashFlow = ledgerTotalInflow - ledgerTotalOutflow;
+
+  const ledgerColumns: Column<LedgerTransaction>[] = [
+    {
+      header: "Date",
+      cell: (r) => dateFmt(r.date),
+      value: (r) => r.date,
+    },
+    {
+      header: "Type",
+      cell: (r) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            r.direction === "inflow"
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-muted text-foreground"
+          }`}
+        >
+          {r.type}
+        </span>
+      ),
+      value: (r) => r.type,
+    },
+    {
+      header: "Party / Payee",
+      cell: (r) => <span className="font-semibold text-xs">{r.party}</span>,
+      value: (r) => r.party,
+    },
+    {
+      header: "Project / Department",
+      cell: (r) => r.projectName,
+      value: (r) => r.projectName,
+    },
+    {
+      header: "Method",
+      cell: (r) => (
+        <span className={r.payment_method === "Not recorded" ? "text-muted-foreground italic text-xs" : "capitalize text-xs font-medium"}>
+          {r.payment_method}
+        </span>
+      ),
+      value: (r) => r.payment_method,
+    },
+    {
+      header: "Reference",
+      cell: (r) => <span className="font-mono text-xs">{r.reference_number}</span>,
+      value: (r) => r.reference_number,
+    },
+    {
+      header: "Description / Notes",
+      cell: (r) => <span className="text-xs text-muted-foreground max-w-[200px] truncate block">{r.description}</span>,
+      value: (r) => r.description,
+    },
+    {
+      header: "Outflow (₹)",
+      cell: (r) => (r.direction === "outflow" ? <span className="font-mono text-xs text-destructive font-semibold">-{currency(r.amount)}</span> : "—"),
+      value: (r) => (r.direction === "outflow" ? r.amount : 0),
+      className: "text-right tabular-nums",
+    },
+    {
+      header: "Inflow (₹)",
+      cell: (r) => (r.direction === "inflow" ? <span className="font-mono text-xs text-emerald-700 font-bold">+{currency(r.amount)}</span> : "—"),
+      value: (r) => (r.direction === "inflow" ? r.amount : 0),
+      className: "text-right tabular-nums",
+    },
+  ];
 
   const paymentColumns: Column<ClientPayment>[] = [
     {
@@ -625,8 +966,11 @@ function AccountsPage() {
         />
       </div>
 
-      <Tabs defaultValue="expenses">
+      <Tabs defaultValue="ledger">
         <TabsList className="no-print">
+          <TabsTrigger value="ledger">
+            <BookOpen className="mr-1.5 size-3.5" /> Unified Ledger ({filteredLedger.length})
+          </TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="client_receipts">
             <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({(clientPayments.data ?? []).length})
@@ -634,6 +978,106 @@ function AccountsPage() {
           <TabsTrigger value="cash">Cash closing</TabsTrigger>
           <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
         </TabsList>
+
+        {/* ================= UNIFIED LEDGER ================= */}
+        <TabsContent value="ledger" className="mt-4 space-y-4">
+          {/* Summary Stat Cards */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-card p-3">
+              <span className="text-xs font-medium text-muted-foreground">Total Inflows (Client Receipts)</span>
+              <p className="mt-1 font-mono text-xl font-bold text-emerald-700">+{currency(ledgerTotalInflow)}</p>
+            </div>
+            <div className="rounded-lg border bg-card p-3">
+              <span className="text-xs font-medium text-muted-foreground">Total Outflows (Wages, Materials, Subs, Expenses)</span>
+              <p className="mt-1 font-mono text-xl font-bold text-destructive">-{currency(ledgerTotalOutflow)}</p>
+            </div>
+            <div className="rounded-lg border bg-card p-3">
+              <span className="text-xs font-medium text-muted-foreground">Net Ledger Cash Movement</span>
+              <p className={`mt-1 font-mono text-xl font-bold ${ledgerNetCashFlow >= 0 ? "text-emerald-700" : "text-destructive"}`}>
+                {ledgerNetCashFlow >= 0 ? "+" : ""}{currency(ledgerNetCashFlow)}
+              </p>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="no-print rounded-lg border bg-card p-3 flex flex-wrap items-end gap-3">
+            <div>
+              <Label className="mb-1 block text-xs font-medium">Filter by Project</Label>
+              <Select value={ledgerProjectFilter} onValueChange={setLedgerProjectFilter}>
+                <SelectTrigger className="w-48 h-8 text-xs">
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects & Office</SelectItem>
+                  {projectOptions.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="mb-1 block text-xs font-medium">Filter by Transaction Type</Label>
+              <Select value={ledgerTypeFilter} onValueChange={setLedgerTypeFilter}>
+                <SelectTrigger className="w-48 h-8 text-xs">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Transaction Types</SelectItem>
+                  <SelectItem value="Client Receipt">Client Receipt (Inflow)</SelectItem>
+                  <SelectItem value="Supplier Payment">Supplier Payment (Outflow)</SelectItem>
+                  <SelectItem value="Contractor Payment">Contractor Payment (Outflow)</SelectItem>
+                  <SelectItem value="Subcontractor">Subcontractor Payment (Outflow)</SelectItem>
+                  <SelectItem value="Expense">Office & Site Expense (Outflow)</SelectItem>
+                  <SelectItem value="Wage Payment">Team Wages Paid (Outflow)</SelectItem>
+                  <SelectItem value="Labour Advance">Labour Advance Paid (Outflow)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(ledgerProjectFilter !== "all" || ledgerTypeFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setLedgerProjectFilter("all");
+                  setLedgerTypeFilter("all");
+                }}
+                className="h-8 px-2 text-xs"
+              >
+                <RotateCcw className="mr-1 size-3" /> Reset
+              </Button>
+            )}
+          </div>
+
+          <div className="rounded-md bg-muted/40 p-2.5 text-xs text-muted-foreground border">
+            <strong>Unified Ledger:</strong> Combines all actual money transactions (Client payments, Supplier payments, Contractor & Subcontractor payments, Expenses, Team Wages and Worker Advances) without double-counting.
+          </div>
+
+          <DataTable
+            rows={filteredLedger}
+            columns={ledgerColumns}
+            loading={
+              expenses.isLoading ||
+              clientPayments.isLoading ||
+              supplierPayments.isLoading ||
+              contractorPayments.isLoading ||
+              subcontractorPayments.isLoading ||
+              wagePayments.isLoading ||
+              wageAdvances.isLoading
+            }
+            exportName="brickweld-unified-ledger"
+            exportTitle="Unified Financial Ledger Report"
+            exportDescription="Consolidated money movements across all projects and departments"
+            appliedFilters={{
+              "Date Range": `${from} to ${to}`,
+              ...(ledgerProjectFilter !== "all" ? { Project: projectName(ledgerProjectFilter) } : {}),
+              ...(ledgerTypeFilter !== "all" ? { "Type": ledgerTypeFilter } : {}),
+            }}
+          />
+        </TabsContent>
 
         {/* ================= EXPENSES ================= */}
         <TabsContent value="expenses" className="mt-4 space-y-3">
