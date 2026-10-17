@@ -713,7 +713,7 @@ INSERT INTO public.client_payments (
 )
 SELECT
   cc.id,
-  'RCP-DEMO-' || SUBSTRING(cc.id::text FROM 1 FOR 8),
+  'RCP-DEMO-' || RIGHT(cc.id::text, 6),
   cc.project_id,
   cc.cash_received,
   cc.closing_date,

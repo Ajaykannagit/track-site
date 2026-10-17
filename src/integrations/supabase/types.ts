@@ -322,6 +322,134 @@ export type Database = {
         };
         Relationships: [];
       };
+      client_payments: {
+        Row: {
+          account_type: string;
+          amount: number;
+          client_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          invoice_reference: string | null;
+          is_demo: boolean;
+          notes: string | null;
+          payment_category: string;
+          payment_date: string;
+          payment_method: string;
+          project_id: string;
+          receipt_number: string;
+          reference_number: string | null;
+          status: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          account_type?: string;
+          amount: number;
+          client_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          invoice_reference?: string | null;
+          is_demo?: boolean;
+          notes?: string | null;
+          payment_category?: string;
+          payment_date?: string;
+          payment_method?: string;
+          project_id: string;
+          receipt_number: string;
+          reference_number?: string | null;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          account_type?: string;
+          amount?: number;
+          client_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          invoice_reference?: string | null;
+          is_demo?: boolean;
+          notes?: string | null;
+          payment_category?: string;
+          payment_date?: string;
+          payment_method?: string;
+          project_id?: string;
+          receipt_number?: string;
+          reference_number?: string | null;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_payments_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_payments_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      payment_milestones: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          due_date: string;
+          expected_amount: number;
+          id: string;
+          is_demo: boolean;
+          order_index: number;
+          project_id: string;
+          status: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          due_date: string;
+          expected_amount: number;
+          id?: string;
+          is_demo?: boolean;
+          order_index?: number;
+          project_id: string;
+          status?: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          due_date?: string;
+          expected_amount?: number;
+          id?: string;
+          is_demo?: boolean;
+          order_index?: number;
+          project_id?: string;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payment_milestones_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contractor_bills: {
         Row: {
           approved_at: string | null;

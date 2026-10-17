@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -78,6 +78,23 @@ type Transfer = {
   remarks: string | null;
 };
 
+type ClientPayment = {
+  id: string;
+  receipt_number: string;
+  project_id: string;
+  client_id: string | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string | null;
+  payment_category: string;
+  invoice_reference: string | null;
+  notes: string | null;
+  status: string;
+  account_type: string;
+  created_at: string;
+};
+
 function AccountsPage() {
   const { canWriteFinance, isMD } = useAuth();
   const [from, setFrom] = useState(monthStart());
@@ -100,6 +117,8 @@ function AccountsPage() {
   const [closingProjectFilter, setClosingProjectFilter] = useState<string>("all");
   const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
   const [transferProjectFilter, setTransferProjectFilter] = useState<string>("all");
+  const [paymentProjectFilter, setPaymentProjectFilter] = useState<string>("all");
+  const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<string>("all");
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
@@ -128,6 +147,14 @@ function AccountsPage() {
       { col: "transfer_date", op: "lte", value: to },
     ],
     order: { col: "transfer_date" },
+    limit: 500,
+  });
+  const clientPayments = useRows<ClientPayment>("client_payments", {
+    filters: [
+      { col: "payment_date", op: "gte", value: from },
+      { col: "payment_date", op: "lte", value: to },
+    ],
+    order: { col: "payment_date", asc: false },
     limit: 500,
   });
 
@@ -177,6 +204,78 @@ function AccountsPage() {
     }
     return list;
   }, [transfers.data, transferProjectFilter]);
+
+  // Filtered client payments
+  const filteredClientPayments = useMemo(() => {
+    let list = clientPayments.data ?? [];
+    if (paymentProjectFilter !== "all") {
+      list = list.filter((p) => p.project_id === paymentProjectFilter);
+    }
+    if (paymentCategoryFilter !== "all") {
+      list = list.filter((p) => p.payment_category === paymentCategoryFilter);
+    }
+    return list;
+  }, [clientPayments.data, paymentProjectFilter, paymentCategoryFilter]);
+
+  const paymentColumns: Column<ClientPayment>[] = [
+    {
+      header: "Receipt #",
+      cell: (r) => <span className="font-mono text-xs font-semibold">{r.receipt_number}</span>,
+      value: (r) => r.receipt_number,
+    },
+    { header: "Date", cell: (r) => dateFmt(r.payment_date), value: (r) => r.payment_date },
+    {
+      header: "Project",
+      cell: (r) => projectName(r.project_id),
+      value: (r) => projectName(r.project_id),
+    },
+    {
+      header: "Category",
+      cell: (r) => {
+        const isRev = r.payment_category === "reversal";
+        return (
+          <Badge variant={isRev ? "destructive" : "secondary"}>
+            {r.payment_category}
+          </Badge>
+        );
+      },
+      value: (r) => r.payment_category,
+    },
+    {
+      header: "Method / Ref",
+      cell: (r) => (
+        <div>
+          <span className="capitalize text-xs font-medium">{r.payment_method}</span>
+          {r.reference_number && (
+            <span className="block text-[10px] font-mono text-muted-foreground">{r.reference_number}</span>
+          )}
+        </div>
+      ),
+      value: (r) => `${r.payment_method} ${r.reference_number || ""}`,
+    },
+    {
+      header: "Account",
+      cell: (r) => (
+        <Badge variant="outline" className="text-[10px]">
+          {r.account_type === "bank" ? "Bank Account" : "Petty Cash"}
+        </Badge>
+      ),
+      value: (r) => r.account_type,
+    },
+    {
+      header: "Amount",
+      cell: (r) => {
+        const isRev = r.payment_category === "reversal";
+        return (
+          <span className={`font-mono font-semibold ${isRev ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
+            {isRev ? `-${currency(r.amount)}` : currency(r.amount)}
+          </span>
+        );
+      },
+      value: (r) => r.amount,
+      className: "text-right",
+    },
+  ];
 
   const expenseColumns: Column<Expense>[] = [
     { header: "Date", cell: (r) => dateFmt(r.expense_date), value: (r) => r.expense_date },
@@ -520,6 +619,9 @@ function AccountsPage() {
       <Tabs defaultValue="expenses">
         <TabsList className="no-print">
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="client_receipts">
+            <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({(clientPayments.data ?? []).length})
+          </TabsTrigger>
           <TabsTrigger value="cash">Cash closing</TabsTrigger>
           <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
         </TabsList>
@@ -707,6 +809,84 @@ function AccountsPage() {
                 ? { Project: projectName(expenseProjectFilter) }
                 : {}),
               ...(expenseCategoryFilter !== "all" ? { Category: expenseCategoryFilter } : {}),
+            }}
+          />
+        </TabsContent>
+
+        {/* ================= CLIENT RECEIPTS ================= */}
+        <TabsContent value="client_receipts" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold flex items-center gap-1.5">
+                <HandCoins className="size-4 text-emerald-600" /> Client Receipts &amp; Inward Payments
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                All client remittances across projects credited to company bank accounts or petty cash.
+              </p>
+            </div>
+
+            <div className="no-print flex flex-wrap items-end gap-2">
+              <div>
+                <Select value={paymentProjectFilter} onValueChange={setPaymentProjectFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projectOptions.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Select value={paymentCategoryFilter} onValueChange={setPaymentCategoryFilter}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="advance">Advance</SelectItem>
+                    <SelectItem value="progress">Progress Payment</SelectItem>
+                    <SelectItem value="final">Final Settlement</SelectItem>
+                    <SelectItem value="reversal">Reversals</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(paymentProjectFilter !== "all" || paymentCategoryFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPaymentProjectFilter("all");
+                    setPaymentCategoryFilter("all");
+                  }}
+                  className="h-8 px-2 text-xs"
+                >
+                  <RotateCcw className="mr-1 size-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <DataTable
+            rows={filteredClientPayments}
+            columns={paymentColumns}
+            loading={clientPayments.isLoading}
+            exportName="brickweld-client-receipts"
+            exportTitle="Client Receipts Report"
+            exportDescription="Construction Project Control System — Client Receipts Report"
+            empty="No client receipts found for the selected date range."
+            appliedFilters={{
+              "Date Range": `${from} to ${to}`,
+              ...(paymentProjectFilter !== "all"
+                ? { Project: projectName(paymentProjectFilter) }
+                : {}),
+              ...(paymentCategoryFilter !== "all" ? { Category: paymentCategoryFilter } : {}),
             }}
           />
         </TabsContent>

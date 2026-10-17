@@ -42,6 +42,7 @@ import {
   Building2,
   ChevronRight,
   DollarSign,
+  HandCoins,
   PackageCheck,
   Pencil,
   Plus,
@@ -50,6 +51,18 @@ import {
   Trash2,
   Wallet,
 } from "lucide-react";
+
+type ClientPaymentRow = {
+  id: string;
+  project_id: string;
+  amount: number;
+  payment_date: string;
+  payment_category: string;
+  payment_method: string;
+  receipt_number: string;
+  reference_number: string | null;
+  status: string;
+};
 
 /** Unified spend-line type used in the full-spend dialog */
 type SpendLine = {
@@ -229,6 +242,12 @@ function Dashboard() {
     select: "project_id,amount",
     enabled: permissions.canViewProjectFinancials,
   });
+  const allClientPayments = useRows<ClientPaymentRow>("client_payments", {
+    select: "id,project_id,amount,payment_date,payment_category,payment_method,receipt_number,reference_number,status",
+    enabled: permissions.canViewCompanyFinancials,
+  });
+
+  const [receivedDialogOpen, setReceivedDialogOpen] = useState(false);
 
   const getProjectContractValue = (p: Project) => {
     const extra = sum(
@@ -236,6 +255,18 @@ function Dashboard() {
       (q) => Number(q.amount || 0),
     );
     return Number(p.quotation_amount || 0) + extra;
+  };
+
+  const getProjectReceivedAmount = (projectId: string) => {
+    return sum(
+      (allClientPayments.data ?? []).filter(
+        (cp) => cp.project_id === projectId && cp.status === "received",
+      ),
+      (cp) => {
+        if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
+        return Number(cp.amount || 0);
+      },
+    );
   };
 
   const projectBreakdown = (projectId: string) => {
@@ -264,6 +295,14 @@ function Dashboard() {
 
   const active = (projects.data ?? []).filter((p) => p.status === "active");
   const contractValue = sum(projects.data ?? [], (p) => getProjectContractValue(p));
+  const totalReceived = sum(
+    (allClientPayments.data ?? []).filter((cp) => cp.status === "received"),
+    (cp) => {
+      if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
+      return Number(cp.amount || 0);
+    },
+  );
+  const pendingReceivables = Math.max(0, contractValue - totalReceived);
   const spend =
     sum(expenses.data ?? [], (e) => e.amount) +
     sum(attendance.data ?? [], (a) => a.calculated_wage);
@@ -493,7 +532,7 @@ function Dashboard() {
 
       {/* StatCards: Full cards for MD; Active projects only for Viewer & Supervisor */}
       {permissions.canViewCompanyFinancials ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div
             onClick={() => setActiveProjectsDialogOpen(true)}
             className="cursor-pointer transition-transform hover:scale-[1.01]"
@@ -515,6 +554,32 @@ function Dashboard() {
               label="Contract value"
               value={currency(contractValue)}
               hint="All active & completed projects"
+            />
+          </div>
+
+          <div
+            onClick={() => setReceivedDialogOpen(true)}
+            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            title="View client payment receipts breakdown"
+          >
+            <StatCard
+              label="Received amount"
+              value={currency(totalReceived)}
+              hint="Total client receipts"
+              tone="success"
+            />
+          </div>
+
+          <div
+            onClick={() => setReceivedDialogOpen(true)}
+            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            title="View pending receivables breakdown"
+          >
+            <StatCard
+              label="Pending receivables"
+              value={currency(pendingReceivables)}
+              hint="Contract value - received"
+              tone={pendingReceivables > 0 ? "warning" : "default"}
             />
           </div>
 
@@ -826,6 +891,100 @@ function Dashboard() {
                     );
                   })}
                 </TableBody>
+              </Table>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DIALOG 2B: Received Amount & Pending Receivables Breakdown (MD & Accounts) */}
+      {/* ========================================================================= */}
+      {permissions.canViewCompanyFinancials && (
+        <Dialog open={receivedDialogOpen} onOpenChange={setReceivedDialogOpen}>
+          <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <HandCoins className="size-5 text-emerald-600" /> Client Receipts & Receivables Breakdown
+              </DialogTitle>
+              <DialogDescription>
+                Project-wise tracking: Revised Contract Value vs. Net Receipts Received and Remaining Outstanding Balance.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 space-y-4 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project</TableHead>
+                    <TableHead className="text-right">Revised Contract Value</TableHead>
+                    <TableHead className="text-right">Total Received</TableHead>
+                    <TableHead className="text-right">Pending Receivables</TableHead>
+                    <TableHead className="text-right">Recovery %</TableHead>
+                    <TableHead className="text-center">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(projects.data ?? []).map((p) => {
+                    const totalVal = getProjectContractValue(p);
+                    const rec = getProjectReceivedAmount(p.id);
+                    const pend = Math.max(0, totalVal - rec);
+                    const pct = totalVal > 0 ? Math.min(100, Math.round((rec / totalVal) * 100)) : 0;
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">
+                          <div>{p.name}</div>
+                          <div className="text-xs text-muted-foreground">{p.project_code}</div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold font-mono">
+                          {currency(totalVal)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-emerald-600 font-semibold">
+                          {currency(rec)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-mono font-bold ${
+                            pend > 0 ? "text-amber-600" : "text-muted-foreground"
+                          }`}
+                        >
+                          {currency(pend)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {pct}%
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Link
+                            to="/projects/$projectId"
+                            params={{ projectId: p.id }}
+                            onClick={() => setReceivedDialogOpen(false)}
+                            className="text-xs text-primary underline"
+                          >
+                            View Project
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-bold">Total Across Projects</TableCell>
+                    <TableCell className="text-right font-bold font-mono">
+                      {currency(contractValue)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold font-mono text-emerald-600">
+                      {currency(totalReceived)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold font-mono text-amber-600">
+                      {currency(pendingReceivables)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold font-mono text-xs">
+                      {contractValue > 0
+                        ? `${Math.min(100, Math.round((totalReceived / contractValue) * 100))}%`
+                        : "0%"}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
               </Table>
             </div>
           </DialogContent>

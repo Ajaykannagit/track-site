@@ -15,6 +15,8 @@ DELETE FROM public.material_request_items    WHERE request_id IN (SELECT id FROM
 -- Child tables (reference parent tables below)
 DELETE FROM public.contractor_payments       WHERE is_demo = true;
 DELETE FROM public.contractor_bills          WHERE is_demo = true;
+DELETE FROM public.client_payments           WHERE is_demo = true;
+DELETE FROM public.payment_milestones        WHERE is_demo = true;
 DELETE FROM public.measurement_books         WHERE is_demo = true;
 DELETE FROM public.work_orders               WHERE is_demo = true;
 DELETE FROM public.subcontractor_payments    WHERE is_demo = true;
