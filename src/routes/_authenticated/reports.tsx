@@ -48,7 +48,7 @@ type Project = {
   expected_completion_date: string | null;
 };
 type Dated = { id: string; project_id: string | null };
-type Expense = Dated & { expense_date: string; category: string; amount: number; description?: string | null };
+type Expense = Dated & { expense_date: string; category: string; amount: number; payment_method?: string | null; description?: string | null };
 type Attendance = Dated & { attendance_date: string; calculated_wage: number };
 type Receipt = Dated & { receipt_date: string; total_amount: number; receipt_number: string };
 type Bill = Dated & { bill_date: string; net_amount: number; status: string; bill_number: string };
@@ -190,6 +190,21 @@ function ReportsPage() {
     }
     return [...map.entries()]
       .map(([category, amount], i) => ({ id: `${i}-${category}`, category, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [expenses.data, selectedProjectId]);
+
+  const byPaymentMethod = useMemo(() => {
+    const list = selectedProjectId === "all"
+      ? (expenses.data ?? [])
+      : (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId);
+
+    const map = new Map<string, number>();
+    for (const e of list) {
+      const method = e.payment_method ? e.payment_method.toUpperCase() : "Not recorded";
+      map.set(method, (map.get(method) ?? 0) + Number(e.amount ?? 0));
+    }
+    return [...map.entries()]
+      .map(([method, amount], i) => ({ id: `${i}-${method}`, method, amount }))
       .sort((a, b) => b.amount - a.amount);
   }, [expenses.data, selectedProjectId]);
 
@@ -548,7 +563,7 @@ function ReportsPage() {
         </CardContent>
       </Card>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -571,7 +586,36 @@ function ReportsPage() {
                   header: "Amount",
                   cell: (r) => currency(r.amount),
                   value: (r) => r.amount,
-                  className: "text-right",
+                  className: "text-right font-mono",
+                },
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {selectedProjectObj ? `Expenses by Payment Method` : "Expenses by payment method"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              rows={byPaymentMethod}
+              loading={expenses.isLoading}
+              searchable={false}
+              exportName="brickweld-expenses-by-payment-method"
+              exportTitle="Expenses by Payment Method Report"
+              exportDescription="Construction Project Control System — Expenses by Payment Method"
+              appliedFilters={{ "Date Range": `${from} to ${to}` }}
+              empty="No expenses recorded in this range."
+              columns={[
+                { header: "Payment Method", cell: (r) => r.method, value: (r) => r.method },
+                {
+                  header: "Amount",
+                  cell: (r) => currency(r.amount),
+                  value: (r) => r.amount,
+                  className: "text-right font-mono",
                 },
               ]}
             />

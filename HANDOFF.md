@@ -81,12 +81,17 @@
     - Deleted Items tab: tracks soft-deleted records across all money/site tables with inline **Restore** button powered by `supabase.rpc('restore_record')`.
   - `src/components/AppShell.tsx`: Added "Audit Log" navigation item with `Shield` icon, strictly visible to MD users.
   - `src/routes/_authenticated/dashboard.tsx`: Allowed Accountant role to add and edit office expenses via `canManageOfficeExpense`, while deletion remains strictly MD-only.
+- **Client Batch 2, Step 5 (R8) completed and pushed**:
+  - `src/routes/_authenticated/reports.tsx`:
+    - Updated `Expense` type to include `payment_method`.
+    - Added `byPaymentMethod` breakdown aggregation in real-time respecting the selected date range (`from` to `to`) and project scope.
+    - Added a dedicated "Expenses by Payment Method" card with DataTable displaying payment method (CASH, BANK, UPI, CHEQUE, etc.), formatted amounts, and one-click report exports.
+    - Enhanced grid layout to accommodate all 3 analytical breakdowns (Category, Payment Method, and Configuration).
   - Zero TypeScript errors (`npx tsc --noEmit`) and clean production build (`npm run build`).
 
 ---
 
 ## 2. Pending List (Next Steps)
-- **Step 5 (R8)**: Spend report with date range, category/project/method breakdowns, and exports.
 - **Step 6 (R9)**: Unified ledger in Accounts combining all money movements without double counting.
 - **a. Apply Missing Migrations**: ✅ RESOLVED. `supabase/checks/check_tables.sql` verified against live database schema. All required tables exist.
 - **b. Review Security SQL**: ✅ RESOLVED. Replaced draft `20261012000000_column_security_proposal.sql` by executing Step 7 Part A and Part B directly. File renamed to `.SUPERSEDED.sql`.
