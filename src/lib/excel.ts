@@ -173,17 +173,6 @@ export async function exportToExcel<T>({
       if (res.ok) {
         buffer = await res.arrayBuffer();
       }
-    } else if (!buffer && typeof process !== "undefined" && process.versions?.node) {
-      try {
-        const fs = await import("fs");
-        const path = await import("path");
-        const possiblePath = path.resolve(process.cwd(), "public", "logo.png");
-        if (fs.existsSync(possiblePath)) {
-          buffer = fs.readFileSync(possiblePath);
-        }
-      } catch {
-        // Continue if Node fs is not accessible
-      }
     }
 
     if (buffer) {

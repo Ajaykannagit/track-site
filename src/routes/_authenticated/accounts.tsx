@@ -262,7 +262,7 @@ function AccountsPage() {
   const saveTransfer = useSaveRow("account_transfers", "Transfer");
   const deleteTransfer = useDeleteRow("account_transfers", "Transfer");
 
-  const projectName = (id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—";
+  const projectName = useCallback((id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—", [projects.data]);
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const canModify = canWriteFinance || isMD;
@@ -327,10 +327,10 @@ function AccountsPage() {
     description: string;
   };
 
-  const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
-  const contractorName = (id: string | null) => contractors.data?.find((c) => c.id === id)?.name ?? "—";
-  const teamName = (id: string | null) => teams.data?.find((t) => t.id === id)?.name ?? "—";
-  const employeeName = (id: string | null) => employees.data?.find((e) => e.id === id)?.full_name ?? "—";
+  const supplierName = useCallback((id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—", [suppliers.data]);
+  const contractorName = useCallback((id: string | null) => contractors.data?.find((c) => c.id === id)?.name ?? "—", [contractors.data]);
+  const teamName = useCallback((id: string | null) => teams.data?.find((t) => t.id === id)?.name ?? "—", [teams.data]);
+  const employeeName = useCallback((id: string | null) => employees.data?.find((e) => e.id === id)?.full_name ?? "—", [employees.data]);
 
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
@@ -471,6 +471,11 @@ function AccountsPage() {
     contractors.data,
     teams.data,
     employees.data,
+    projectName,
+    supplierName,
+    contractorName,
+    teamName,
+    employeeName,
   ]);
 
   const filteredLedger = useMemo(() => {

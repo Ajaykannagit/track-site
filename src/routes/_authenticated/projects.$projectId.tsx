@@ -231,7 +231,7 @@ function ProjectDetail() {
   const totalContractValue = baseContractValue + extraQuotationsTotal;
 
   // Client Receipts & Advances
-  const paymentsList = clientPayments.data ?? [];
+  const paymentsList = useMemo(() => clientPayments.data ?? [], [clientPayments.data]);
   const validReceipts = paymentsList.filter((cp) => cp.status === "received");
   const totalReceived = sum(validReceipts, (cp) => {
     if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
@@ -1308,7 +1308,11 @@ function ProjectDetail() {
                 open={!!deletingPayment}
                 onOpenChange={(open) => !open && setDeletingPayment(null)}
                 title="Delete Client Payment Record"
-                description={`Are you sure you want to permanently delete receipt "${deletingPayment.receipt_number}" (${currency(deletingPayment.amount)})? For accounting compliance, financial reversals are generally preferred.`}
+                tableName="client_payments"
+                recordId={deletingPayment.id}
+                recordTitle={`Client Receipt: ${deletingPayment.receipt_number} (${currency(deletingPayment.amount)})`}
+                recordData={deletingPayment}
+                description={`Delete client payment "${deletingPayment.receipt_number}" (${currency(deletingPayment.amount)})? This action requires MD approval.`}
                 onConfirm={async () => {
                   await deletePayment.mutateAsync(deletingPayment.id);
                   setDeletingPayment(null);
@@ -1322,7 +1326,11 @@ function ProjectDetail() {
                 open={!!deletingMilestone}
                 onOpenChange={(open) => !open && setDeletingMilestone(null)}
                 title="Delete Payment Milestone"
-                description={`Are you sure you want to delete milestone "${deletingMilestone.title}" (${currency(deletingMilestone.expected_amount)})?`}
+                tableName="payment_milestones"
+                recordId={deletingMilestone.id}
+                recordTitle={`Milestone: ${deletingMilestone.title} (${currency(deletingMilestone.expected_amount)})`}
+                recordData={deletingMilestone}
+                description={`Delete milestone "${deletingMilestone.title}" (${currency(deletingMilestone.expected_amount)})? This action requires MD approval.`}
                 onConfirm={async () => {
                   await deleteMilestone.mutateAsync(deletingMilestone.id);
                   setDeletingMilestone(null);
@@ -1494,7 +1502,11 @@ function ProjectDetail() {
           open={!!deletingQuotation}
           onOpenChange={(open) => !open && setDeletingQuotation(null)}
           title="Delete Quotation"
-          description={`Are you sure you want to remove quotation "${deletingQuotation.title}" (${currency(deletingQuotation.amount)})? This will reduce the project contract value.`}
+          tableName="project_quotations"
+          recordId={deletingQuotation.id}
+          recordTitle={`Quotation: ${deletingQuotation.title} (${currency(deletingQuotation.amount)})`}
+          recordData={deletingQuotation}
+          description={`Delete quotation "${deletingQuotation.title}" (${currency(deletingQuotation.amount)})? This action requires MD approval.`}
           onConfirm={async () => {
             await deleteQuotation.mutateAsync(deletingQuotation.id);
             setDeletingQuotation(null);

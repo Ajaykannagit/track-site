@@ -5,13 +5,14 @@ export interface RolePermissions {
   canViewCompanyFinancials: boolean; // Profit/Loss, Dashboard contract value & spend
   canViewCompanyCashOnHand: boolean; // Company-wide cash on hand & cash balance (MD only)
   canViewOfficeExpense: boolean;     // Office expense details & receipts (Accountant sees own, MD sees all)
-  canManageUsers: boolean;           // User and role management in settings
+  canManageUsers: boolean;           // User and role management in settings (MD only)
   canViewAuditLog: boolean;          // MD-only: audit trail and deleted-items restore
 
-  // Projects
+  // Projects & Master Records
   canViewProjects: boolean;
   canViewProjectFinancials: boolean; // Contract value, quotation amount, project costs on project screens
   canManageQuotations: boolean;
+  canManageMasters: boolean;         // Add/edit workers, contractors, clients, suppliers
 
   // Attendance & Wages
   canEnterAttendance: boolean;       // in/out time, site, leave
@@ -40,6 +41,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
+    canManageMasters: true,
     canEnterAttendance: true,
     canViewWagesAndPayments: true,
     canViewWorkerProfiles: true,
@@ -50,12 +52,13 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
   accounts: {
     canViewCompanyFinancials: false, // MD-only high-level earnings/spend dashboard
     canViewCompanyCashOnHand: false, // MD-only company-wide cash balance
-    canViewOfficeExpense: true,      // Accountant can view and enter office expenses (own rows enforced by RLS)
-    canManageUsers: false,
+    canViewOfficeExpense: true,      // Accountant can view and enter office expenses
+    canManageUsers: false,           // Strictly MD-only: cannot assign roles or supervisors
     canViewAuditLog: false,
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
+    canManageMasters: true,          // Accountant can add & maintain worker, contractor & supplier records
     canEnterAttendance: true,
     canViewWagesAndPayments: true,
     canViewWorkerProfiles: true,
@@ -72,6 +75,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
+    canManageMasters: false,
     canEnterAttendance: true,
     canViewWagesAndPayments: false,
     canViewWorkerProfiles: true,
@@ -88,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
+    canManageMasters: false,
     canEnterAttendance: false,
     canViewWagesAndPayments: false,
     canViewWorkerProfiles: false,
@@ -113,6 +118,7 @@ export function getEffectivePermissions(roles: AppRole[]): RolePermissions {
     canViewProjects: false,
     canViewProjectFinancials: false,
     canManageQuotations: false,
+    canManageMasters: false,
     canEnterAttendance: false,
     canViewWagesAndPayments: false,
     canViewWorkerProfiles: false,

@@ -215,7 +215,7 @@ function ProjectsPage() {
         title="Projects"
         description="Every site with client, contract value and delivery dates."
         actions={
-          isMD ? (
+          (isMD || permissions.canManageQuotations) ? (
             <FormDialog
               title="New project"
               description="Create a project record with client, contract value and site details."
@@ -281,7 +281,11 @@ function ProjectsPage() {
           open={!!deletingProject}
           onOpenChange={(v) => !v && setDeletingProject(null)}
           title="Delete project"
-          description={`Are you sure you want to delete project "${deletingProject.name}"? This action cannot be undone.`}
+          tableName="projects"
+          recordId={deletingProject.id}
+          recordTitle={`Project: ${deletingProject.name}`}
+          recordData={deletingProject}
+          description={`Delete project "${deletingProject.name}"? This action requires MD approval.`}
           onConfirm={async () => {
             await deleteProject.mutateAsync(deletingProject.id);
             setDeletingProject(null);
