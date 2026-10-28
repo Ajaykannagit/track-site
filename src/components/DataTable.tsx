@@ -44,6 +44,7 @@ export function DataTable<T extends { id?: string }>({
   appliedFilters,
   empty = "No records yet.",
   onRowClick,
+  rowClassName,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -55,6 +56,7 @@ export function DataTable<T extends { id?: string }>({
   appliedFilters?: Record<string, string | number | null | undefined> | undefined;
   empty?: string | undefined;
   onRowClick?: ((row: T) => void) | undefined;
+  rowClassName?: ((row: T) => string | undefined) | undefined;
 }) {
   const [q, setQ] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -186,7 +188,10 @@ export function DataTable<T extends { id?: string }>({
                 <TableRow
                   key={row.id ?? i}
                   onClick={() => onRowClick?.(row)}
-                  className={onRowClick ? "cursor-pointer" : undefined}
+                  className={[
+                    onRowClick ? "cursor-pointer" : undefined,
+                    rowClassName?.(row),
+                  ].filter(Boolean).join(" ") || undefined}
                 >
                   {columns.map((c) => (
                     <TableCell key={c.header} className={c.className}>

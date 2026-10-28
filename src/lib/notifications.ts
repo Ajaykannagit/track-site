@@ -15,8 +15,10 @@ export type NotificationItem = {
   new_value?: string | null;
   reason?: string | null;
   target_role?: string | null;
+  target_user_id?: string | null;
   created_by?: string | null;
   created_by_email?: string | null;
+  /** Unread = no row in notification_reads for the current user. */
   is_read: boolean;
   details?: Record<string, unknown>;
   created_at: string;
@@ -33,27 +35,9 @@ export type SendEditNotificationParams = {
   details?: Record<string, unknown>;
 };
 
-const LOCAL_NOTIFICATIONS_KEY = "brickweld_notifications_store";
-
-function getLocalNotifications(): NotificationItem[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_NOTIFICATIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalNotifications(list: NotificationItem[]) {
-  try {
-    localStorage.setItem(LOCAL_NOTIFICATIONS_KEY, JSON.stringify(list.slice(0, 200)));
-  } catch {
-    // Ignore storage quota issues
-  }
-}
-
 /**
  * Dispatch an edit notification to the MD.
+ * Errors are logged — never silently swallowed.
  */
 export async function sendEditNotification(params: SendEditNotificationParams): Promise<void> {
   const {
@@ -73,20 +57,19 @@ export async function sendEditNotification(params: SendEditNotificationParams): 
     ? `Edit in ${tableName.replace(/_/g, " ")}: ${recordTitle}`
     : `Edit in ${tableName.replace(/_/g, " ")}`;
 
-  let userEmail = "Current User";
   let userId: string | null = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-      userEmail = data.user.email ?? "User";
-    }
-  } catch {
-    // ignore
+  let userEmail = "Current User";
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) {
+    console.error("sendEditNotification: auth error", userError.message);
+    return;
+  }
+  if (userData?.user) {
+    userId = userData.user.id;
+    userEmail = userData.user.email ?? "User";
   }
 
-  const notificationObj: NotificationItem = {
-    id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  const { error } = await supabase.from("notifications").insert({
     type: "edit",
     title,
     message: `Field "${fieldName}" changed from "${oldStr}" to "${newStr}". Reason: ${reason}`,
@@ -99,90 +82,107 @@ export async function sendEditNotification(params: SendEditNotificationParams): 
     target_role: "md",
     created_by: userId,
     created_by_email: userEmail,
-    is_read: false,
     details,
-    created_at: new Date().toISOString(),
-  };
+  });
 
-  // Always store locally as fallback / sync
-  const current = getLocalNotifications();
-  saveLocalNotifications([notificationObj, ...current]);
-
-  // Also push to Supabase table
-  try {
-    await supabase.from("notifications").insert({
-      type: "edit",
-      title: notificationObj.title,
-      message: notificationObj.message,
-      table_name: tableName,
-      record_id: recordId,
-      field_name: fieldName,
-      old_value: oldStr,
-      new_value: newStr,
-      reason: reason,
-      target_role: "md",
-      created_by: userId,
-      created_by_email: userEmail,
-      is_read: false,
-      details,
-    });
-  } catch (err) {
-    console.warn("Could not save notification to remote table:", err);
+  if (error) {
+    console.error("sendEditNotification: failed to insert notification:", error.message);
   }
 }
 
 /**
- * Fetch all notifications for the MD
+ * Fetch notifications visible to the current user.
+ * RLS ensures each user only sees their own or role-targeted notifications.
+ * Unread state is per-user via notification_reads table.
  */
-export async function fetchMdNotifications(): Promise<NotificationItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
+export async function fetchNotificationsForCurrentUser(): Promise<NotificationItem[]> {
+  // Get current user id for unread check
+  const { data: userData } = await supabase.auth.getUser();
+  const userId: string | null = userData?.user?.id ?? null;
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      // Merge with any local ones not present
-      const local = getLocalNotifications();
-      const existingIds = new Set(data.map((d: any) => d.id));
-      const combined = [...data, ...local.filter((l) => !existingIds.has(l.id))];
-      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      return combined;
-    }
-  } catch {
-    // ignore
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    console.error("fetchNotificationsForCurrentUser: error", error.message);
+    return [];
   }
 
-  return getLocalNotifications();
+  if (!userId || !data?.length) return (data ?? []) as NotificationItem[];
+
+  // Fetch which notifications the current user has read
+  const ids = (data as { id: string }[]).map((n) => n.id);
+  const { data: reads, error: readsError } = await supabase
+    .from("notification_reads")
+    .select("notification_id")
+    .eq("user_id", userId)
+    .in("notification_id", ids);
+
+  if (readsError) {
+    console.error("fetchNotificationsForCurrentUser: reads error", readsError.message);
+    // Fallback: mark everything as unread
+    return (data as NotificationItem[]).map((n) => ({ ...n, is_read: false }));
+  }
+
+  const readSet = new Set((reads ?? []).map((r: { notification_id: string }) => r.notification_id));
+  return (data as NotificationItem[]).map((n) => ({ ...n, is_read: readSet.has(n.id) }));
 }
 
+/** @deprecated Use fetchNotificationsForCurrentUser instead */
+export const fetchMdNotifications = fetchNotificationsForCurrentUser;
+
 /**
- * Mark a notification as read
+ * Mark a single notification as read for the current user.
  */
 export async function markNotificationAsRead(id: string): Promise<void> {
-  const local = getLocalNotifications();
-  const updated = local.map((n) => (n.id === id ? { ...n, is_read: true } : n));
-  saveLocalNotifications(updated);
+  const { data: userData } = await supabase.auth.getUser();
+  const userId: string | null = userData?.user?.id ?? null;
+  if (!userId) return;
 
-  try {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-  } catch {
-    // ignore
+  const { error } = await supabase
+    .from("notification_reads")
+    .upsert({ notification_id: id, user_id: userId }, { onConflict: "notification_id,user_id" });
+
+  if (error) {
+    console.error("markNotificationAsRead: error", error.message);
   }
 }
 
 /**
- * Mark all notifications as read
+ * Mark all visible notifications as read for the current user only.
+ * Does not affect other users' read state.
  */
 export async function markAllNotificationsAsRead(): Promise<void> {
-  const local = getLocalNotifications();
-  const updated = local.map((n) => ({ ...n, is_read: true }));
-  saveLocalNotifications(updated);
+  const { data: userData } = await supabase.auth.getUser();
+  const userId: string | null = userData?.user?.id ?? null;
+  if (!userId) return;
 
-  try {
-    await supabase.from("notifications").update({ is_read: true }).eq("is_read", false);
-  } catch {
-    // ignore
+  // Get all notification ids visible to this user
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id")
+    .limit(500);
+
+  if (error) {
+    console.error("markAllNotificationsAsRead: fetch error", error.message);
+    return;
+  }
+
+  const rows = (data ?? []).map((n: { id: string }) => ({
+    notification_id: n.id,
+    user_id: userId,
+  }));
+
+  if (!rows.length) return;
+
+  const { error: upsertError } = await supabase
+    .from("notification_reads")
+    .upsert(rows, { onConflict: "notification_id,user_id" });
+
+  if (upsertError) {
+    console.error("markAllNotificationsAsRead: upsert error", upsertError.message);
   }
 }

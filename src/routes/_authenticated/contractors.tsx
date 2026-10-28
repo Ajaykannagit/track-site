@@ -1,3 +1,4 @@
+import { RequirePermission } from "@/components/RequirePermission";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
@@ -613,6 +614,7 @@ function ContractorsPage() {
   const paid = sum(filteredPayments, (r) => r.amount);
 
   return (
+    <RequirePermission permission="canViewMaterialsAndContractors" label="Contractors">
     <div>
       <PageHeader
         title="Contractors"
@@ -784,7 +786,11 @@ function ContractorsPage() {
               open={!!deletingWo}
               onOpenChange={(v) => !v && setDeletingWo(null)}
               title="Delete work order"
-              description={`Are you sure you want to delete work order "${deletingWo.work_order_number}"? This action cannot be undone.`}
+              tableName="work_orders"
+              recordId={deletingWo.id}
+              recordTitle={`Work Order: ${deletingWo.work_order_number}`}
+              recordData={deletingWo}
+              description={`Delete work order "${deletingWo.work_order_number}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteWo.mutateAsync(deletingWo.id);
                 setDeletingWo(null);
@@ -877,7 +883,11 @@ function ContractorsPage() {
               open={!!deletingMb}
               onOpenChange={(v) => !v && setDeletingMb(null)}
               title="Delete measurement book"
-              description={`Are you sure you want to delete MB "${deletingMb.mb_number}"? This action cannot be undone.`}
+              tableName="measurement_books"
+              recordId={deletingMb.id}
+              recordTitle={`MB: ${deletingMb.mb_number}`}
+              recordData={deletingMb}
+              description={`Delete MB "${deletingMb.mb_number}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteMb.mutateAsync(deletingMb.id);
                 setDeletingMb(null);
@@ -978,7 +988,11 @@ function ContractorsPage() {
               open={!!deletingBill}
               onOpenChange={(v) => !v && setDeletingBill(null)}
               title="Delete bill"
-              description={`Are you sure you want to delete bill "${deletingBill.bill_number}"? This action cannot be undone.`}
+              tableName="contractor_bills"
+              recordId={deletingBill.id}
+              recordTitle={`Bill: ${deletingBill.bill_number}`}
+              recordData={deletingBill}
+              description={`Delete bill "${deletingBill.bill_number}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteBill.mutateAsync(deletingBill.id);
                 setDeletingBill(null);
@@ -1169,7 +1183,11 @@ function ContractorsPage() {
               open={!!deletingPayment}
               onOpenChange={(v) => !v && setDeletingPayment(null)}
               title="Delete payment"
-              description={`Are you sure you want to delete payment of ${currency(deletingPayment.amount)}? This action cannot be undone.`}
+              tableName="contractor_payments"
+              recordId={deletingPayment.id}
+              recordTitle={`Contractor Payment: ${currency(deletingPayment.amount)}`}
+              recordData={deletingPayment}
+              description={`Delete payment of ${currency(deletingPayment.amount)}? This action requires MD approval.`}
               onConfirm={async () => {
                 await deletePayment.mutateAsync(deletingPayment.id);
                 setDeletingPayment(null);
@@ -1421,7 +1439,11 @@ function ContractorsPage() {
                 open={!!deletingSubPay}
                 onOpenChange={(v) => !v && setDeletingSubPay(null)}
                 title="Delete other payment"
-                description={`Delete payment "${deletingSubPay.name}" (${currency(deletingSubPay.amount)})? This cannot be undone.`}
+              tableName="subcontractor_payments"
+              recordId={deletingSubPay.id}
+              recordTitle={`Subcontractor Payment: ${deletingSubPay.name} (${currency(deletingSubPay.amount)})`}
+              recordData={deletingSubPay}
+              description={`Delete payment "${deletingSubPay.name}" (${currency(deletingSubPay.amount)})? This action requires MD approval.`}
                 onConfirm={async () => {
                   await deleteSubPay.mutateAsync(deletingSubPay.id);
                   setDeletingSubPay(null);
@@ -1541,5 +1563,6 @@ function ContractorsPage() {
         )}
       </Tabs>
     </div>
+    </RequirePermission>
   );
 }

@@ -1,4 +1,5 @@
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase = typedSupabase as any;
@@ -21,25 +22,6 @@ export type DeletionRequest = {
   review_notes?: string | null;
 };
 
-const LOCAL_DELETIONS_KEY = "brickweld_deletion_requests_store";
-
-function getLocalDeletionRequests(): DeletionRequest[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_DELETIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalDeletionRequests(list: DeletionRequest[]) {
-  try {
-    localStorage.setItem(LOCAL_DELETIONS_KEY, JSON.stringify(list.slice(0, 200)));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
 export type RequestDeleteParams = {
   tableName: string;
   recordId: string;
@@ -51,258 +33,119 @@ export type RequestDeleteParams = {
 
 /**
  * Submit a deletion request to the MD for approval.
+ * The database is the sole source of truth — no localStorage fallback.
+ * If the insert fails, throws an error so the caller can show a toast.
  */
 export async function submitDeletionRequest(params: RequestDeleteParams): Promise<DeletionRequest> {
   const { tableName, recordId, recordTitle, recordSummary, recordData = {}, reason } = params;
 
   let userEmail = "Current User";
   let userId: string | null = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-      userEmail = data.user.email ?? "User";
-    }
-  } catch {
-    // ignore
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw new Error(`Auth error: ${userError.message}`);
+  if (userData?.user) {
+    userId = userData.user.id;
+    userEmail = userData.user.email ?? "User";
   }
 
-  const req: DeletionRequest = {
-    id: `del-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    table_name: tableName,
-    record_id: recordId,
-    record_title: recordTitle,
-    record_summary: recordSummary ?? `${tableName.replace(/_/g, " ")}: ${recordTitle}`,
-    record_data: recordData,
-    reason: reason.trim(),
-    status: "pending",
-    requested_by: userId,
-    requested_by_email: userEmail,
-    requested_at: new Date().toISOString(),
-  };
+  const summary = recordSummary ?? `${tableName.replace(/_/g, " ")}: ${recordTitle}`;
 
-  const current = getLocalDeletionRequests();
-  saveLocalDeletionRequests([req, ...current]);
-
-  try {
-    const { data: dbData } = await supabase
-      .from("deletion_requests")
-      .insert({
-        table_name: tableName,
-        record_id: recordId,
-        record_title: recordTitle,
-        record_summary: req.record_summary,
-        record_data: recordData,
-        reason: req.reason,
-        status: "pending",
-        requested_by: userId,
-        requested_by_email: userEmail,
-      })
-      .select()
-      .single();
-
-    if (dbData?.id) {
-      req.id = dbData.id;
-    }
-  } catch (err) {
-    console.warn("Could not insert deletion request to database:", err);
-  }
-
-  // Also create a notification for MD
-  try {
-    await supabase.from("notifications").insert({
-      type: "delete_request",
-      title: `Deletion Approval Request: ${recordTitle}`,
-      message: `User ${userEmail} requested to delete "${recordTitle}" from ${tableName.replace(/_/g, " ")}. Reason: ${reason}`,
+  const { data: dbData, error: insertError } = await supabase
+    .from("deletion_requests")
+    .insert({
       table_name: tableName,
       record_id: recordId,
-      reason: reason,
-      target_role: "md",
-      created_by: userId,
-      created_by_email: userEmail,
-      is_read: false,
-      details: { requestId: req.id, recordData },
-    });
-  } catch {
-    // ignore
+      record_title: recordTitle,
+      record_summary: summary,
+      record_data: recordData,
+      reason: reason.trim(),
+      status: "pending",
+      requested_by: userId,
+      requested_by_email: userEmail,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to submit deletion request: ${insertError.message}`);
   }
 
-  return req;
+  // Notify the MD
+  const { error: notifError } = await supabase.from("notifications").insert({
+    type: "delete_request",
+    title: `Deletion Approval Request: ${recordTitle}`,
+    message: `User ${userEmail} requested to delete "${recordTitle}" from ${tableName.replace(/_/g, " ")}. Reason: ${reason}`,
+    table_name: tableName,
+    record_id: recordId,
+    reason: reason,
+    target_role: "md",
+    created_by: userId,
+    created_by_email: userEmail,
+    details: { requestId: dbData.id, recordData },
+  });
+
+  if (notifError) {
+    console.error("Failed to send MD notification for deletion request:", notifError.message);
+    // Non-fatal — the request itself was saved
+  }
+
+  return dbData as DeletionRequest;
 }
 
 /**
- * Fetch all pending / historical deletion requests
+ * Fetch all pending / historical deletion requests.
+ * MD can see all; non-MD can see only their own rows (enforced by RLS).
  */
 export async function fetchDeletionRequests(): Promise<DeletionRequest[]> {
-  try {
-    const { data, error } = await supabase
-      .from("deletion_requests")
-      .select("*")
-      .order("requested_at", { ascending: false })
-      .limit(100);
+  const { data, error } = await supabase
+    .from("deletion_requests")
+    .select("*")
+    .order("requested_at", { ascending: false })
+    .limit(200);
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      const local = getLocalDeletionRequests();
-      const existingIds = new Set(data.map((d: any) => d.id));
-      const combined = [...data, ...local.filter((l) => !existingIds.has(l.id))];
-      combined.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime());
-      return combined;
-    }
-  } catch {
-    // ignore
+  if (error) {
+    console.error("Failed to fetch deletion requests:", error.message);
+    return [];
   }
-
-  return getLocalDeletionRequests();
+  return (data ?? []) as DeletionRequest[];
 }
 
 /**
- * MD approves a deletion request.
- * This permanently deletes the underlying record from its table and marks the request as approved.
+ * MD approves a deletion request via server-side RPC.
+ * The function performs the soft delete, updates the request, and notifies the requester.
  */
-export async function approveDeletionRequest(requestId: string): Promise<{ success: boolean; error?: string }> {
-  let userEmail = "MD";
-  let userId: string | null = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-      userEmail = data.user.email ?? "MD";
-    }
-  } catch {
-    // ignore
-  }
-
-  const all = getLocalDeletionRequests();
-  const req = all.find((r) => r.id === requestId);
-
-  if (!req) {
-    // Try fetching from supabase
-    try {
-      const { data } = await supabase.from("deletion_requests").select("*").eq("id", requestId).single();
-      if (data) {
-        return approveDeletionRequestInternal(data, userId, userEmail);
-      }
-    } catch {
-      // ignore
-    }
-    return { success: false, error: "Deletion request not found." };
-  }
-
-  return approveDeletionRequestInternal(req, userId, userEmail);
-}
-
-async function approveDeletionRequestInternal(
-  req: DeletionRequest,
-  userId: string | null,
-  userEmail: string
+export async function approveDeletionRequest(
+  requestId: string,
+  notes?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    // 1. Delete the actual record from domain table
-    const { error: delError } = await supabase
-      .from(req.table_name)
-      .delete()
-      .eq("id", req.record_id);
+  const { error } = await supabase.rpc("approve_deletion_request", {
+    p_request_id: requestId,
+    p_notes: notes ?? null,
+  });
 
-    if (delError) {
-      console.error("Failed to delete record:", delError);
-      return { success: false, error: delError.message };
-    }
-
-    // 2. Update the deletion request status to approved
-    const now = new Date().toISOString();
-    req.status = "approved";
-    req.reviewed_by = userId;
-    req.reviewed_by_email = userEmail;
-    req.reviewed_at = now;
-
-    const current = getLocalDeletionRequests();
-    const updated = current.map((r) => (r.id === req.id ? { ...r, status: "approved" as const, reviewed_at: now } : r));
-    saveLocalDeletionRequests(updated);
-
-    try {
-      await supabase
-        .from("deletion_requests")
-        .update({
-          status: "approved",
-          reviewed_by: userId,
-          reviewed_by_email: userEmail,
-          reviewed_at: now,
-        })
-        .eq("id", req.id);
-    } catch {
-      // ignore
-    }
-
-    // 3. Log audit entry for the permanent deletion
-    try {
-      await supabase.from("audit_logs").insert({
-        table_name: req.table_name,
-        record_id: req.record_id,
-        action: "delete",
-        reason: `MD Approved Deletion: ${req.reason}`,
-        user_role: "md",
-        performed_by: userId,
-        details: { approved_by: userEmail, original_request: req },
-      });
-    } catch {
-      // ignore
-    }
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Unknown error approving deletion" };
+  if (error) {
+    console.error("Failed to approve deletion request:", error.message);
+    return { success: false, error: error.message };
   }
+  return { success: true };
 }
 
 /**
- * MD rejects a deletion request. Data remains unchanged in the database.
+ * MD rejects a deletion request via server-side RPC.
+ * The record remains unchanged. The requester is notified.
  */
 export async function rejectDeletionRequest(
   requestId: string,
-  reviewNotes?: string
+  reviewNotes?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  let userEmail = "MD";
-  let userId: string | null = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-      userEmail = data.user.email ?? "MD";
-    }
-  } catch {
-    // ignore
+  const { error } = await supabase.rpc("reject_deletion_request", {
+    p_request_id: requestId,
+    p_notes: reviewNotes ?? null,
+  });
+
+  if (error) {
+    console.error("Failed to reject deletion request:", error.message);
+    return { success: false, error: error.message };
   }
-
-  const now = new Date().toISOString();
-  const current = getLocalDeletionRequests();
-  const updated = current.map((r) =>
-    r.id === requestId
-      ? {
-          ...r,
-          status: "rejected" as const,
-          reviewed_by: userId,
-          reviewed_by_email: userEmail,
-          reviewed_at: now,
-          review_notes: reviewNotes ?? "Rejected by MD",
-        }
-      : r
-  );
-  saveLocalDeletionRequests(updated);
-
-  try {
-    await supabase
-      .from("deletion_requests")
-      .update({
-        status: "rejected",
-        reviewed_by: userId,
-        reviewed_by_email: userEmail,
-        reviewed_at: now,
-        review_notes: reviewNotes ?? "Rejected by MD",
-      })
-      .eq("id", requestId);
-  } catch {
-    // ignore
-  }
-
   return { success: true };
 }

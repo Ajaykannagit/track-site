@@ -56,6 +56,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
+import { RequirePermission } from "@/components/RequirePermission";
 import { useRows, useSaveRow, sum } from "@/lib/db";
 import { currency, dateFmt } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
@@ -222,7 +223,7 @@ function AttendanceWeeklySheetPage() {
   // Cell Edit Form States
   const [inTimeInput, setInTimeInput] = useState("6");
   const [outTimeInput, setOutTimeInput] = useState("6");
-  const [siteInput, setSiteInput] = useState("Site 637");
+  const [siteInput, setSiteInput] = useState("");
   const [isLeaveInput, setIsLeaveInput] = useState(false);
   const [dayValueInput, setDayValueInput] = useState("1.5");
 
@@ -349,13 +350,13 @@ function AttendanceWeeklySheetPage() {
     if (rec) {
       setInTimeInput(rec.in_time ?? "6");
       setOutTimeInput(rec.out_time ?? "6");
-      setSiteInput(rec.site_name ?? "Site 637");
+      setSiteInput(rec.site_name ?? sites.data?.[0]?.name ?? "Site 637");
       setIsLeaveInput(Boolean(rec.is_leave));
       setDayValueInput(String(rec.day_value ?? 1.0));
     } else {
       setInTimeInput("6");
       setOutTimeInput("6");
-      setSiteInput("Site 637");
+      setSiteInput(sites.data?.[0]?.name ?? "Site 637");
       setIsLeaveInput(false);
       setDayValueInput("1.5");
     }
@@ -680,6 +681,7 @@ function AttendanceWeeklySheetPage() {
   };
 
   return (
+    <RequirePermission permission="canEnterAttendance" label="Attendance">
     <div className="space-y-6">
       {/* Title & Navigation Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1783,5 +1785,6 @@ function AttendanceWeeklySheetPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </RequirePermission>
   );
 }

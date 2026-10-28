@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useRowMarkers, getRowMarkerClass } from "@/hooks/useRowMarkers";
+import { RowMarkerBadge, RowMarkerLegend } from "@/components/RowMarkerBadge";
+import { RequirePermission } from "@/components/RequirePermission";
+import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { BookOpen, HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
@@ -135,6 +138,7 @@ function AccountsPage() {
     order: { col: "expense_date" },
     limit: 500,
   });
+  const expenseMarkers = useRowMarkers("expenses", (expenses.data ?? []).map((e) => e.id));
   const closings = useRows<Closing>("cash_closing", {
     filters: [
       { col: "closing_date", op: "gte", value: from },
@@ -262,7 +266,7 @@ function AccountsPage() {
   const saveTransfer = useSaveRow("account_transfers", "Transfer");
   const deleteTransfer = useDeleteRow("account_transfers", "Transfer");
 
-  const projectName = (id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—";
+  const projectName = useCallback((id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—", [projects.data]);
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const canModify = canWriteFinance || isMD;
@@ -327,10 +331,10 @@ function AccountsPage() {
     description: string;
   };
 
-  const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
-  const contractorName = (id: string | null) => contractors.data?.find((c) => c.id === id)?.name ?? "—";
-  const teamName = (id: string | null) => teams.data?.find((t) => t.id === id)?.name ?? "—";
-  const employeeName = (id: string | null) => employees.data?.find((e) => e.id === id)?.full_name ?? "—";
+  const supplierName = useCallback((id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—", [suppliers.data]);
+  const contractorName = useCallback((id: string | null) => contractors.data?.find((c) => c.id === id)?.name ?? "—", [contractors.data]);
+  const teamName = useCallback((id: string | null) => teams.data?.find((t) => t.id === id)?.name ?? "—", [teams.data]);
+  const employeeName = useCallback((id: string | null) => employees.data?.find((e) => e.id === id)?.full_name ?? "—", [employees.data]);
 
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
@@ -471,6 +475,11 @@ function AccountsPage() {
     contractors.data,
     teams.data,
     employees.data,
+    projectName,
+    supplierName,
+    contractorName,
+    teamName,
+    employeeName,
   ]);
 
   const filteredLedger = useMemo(() => {
@@ -922,6 +931,7 @@ function AccountsPage() {
   const latestBankClosing = closings.data?.find((c) => c.account_type === "bank");
 
   return (
+    <RequirePermission permission="canViewMaterialContractorCosts" label="Accounts & Cash">
     <div>
       <PageHeader
         title="Accounts & Cash"
@@ -1253,6 +1263,7 @@ function AccountsPage() {
             rows={filteredExpenses}
             columns={expenseColumns}
             loading={expenses.isLoading}
+            rowClassName={(r) => getRowMarkerClass(expenseMarkers.data?.[r.id])}
             exportName="brickweld-expenses"
             exportTitle="Expenses Report"
             exportDescription="Construction Project Control System — Expenses Report"
@@ -1701,5 +1712,6 @@ function AccountsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </RequirePermission>
   );
 }

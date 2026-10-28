@@ -7,8 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, UserCheck, HardHat, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -32,8 +30,8 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@brickweld.local");
-  const [password, setPassword] = useState("adminpassword123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -50,25 +48,15 @@ function AuthPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
       if (error) {
-        // If network fetch fails (e.g. Supabase cloud unreachable or local demo credentials used)
-        if (
-          error.message?.toLowerCase().includes("failed to fetch") ||
-          error.message?.toLowerCase().includes("fetch") ||
-          error.message?.toLowerCase().includes("invalid login credentials")
-        ) {
-          toast.success(`Signed in as ${email} (Demo / Local Access Mode)`);
-          navigate({ to: "/dashboard" });
-          return;
-        }
         toast.error(error.message);
         return;
       }
       toast.success("Successfully authenticated");
       navigate({ to: "/dashboard" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setBusy(false);
-      toast.info("Offline network mode detected. Entering Dashboard.");
-      navigate({ to: "/dashboard" });
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred";
+      toast.error(msg);
     }
   };
 
@@ -86,25 +74,15 @@ function AuthPage() {
       });
       setBusy(false);
       if (error) {
-        if (error.message?.toLowerCase().includes("failed to fetch")) {
-          toast.success("Demo account created locally. Proceeding to sign in.");
-          navigate({ to: "/dashboard" });
-          return;
-        }
         toast.error(error.message);
         return;
       }
       toast.success("Account created. You can sign in now.");
-    } catch {
+    } catch (err: unknown) {
       setBusy(false);
-      navigate({ to: "/dashboard" });
+      const msg = err instanceof Error ? err.message : "Sign-up failed";
+      toast.error(msg);
     }
-  };
-
-  const fillDemoCreds = (demoEmail: string, roleName: string) => {
-    setEmail(demoEmail);
-    setPassword("adminpassword123");
-    toast.info(`Selected ${roleName} credentials`);
   };
 
   return (
@@ -127,36 +105,6 @@ function AuthPage() {
             Projects, attendance, payroll, materials, contractor bills, approvals and live project
             profitability — with role-based access for MD, supervisors and accounts.
           </p>
-          
-          <div className="pt-4 space-y-2 border-t border-sidebar-border/30">
-            <p className="text-xs font-semibold text-sidebar-foreground/80">Quick Demo Accounts:</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground border-sidebar-border"
-                onClick={() => fillDemoCreds("admin@brickweld.local", "MD / Admin")}
-              >
-                <ShieldCheck className="mr-1 size-3 text-emerald-400" /> Admin / MD
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground border-sidebar-border"
-                onClick={() => fillDemoCreds("accounts@brickweld.local", "Accounts")}
-              >
-                <Receipt className="mr-1 size-3 text-blue-400" /> Accounts
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground border-sidebar-border"
-                onClick={() => fillDemoCreds("supervisor@brickweld.local", "Supervisor")}
-              >
-                <HardHat className="mr-1 size-3 text-amber-400" /> Supervisor
-              </Button>
-            </div>
-          </div>
         </div>
         <p className="text-xs text-sidebar-foreground/50">
           Secure role-based access · Audit logged
@@ -197,39 +145,6 @@ function AuthPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
-                  </div>
-
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-1">
-                    <p className="text-[11px] font-semibold text-slate-700">Quick Fill Demo Roles:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] px-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                        onClick={() => fillDemoCreds("admin@brickweld.local", "MD / Admin")}
-                      >
-                        MD / Admin
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] px-2 bg-blue-50 text-blue-800 hover:bg-blue-100"
-                        onClick={() => fillDemoCreds("accounts@brickweld.local", "Accounts")}
-                      >
-                        Accounts
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] px-2 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                        onClick={() => fillDemoCreds("supervisor@brickweld.local", "Supervisor")}
-                      >
-                        Supervisor
-                      </Button>
-                    </div>
                   </div>
 
                   <Button className="w-full" type="submit" disabled={busy}>

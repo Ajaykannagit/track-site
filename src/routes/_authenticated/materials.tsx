@@ -1,3 +1,4 @@
+import { RequirePermission } from "@/components/RequirePermission";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { History, ListPlus, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
@@ -587,6 +588,7 @@ function MaterialsPage() {
   ];
 
   return (
+    <RequirePermission permission="canViewMaterialsAndContractors" label="Materials">
     <div>
       <PageHeader
         title="Materials"
@@ -1199,5 +1201,6 @@ function MaterialsPage() {
         onClose={() => setViewingReceipt(null)}
       />
     </div>
+    </RequirePermission>
   );
 }

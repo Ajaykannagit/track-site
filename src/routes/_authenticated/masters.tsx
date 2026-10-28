@@ -95,7 +95,7 @@ const Active = ({ on }: { on: boolean }) => (
 );
 
 function MastersPage() {
-  const { isMD, canWriteSite } = useAuth();
+  const { isMD, canWriteSite, permissions } = useAuth();
 
   // Selected item states for Edit and Delete
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -145,7 +145,7 @@ function MastersPage() {
   const saveMachine = useSaveRow("machines", "Machine");
   const deleteMachine = useDeleteRow("machines", "Machine");
 
-  const canManageMasters = isMD; // Only MD has full authority over core masters
+  const canManageMasters = isMD || permissions.canManageMasters; // Only MD has full authority over core masters
   const canManageMachines = isMD || canWriteSite;
 
   const addButton = (label: string) => (
@@ -511,7 +511,11 @@ function MastersPage() {
               open={!!deletingClient}
               onOpenChange={(v) => !v && setDeletingClient(null)}
               title="Delete client"
-              description={`Are you sure you want to delete client "${deletingClient.name}"? This action cannot be undone.`}
+              tableName="clients"
+              recordId={deletingClient.id}
+              recordTitle={`Client: ${deletingClient.name}`}
+              recordData={deletingClient}
+              description={`Delete client "${deletingClient.name}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteClient.mutateAsync(deletingClient.id);
                 setDeletingClient(null);
@@ -640,7 +644,11 @@ function MastersPage() {
               open={!!deletingEmployee}
               onOpenChange={(v) => !v && setDeletingEmployee(null)}
               title="Delete employee"
-              description={`Are you sure you want to delete employee "${deletingEmployee.full_name}"? This action cannot be undone.`}
+              tableName="employees"
+              recordId={deletingEmployee.id}
+              recordTitle={`Employee: ${deletingEmployee.full_name}`}
+              recordData={deletingEmployee}
+              description={`Delete employee "${deletingEmployee.full_name}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteEmployee.mutateAsync(deletingEmployee.id);
                 setDeletingEmployee(null);
@@ -761,7 +769,11 @@ function MastersPage() {
               open={!!deletingContractor}
               onOpenChange={(v) => !v && setDeletingContractor(null)}
               title="Delete contractor"
-              description={`Are you sure you want to delete contractor "${deletingContractor.name}"? This action cannot be undone.`}
+              tableName="contractors"
+              recordId={deletingContractor.id}
+              recordTitle={`Contractor: ${deletingContractor.name}`}
+              recordData={deletingContractor}
+              description={`Delete contractor "${deletingContractor.name}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteContractor.mutateAsync(deletingContractor.id);
                 setDeletingContractor(null);
@@ -859,7 +871,11 @@ function MastersPage() {
               open={!!deletingSupplier}
               onOpenChange={(v) => !v && setDeletingSupplier(null)}
               title="Delete supplier"
-              description={`Are you sure you want to delete supplier "${deletingSupplier.name}"? This action cannot be undone.`}
+              tableName="suppliers"
+              recordId={deletingSupplier.id}
+              recordTitle={`Supplier: ${deletingSupplier.name}`}
+              recordData={deletingSupplier}
+              description={`Delete supplier "${deletingSupplier.name}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteSupplier.mutateAsync(deletingSupplier.id);
                 setDeletingSupplier(null);
@@ -918,7 +934,11 @@ function MastersPage() {
               open={!!deletingMachine}
               onOpenChange={(v) => !v && setDeletingMachine(null)}
               title="Delete machine"
-              description={`Are you sure you want to delete machine "${deletingMachine.name}"? This action cannot be undone.`}
+              tableName="machines"
+              recordId={deletingMachine.id}
+              recordTitle={`Machine: ${deletingMachine.name}`}
+              recordData={deletingMachine}
+              description={`Delete machine "${deletingMachine.name}"? This action requires MD approval.`}
               onConfirm={async () => {
                 await deleteMachine.mutateAsync(deletingMachine.id);
                 setDeletingMachine(null);

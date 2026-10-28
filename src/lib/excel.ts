@@ -173,17 +173,6 @@ export async function exportToExcel<T>({
       if (res.ok) {
         buffer = await res.arrayBuffer();
       }
-    } else if (!buffer && typeof process !== "undefined" && process.versions?.node) {
-      try {
-        const fs = await import("fs");
-        const path = await import("path");
-        const possiblePath = path.resolve(process.cwd(), "public", "logo.png");
-        if (fs.existsSync(possiblePath)) {
-          buffer = fs.readFileSync(possiblePath);
-        }
-      } catch {
-        // Continue if Node fs is not accessible
-      }
     }
 
     if (buffer) {
@@ -348,7 +337,10 @@ export async function exportToExcel<T>({
               : parseFloat(String(rawVal).replace(/[^0-9.-]+/g, ""));
           rowArr.push(isNaN(num) ? 0 : num);
         } else {
-          rowArr.push(String(rawVal));
+          // Prevent spreadsheet formula injection: prefix dangerous text values with a single quote
+          let textVal = String(rawVal);
+          if (/^[=+\-@]/.test(textVal)) textVal = `'${textVal}`;
+          rowArr.push(textVal);
         }
       });
       tableDataRows.push(rowArr);

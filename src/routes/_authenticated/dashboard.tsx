@@ -837,7 +837,7 @@ function Dashboard() {
       {/* ========================================================================= */}
       {/* DIALOG 2: Contract Value & Financial Breakdown Drawer (MD Only) */}
       {/* ========================================================================= */}
-      {permissions.canViewCompanyFinancials && (
+      {permissions.canViewProfitAndLoss && (
         <Dialog open={contractValueDialogOpen} onOpenChange={setContractValueDialogOpen}>
           <DialogContent className="w-full max-h-[90vh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>

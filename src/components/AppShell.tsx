@@ -42,7 +42,8 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const allowedNav = NAV.filter((item) => {
     if (item.to === "/dashboard" || item.to === "/projects") return permissions.canViewProjects;
     if (item.to === "/attendance") return permissions.canEnterAttendance || permissions.canViewWagesAndPayments;
-    if (item.to === "/accounts" || item.to === "/reports") return permissions.canViewMaterialContractorCosts;
+    if (item.to === "/accounts") return permissions.canViewMaterialContractorCosts;
+    if (item.to === "/reports") return permissions.canViewProfitAndLoss; // Reports & P&L is MD-only
     if (item.to === "/materials" || item.to === "/contractors" || item.to === "/masters") return permissions.canViewMaterialsAndContractors;
     if (item.to === "/settings") return isMD || permissions.canManageUsers;
     if (item.to === "/audit") return permissions.canViewAuditLog;

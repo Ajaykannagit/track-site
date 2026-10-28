@@ -165,3 +165,38 @@ Ran benchmark week (13.09.2026 to 19.09.2026) directly through `src/lib/wageRule
   - Sathish Team (Kolar): 2,600
   - Krishna team: 23,600
 
+
+
+## 2026-10-26 Updates: Security, Approval Workflow & Business Rules Fixes
+- **Phase 1 Fixes:**
+  - Fixed useCallback missing import in src/routes/_authenticated/accounts.tsx.
+  - Hardened user creation trigger: handle_new_user() now always assigns role 'viewer', ignoring client metadata. First MD provisioned via direct SQL insert in Supabase.
+  - Removed demo credential autocompletion and fake offline login fallbacks in src/routes/auth.tsx.
+  - Moved duplicate rollback file to supabase/rollbacks/.
+  - Revoked direct DELETE privileges on domain tables for uthenticated users, enforcing MD approval workflow.
+  - Expanded soft_delete_record and estore_record whitelist to include clients, employees, contractors, suppliers, machines, projects, work_orders, measurement_books, and account_transfers.
+  - Implemented server-side RPC functions pprove_deletion_request and eject_deletion_request for safe soft-deletion and automated requester notifications. Removed localStorage fallback.
+  - Hardened notifications with per-user 
+otification_reads table; approval/rejection generates user-targeted notifications.
+  - Hardened audit log: read is MD-only, insert enforced to authenticated user.
+
+- **Phase 2 Fixes:**
+  - Enforced MD-only visibility for Profit, Loss, and Margins via canViewProfitAndLoss permission.
+  - Added route guards with reusable <RequirePermission /> component on reports, accounts, audit, settings, contractors, materials, and attendance routes.
+  - Updated can_write_attendance() database function to grant Accounts and Supervisor attendance editing access.
+  - Added database triggers and get_row_markers RPC for row status marking: ORANGE for edited records, RED for records with pending deletion requests.
+  - Automated edit notifications to the MD via database trigger on non-MD row modifications.
+
+- **Phase 3 Fixes:**
+  - Fixed India timezone date calculation bugs in src/lib/format.ts (	oday(), monthStart(), yearsAgo()).
+  - Corrected wage rule edge cases in src/lib/wageRules.ts: 12 treated as 12:00 noon, added explicit AM/PM and 24-hour time support, and added validation warnings.
+  - Implemented automatic pagination up to 20,000 rows in useRows in src/lib/db.ts.
+  - Added overpayment check with confirmation alert on supplier, contractor, and subcontractor payment submissions.
+  - Protected CSV and Excel exports against spreadsheet formula injection and added UTF-8 BOM for Tamil and rupee symbol support.
+
+- **Phase 4 & Quality Assurance:**
+  - Added Vitest unit test suite covering wage rules, timezone helpers, permission matrix, and CSV escaping (17 tests passing).
+  - TypeScript check (
+px tsc --noEmit) passes with zero errors.
+  - Production build (
+pm run build) builds cleanly with zero errors.
