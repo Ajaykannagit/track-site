@@ -8,6 +8,12 @@ export interface RolePermissions {
   canManageUsers: boolean;           // User and role management in settings (MD only)
   canViewAuditLog: boolean;          // MD-only: audit trail and deleted-items restore
 
+  // P&L — MD-only. Accounts keeps access to payments, bills, supplier/contractor costs and
+  // client receipts (they need them for their job), but NO profit, loss or margin figure and
+  // NO P&L page anywhere. Change the single value below if the MD wants accounts to also
+  // lose cost totals.
+  canViewProfitAndLoss: boolean;     // MD only: Profit/Loss/Margin figures and Reports page
+
   // Projects & Master Records
   canViewProjects: boolean;
   canViewProjectFinancials: boolean; // Contract value, quotation amount, project costs on project screens
@@ -38,6 +44,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewOfficeExpense: true,
     canManageUsers: true,
     canViewAuditLog: true,
+    canViewProfitAndLoss: true,
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
@@ -55,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewOfficeExpense: true,      // Accountant can view and enter office expenses
     canManageUsers: false,           // Strictly MD-only: cannot assign roles or supervisors
     canViewAuditLog: false,
+    canViewProfitAndLoss: false,     // ← Accounts CANNOT see profit, loss or margin
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,
@@ -72,6 +80,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewAuditLog: false,
+    canViewProfitAndLoss: false,
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
@@ -89,6 +98,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewAuditLog: false,
+    canViewProfitAndLoss: false,
     canViewProjects: true,
     canViewProjectFinancials: false,
     canManageQuotations: false,
@@ -115,6 +125,7 @@ export function getEffectivePermissions(roles: AppRole[]): RolePermissions {
     canViewOfficeExpense: false,
     canManageUsers: false,
     canViewAuditLog: false,
+    canViewProfitAndLoss: false,
     canViewProjects: false,
     canViewProjectFinancials: false,
     canManageQuotations: false,

@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { dateFmt } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import {
-  fetchMdNotifications,
+  fetchNotificationsForCurrentUser,
   markAllNotificationsAsRead,
   markNotificationAsRead,
   type NotificationItem,
@@ -39,41 +39,50 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 export function NotificationCenter() {
-  const { isMD, user } = useAuth();
+  const { isMD } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [deletions, setDeletions] = useState<DeletionRequest[]>([]);
-  const [loading, setLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
-      const [notifs, dels] = await Promise.all([
-        fetchMdNotifications(),
-        fetchDeletionRequests(),
-      ]);
+      const notifs = await fetchNotificationsForCurrentUser();
       setNotifications(notifs);
-      setDeletions(dels);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("NotificationCenter: failed to load notifications", err);
+    }
+    if (isMD) {
+      try {
+        const dels = await fetchDeletionRequests();
+        setDeletions(dels);
+      } catch (err) {
+        console.error("NotificationCenter: failed to load deletion requests", err);
+      }
     }
   };
 
   useEffect(() => {
     loadData();
-    const timer = setInterval(loadData, 10000);
+    const timer = setInterval(loadData, 10_000);
     return () => clearInterval(timer);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMD]);
 
   const unreadNotifs = notifications.filter((n) => !n.is_read).length;
   const pendingDeletions = deletions.filter((d) => d.status === "pending").length;
-  const totalBadge = unreadNotifs + pendingDeletions;
+  const totalBadge = unreadNotifs + (isMD ? pendingDeletions : 0);
 
   const handleMarkAllRead = async () => {
-    await markAllNotificationsAsRead();
-    await loadData();
-    toast.success("All notifications marked as read");
+    try {
+      await markAllNotificationsAsRead();
+      await loadData();
+      toast.success("All notifications marked as read");
+    } catch (err) {
+      console.error("markAllRead error:", err);
+      toast.error("Failed to mark notifications as read");
+    }
   };
 
   const handleApproveDelete = async (req: DeletionRequest) => {
@@ -81,7 +90,7 @@ export function NotificationCenter() {
       setActionBusy(req.id);
       const res = await approveDeletionRequest(req.id);
       if (res.success) {
-        toast.success(`Deletion approved: "${req.record_title}" deleted permanently.`);
+        toast.success(`Deletion approved: "${req.record_title}" soft-deleted.`);
         qc.invalidateQueries({ queryKey: [req.table_name] });
         await loadData();
       } else {
@@ -130,7 +139,7 @@ export function NotificationCenter() {
           <div className="flex items-center justify-between pr-6">
             <SheetTitle className="text-base flex items-center gap-2 font-display">
               <Bell className="size-4 text-primary" />
-              {isMD ? "MD Review & Notification Center" : "Activity Notifications"}
+              {isMD ? "MD Review & Notification Center" : "My Notifications"}
             </SheetTitle>
             {unreadNotifs > 0 && (
               <Button
@@ -146,54 +155,60 @@ export function NotificationCenter() {
           <SheetDescription className="text-xs">
             {isMD
               ? "Review live field-level edits and approve or reject deletion requests."
-              : "Recent updates and notifications across site records."}
+              : "Your recent notifications and activity updates."}
           </SheetDescription>
         </SheetHeader>
 
         <Tabs defaultValue={pendingDeletions > 0 && isMD ? "deletions" : "edits"} className="flex-1 flex flex-col">
           <div className="px-4 pt-2 border-b bg-muted/30">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className={`grid w-full ${isMD ? "grid-cols-2" : "grid-cols-1"}`}>
               <TabsTrigger value="edits" className="text-xs relative">
-                Edit Alerts
+                {isMD ? "Edit Alerts" : "Notifications"}
                 {unreadNotifs > 0 && (
                   <Badge variant="destructive" className="ml-1.5 px-1 py-0 text-[10px] h-4">
                     {unreadNotifs}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="deletions" className="text-xs relative">
-                Delete Requests
-                {pendingDeletions > 0 && (
-                  <Badge variant="default" className="ml-1.5 px-1 py-0 text-[10px] h-4 bg-amber-600">
-                    {pendingDeletions}
-                  </Badge>
-                )}
-              </TabsTrigger>
+              {isMD && (
+                <TabsTrigger value="deletions" className="text-xs relative">
+                  Delete Requests
+                  {pendingDeletions > 0 && (
+                    <Badge variant="default" className="ml-1.5 px-1 py-0 text-[10px] h-4 bg-amber-600">
+                      {pendingDeletions}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
-          {/* ================= EDIT NOTIFICATIONS TAB ================= */}
+          {/* ================= NOTIFICATIONS TAB ================= */}
           <TabsContent value="edits" className="flex-1 overflow-y-auto p-4 space-y-3 m-0">
             {notifications.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 <History className="mx-auto size-8 mb-2 opacity-40" />
-                No edit notifications yet.
+                No notifications yet.
               </div>
             ) : (
               notifications.map((notif) => (
                 <div
                   key={notif.id}
-                  className={`rounded-lg border p-3 text-xs transition-colors ${
-                    notif.is_read ? "bg-card border-border/60" : "bg-red-500/5 border-red-300 dark:border-red-900/60"
+                  className={`rounded-lg border p-3 text-xs transition-colors cursor-pointer ${
+                    notif.is_read ? "bg-card border-border/60" : "bg-blue-500/5 border-blue-300 dark:border-blue-900/60"
                   }`}
                   onClick={() => {
-                    if (!notif.is_read) markNotificationAsRead(notif.id);
+                    if (!notif.is_read) {
+                      markNotificationAsRead(notif.id).then(loadData).catch((err) =>
+                        console.error("markRead error:", err)
+                      );
+                    }
                   }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 font-semibold text-foreground">
                       {!notif.is_read && (
-                        <span className="size-2 rounded-full bg-red-500 shrink-0" />
+                        <span className="size-2 rounded-full bg-blue-500 shrink-0" />
                       )}
                       <span>{notif.title}</span>
                     </div>
@@ -219,6 +234,10 @@ export function NotificationCenter() {
                     </div>
                   )}
 
+                  {notif.message && !notif.field_name && (
+                    <p className="text-[11px] text-muted-foreground mt-1">{notif.message}</p>
+                  )}
+
                   {notif.reason && (
                     <p className="text-[11px] text-muted-foreground">
                       <strong className="text-foreground">Reason:</strong> {notif.reason}
@@ -234,63 +253,63 @@ export function NotificationCenter() {
             )}
           </TabsContent>
 
-          {/* ================= DELETION APPROVALS TAB ================= */}
-          <TabsContent value="deletions" className="flex-1 overflow-y-auto p-4 space-y-3 m-0">
-            {deletions.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                <Trash2 className="mx-auto size-8 mb-2 opacity-40" />
-                No deletion requests recorded.
-              </div>
-            ) : (
-              deletions.map((req) => {
-                const isPending = req.status === "pending";
-                return (
-                  <div
-                    key={req.id}
-                    className={`rounded-lg border p-3.5 text-xs ${
-                      isPending
-                        ? "bg-amber-500/5 border-amber-300 dark:border-amber-900/60 shadow-sm"
-                        : req.status === "approved"
-                        ? "bg-muted/40 border-border opacity-70"
-                        : "bg-red-500/5 border-red-200 opacity-70"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div>
-                        <Badge
-                          variant={isPending ? "default" : req.status === "approved" ? "secondary" : "destructive"}
-                          className={`text-[10px] uppercase font-bold mb-1 ${
-                            isPending ? "bg-amber-600 hover:bg-amber-700" : ""
-                          }`}
-                        >
-                          {req.status === "pending" ? "Pending MD Approval" : req.status}
-                        </Badge>
-                        <h4 className="font-semibold text-foreground text-sm">{req.record_title}</h4>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        {dateFmt(req.requested_at)}
-                      </span>
-                    </div>
-
-                    <div className="bg-muted/60 rounded p-2 my-2 space-y-1 text-[11px]">
-                      <div>
-                        <span className="text-muted-foreground">Module:</span>{" "}
-                        <span className="font-medium text-foreground capitalize">
-                          {req.table_name.replace(/_/g, " ")}
+          {/* ================= DELETION APPROVALS TAB (MD only) ================= */}
+          {isMD && (
+            <TabsContent value="deletions" className="flex-1 overflow-y-auto p-4 space-y-3 m-0">
+              {deletions.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  <Trash2 className="mx-auto size-8 mb-2 opacity-40" />
+                  No deletion requests recorded.
+                </div>
+              ) : (
+                deletions.map((req) => {
+                  const isPending = req.status === "pending";
+                  return (
+                    <div
+                      key={req.id}
+                      className={`rounded-lg border p-3.5 text-xs ${
+                        isPending
+                          ? "bg-amber-500/5 border-amber-300 dark:border-amber-900/60 shadow-sm"
+                          : req.status === "approved"
+                          ? "bg-muted/40 border-border opacity-70"
+                          : "bg-red-500/5 border-red-200 opacity-70"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div>
+                          <Badge
+                            variant={isPending ? "default" : req.status === "approved" ? "secondary" : "destructive"}
+                            className={`text-[10px] uppercase font-bold mb-1 ${
+                              isPending ? "bg-amber-600 hover:bg-amber-700" : ""
+                            }`}
+                          >
+                            {req.status === "pending" ? "Pending MD Approval" : req.status}
+                          </Badge>
+                          <h4 className="font-semibold text-foreground text-sm">{req.record_title}</h4>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {dateFmt(req.requested_at)}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Requested by:</span>{" "}
-                        <span className="font-medium text-foreground">{req.requested_by_email || "User"}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Reason for deletion:</span>{" "}
-                        <span className="font-semibold text-destructive">{req.reason}</span>
-                      </div>
-                    </div>
 
-                    {isPending ? (
-                      isMD ? (
+                      <div className="bg-muted/60 rounded p-2 my-2 space-y-1 text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground">Module:</span>{" "}
+                          <span className="font-medium text-foreground capitalize">
+                            {req.table_name.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Requested by:</span>{" "}
+                          <span className="font-medium text-foreground">{req.requested_by_email || "User"}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Reason for deletion:</span>{" "}
+                          <span className="font-semibold text-destructive">{req.reason}</span>
+                        </div>
+                      </div>
+
+                      {isPending ? (
                         <div className="mt-3 flex items-center justify-end gap-2 border-t pt-2">
                           <Button
                             variant="outline"
@@ -312,21 +331,17 @@ export function NotificationCenter() {
                           </Button>
                         </div>
                       ) : (
-                        <p className="text-[11px] text-amber-700 dark:text-amber-400 italic">
-                          Awaiting MD review. Record remains safe until approved.
-                        </p>
-                      )
-                    ) : (
-                      <div className="text-[10px] text-muted-foreground border-t pt-1.5 flex justify-between">
-                        <span>Reviewed by: {req.reviewed_by_email || "MD"}</span>
-                        <span>{req.reviewed_at ? dateFmt(req.reviewed_at) : ""}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </TabsContent>
+                        <div className="text-[10px] text-muted-foreground border-t pt-1.5 flex justify-between">
+                          <span>Reviewed by: {req.reviewed_by_email || "MD"}</span>
+                          <span>{req.reviewed_at ? dateFmt(req.reviewed_at) : ""}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       </SheetContent>
     </Sheet>

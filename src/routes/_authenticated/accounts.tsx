@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useRowMarkers, getRowMarkerClass } from "@/hooks/useRowMarkers";
+import { RowMarkerBadge, RowMarkerLegend } from "@/components/RowMarkerBadge";
+import { RequirePermission } from "@/components/RequirePermission";
+import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { BookOpen, HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
@@ -135,6 +138,7 @@ function AccountsPage() {
     order: { col: "expense_date" },
     limit: 500,
   });
+  const expenseMarkers = useRowMarkers("expenses", (expenses.data ?? []).map((e) => e.id));
   const closings = useRows<Closing>("cash_closing", {
     filters: [
       { col: "closing_date", op: "gte", value: from },
@@ -927,6 +931,7 @@ function AccountsPage() {
   const latestBankClosing = closings.data?.find((c) => c.account_type === "bank");
 
   return (
+    <RequirePermission permission="canViewMaterialContractorCosts" label="Accounts & Cash">
     <div>
       <PageHeader
         title="Accounts & Cash"
@@ -1258,6 +1263,7 @@ function AccountsPage() {
             rows={filteredExpenses}
             columns={expenseColumns}
             loading={expenses.isLoading}
+            rowClassName={(r) => getRowMarkerClass(expenseMarkers.data?.[r.id])}
             exportName="brickweld-expenses"
             exportTitle="Expenses Report"
             exportDescription="Construction Project Control System — Expenses Report"
@@ -1706,5 +1712,6 @@ function AccountsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </RequirePermission>
   );
 }

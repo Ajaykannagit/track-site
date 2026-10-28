@@ -337,7 +337,10 @@ export async function exportToExcel<T>({
               : parseFloat(String(rawVal).replace(/[^0-9.-]+/g, ""));
           rowArr.push(isNaN(num) ? 0 : num);
         } else {
-          rowArr.push(String(rawVal));
+          // Prevent spreadsheet formula injection: prefix dangerous text values with a single quote
+          let textVal = String(rawVal);
+          if (/^[=+\-@]/.test(textVal)) textVal = `'${textVal}`;
+          rowArr.push(textVal);
         }
       });
       tableDataRows.push(rowArr);

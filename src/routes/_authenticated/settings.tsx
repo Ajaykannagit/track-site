@@ -1,6 +1,9 @@
+import { RequirePermission } from "@/components/RequirePermission";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -10,8 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, ROLE_LABEL, type AppRole } from "@/lib/auth";
-import { useRows, useSaveRow, useDeleteRow } from "@/lib/db";
+import { useRows, useSaveRow } from "@/lib/db";
 import { dateTimeFmt } from "@/lib/format";
+import { supabase as typedSupabase } from "@/integrations/supabase/client";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const supabase = typedSupabase as any;
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -46,7 +53,20 @@ function SettingsPage() {
   const settings = useRows<Setting>("app_settings", { order: { col: "key", asc: true } });
 
   const saveRole = useSaveRow("user_roles", "Role");
-  const deleteRole = useDeleteRow("user_roles", "Role");
+  // user_roles has no soft-delete column; MD deletes role rows directly via plain DELETE.
+  // MD-only RLS on user_roles already enforces that only the MD can do this.
+  const qc = useQueryClient();
+  const deleteRole = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("user_roles").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user_roles"] });
+      toast.success("Role removed");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to remove role"),
+  });
   const saveSetting = useSaveRow("app_settings", "Setting");
 
   const [editing, setEditing] = useState<Setting | null>(null);

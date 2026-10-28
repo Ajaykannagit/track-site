@@ -6,7 +6,8 @@ import { supabase as typedSupabase } from "@/integrations/supabase/client";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase = typedSupabase as any;
 
-type Filter = { col: string; op: "eq" | "gte" | "lte" | "in"; value: unknown };
+type FilterOp = "eq" | "gte" | "lte" | "in";
+type Filter = { col: string; op: FilterOp; value: unknown };
 
 export type ListOptions = {
   select?: string;
@@ -16,30 +17,62 @@ export type ListOptions = {
   enabled?: boolean;
 };
 
-/** Generic list query against any table via the Data API (RLS applies). */
+const PAGE_SIZE = 1000;
+const MAX_ROWS = 20_000;
+
+/** Generic list query against any table via the Data API (RLS applies).
+ *  Automatically pages through all rows (up to MAX_ROWS) unless `limit` is set. */
 export function useRows<T = Record<string, unknown>>(table: string, opts: ListOptions = {}) {
   const { select = "*", filters = [], order, limit, enabled = true } = opts;
   return useQuery({
     queryKey: [table, select, filters, order, limit],
     enabled,
     queryFn: async () => {
-      let q = supabase.from(table).select(select);
-      for (const f of filters) {
-        if (f.value === undefined || f.value === null || f.value === "") continue;
-        q = q[f.op](f.col, f.value);
+      // If a hard limit is requested, do a single fetch with that limit
+      if (limit) {
+        let q = supabase.from(table).select(select);
+        for (const f of filters) {
+          if (f.value === undefined || f.value === null || f.value === "") continue;
+          q = q[f.op](f.col, f.value);
+        }
+        if (order) q = q.order(order.col, { ascending: order.asc ?? false });
+        q = q.limit(limit);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []) as T[];
       }
-      if (order) q = q.order(order.col, { ascending: order.asc ?? false });
-      if (limit) q = q.limit(limit);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as T[];
+
+      // Otherwise page through all rows
+      const allRows: T[] = [];
+      let offset = 0;
+      while (true) {
+        let q = supabase.from(table).select(select);
+        for (const f of filters) {
+          if (f.value === undefined || f.value === null || f.value === "") continue;
+          q = q[f.op](f.col, f.value);
+        }
+        if (order) q = q.order(order.col, { ascending: order.asc ?? false });
+        q = q.range(offset, offset + PAGE_SIZE - 1);
+        const { data, error } = await q;
+        if (error) throw error;
+        const page = (data ?? []) as T[];
+        allRows.push(...page);
+        if (page.length < PAGE_SIZE) break; // last page
+        offset += PAGE_SIZE;
+        if (allRows.length >= MAX_ROWS) {
+          console.warn(
+            `[useRows] Table "${table}" has ≥${MAX_ROWS} rows. Stopped paging. Some rows may be missing.`,
+          );
+          break;
+        }
+      }
+      return allRows;
     },
   });
 }
 
 export function formatDbError(e: unknown, defaultAction = "modify"): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const err = e as any;
+  const err = e as { message?: string; code?: string };
   const msg = err?.message || String(e || "");
   const code = err?.code;
   if (

@@ -1,3 +1,4 @@
+import { RequirePermission } from "@/components/RequirePermission";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
@@ -613,6 +614,7 @@ function ContractorsPage() {
   const paid = sum(filteredPayments, (r) => r.amount);
 
   return (
+    <RequirePermission permission="canViewMaterialsAndContractors" label="Contractors">
     <div>
       <PageHeader
         title="Contractors"
@@ -1561,5 +1563,6 @@ function ContractorsPage() {
         )}
       </Tabs>
     </div>
+    </RequirePermission>
   );
 }

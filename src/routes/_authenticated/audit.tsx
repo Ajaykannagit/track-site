@@ -1,3 +1,4 @@
+import { RequirePermission } from "@/components/RequirePermission";
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Shield, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
@@ -210,6 +211,7 @@ function AuditPageInner() {
   }, [logs.data]);
 
   return (
+    <RequirePermission permission="canViewAuditLog" label="Audit Log">
     <div>
       <PageHeader
         title="Audit Log"
@@ -405,6 +407,7 @@ function AuditPageInner() {
         </TabsContent>
       </Tabs>
     </div>
+    </RequirePermission>
   );
 }
 
