@@ -62,7 +62,7 @@ function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
-  const projects = useRows<Project>("projects_view", { order: { col: "created_at" } });
+  const projects = useRows<Project>("projects_view", { order: { col: "created_at", asc: false } });
   const clients = useRows<{ id: string; name: string }>("clients", { select: "id,name" });
   const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
     select: "project_id,amount",
@@ -176,7 +176,7 @@ function ProjectsPage() {
               <Eye className="size-3.5" />
             </Link>
           </Button>
-          {isMD && (
+          {(isMD || permissions.canManageQuotations) && (
             <>
               <Button
                 variant="ghost"

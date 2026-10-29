@@ -113,6 +113,7 @@ export function useSaveRow(table: string, label = "Record") {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
+      qc.invalidateQueries({ queryKey: [`${table}_view`] });
       toast.success(`${label} saved`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "save")),
@@ -132,6 +133,7 @@ export function useDeleteRow(table: string, label = "Record") {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
+      qc.invalidateQueries({ queryKey: [`${table}_view`] });
       toast.success(`${label} deleted successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "delete")),
@@ -151,6 +153,7 @@ export function useRestoreRow(table: string, label = "Record") {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
+      qc.invalidateQueries({ queryKey: [`${table}_view`] });
       toast.success(`${label} restored successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "restore")),
