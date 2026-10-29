@@ -256,11 +256,21 @@ BEGIN
       tbl, tbl
     );
 
-    -- Create UPDATE policy (respecting soft-deletion)
-    EXECUTE format(
-      'CREATE POLICY "%s update policy" ON public.%I FOR UPDATE TO authenticated USING (deleted_at IS NULL AND public.can_manage_masters()) WITH CHECK (deleted_at IS NULL AND public.can_manage_masters())',
-      tbl, tbl
-    );
+    -- Create UPDATE policy (dynamically check if deleted_at exists)
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = tbl AND column_name = 'deleted_at'
+    ) THEN
+      EXECUTE format(
+        'CREATE POLICY "%s update policy" ON public.%I FOR UPDATE TO authenticated USING (deleted_at IS NULL AND public.can_manage_masters()) WITH CHECK (deleted_at IS NULL AND public.can_manage_masters())',
+        tbl, tbl
+      );
+    ELSE
+      EXECUTE format(
+        'CREATE POLICY "%s update policy" ON public.%I FOR UPDATE TO authenticated USING (public.can_manage_masters()) WITH CHECK (public.can_manage_masters())',
+        tbl, tbl
+      );
+    END IF;
   END LOOP;
 END $$;
 
