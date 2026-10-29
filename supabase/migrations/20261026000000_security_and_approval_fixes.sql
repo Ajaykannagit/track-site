@@ -217,6 +217,54 @@ BEGIN
 END $$;
 
 -- -------------------------------------------------------------------------
+
+-- -------------------------------------------------------------------------
+-- PART 4B: Master & Operational Tables INSERT/UPDATE RLS for Accounts Role
+-- -------------------------------------------------------------------------
+-- In initial setup, admin_tables had 'admin write' restricted strictly to MD.
+-- Accounts role is responsible for entering data (clients, projects, contractors,
+-- suppliers, employees, expense categories, project budgets, machines).
+-- Replace MD-only write policy with INSERT & UPDATE for accounts + md.
+
+CREATE OR REPLACE FUNCTION public.can_manage_masters() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.has_role(auth.uid(), 'md') OR public.has_role(auth.uid(), 'accounts');
+$$;
+
+GRANT EXECUTE ON FUNCTION public.can_manage_masters() TO authenticated;
+
+DO $$
+DECLARE
+  tbl text;
+  master_tables text[] := ARRAY[
+    'clients', 'projects', 'employees', 'contractors',
+    'suppliers', 'expense_categories', 'project_budgets',
+    'project_assignments', 'machines'
+  ];
+BEGIN
+  FOREACH tbl IN ARRAY master_tables LOOP
+    -- Drop initial restrictive MD-only write policy if present
+    EXECUTE format('DROP POLICY IF EXISTS "admin write" ON public.%I', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "site write" ON public.%I', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "finance write" ON public.%I', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "%s insert policy" ON public.%I', tbl, tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "%s update policy" ON public.%I', tbl, tbl);
+
+    -- Create INSERT policy
+    EXECUTE format(
+      'CREATE POLICY "%s insert policy" ON public.%I FOR INSERT TO authenticated WITH CHECK (public.can_manage_masters())',
+      tbl, tbl
+    );
+
+    -- Create UPDATE policy (respecting soft-deletion)
+    EXECUTE format(
+      'CREATE POLICY "%s update policy" ON public.%I FOR UPDATE TO authenticated USING (deleted_at IS NULL AND public.can_manage_masters()) WITH CHECK (deleted_at IS NULL AND public.can_manage_masters())',
+      tbl, tbl
+    );
+  END LOOP;
+END $$;
+
+-- -------------------------------------------------------------------------
 -- PART 5: Deletion Requests & Approval Functions
 -- -------------------------------------------------------------------------
 

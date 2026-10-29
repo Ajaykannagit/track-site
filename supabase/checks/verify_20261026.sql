@@ -63,3 +63,16 @@ SELECT proname, prosecdef
 FROM pg_proc
 WHERE proname = 'get_row_markers';
 -- Expected: prosecdef = true (SECURITY DEFINER).
+
+-- 9. Verify can_manage_masters function and master tables INSERT/UPDATE policies for Accounts & MD:
+SELECT proname, prosrc
+FROM pg_proc
+WHERE proname = 'can_manage_masters';
+-- Expected: prosrc checks 'md' OR 'accounts'.
+
+SELECT tablename, policyname, cmd
+FROM pg_policies
+WHERE tablename IN ('clients', 'projects', 'employees', 'contractors', 'suppliers')
+  AND cmd IN ('INSERT', 'UPDATE')
+ORDER BY tablename, cmd;
+-- Expected: <table_name> insert policy and <table_name> update policy present on all 5 tables.
