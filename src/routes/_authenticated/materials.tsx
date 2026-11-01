@@ -1,3 +1,7 @@
+import { ConfirmVoidDialog } from "@/components/ConfirmVoidDialog";
+import { VoidToggle, VoidBadge } from "@/components/VoidControls";
+import { Ban } from "lucide-react";
+import { useSharedProjectFilter } from "@/hooks/useSharedProjectFilter";
 import { RequirePermission } from "@/components/RequirePermission";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -110,6 +114,8 @@ function MaterialsPage() {
   const [newIndentOpen, setNewIndentOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<Request | null>(null);
+  const [voidingTarget, setVoidingTarget] = useState<{ table: string; id: string; title: string; isVoid: boolean; label: string } | null>(null);
+  const [showVoided, setShowVoided] = useState(false);
 
   const [newPoOpen, setNewPoOpen] = useState(false);
   const [editingPo, setEditingPo] = useState<Po | null>(null);
@@ -122,14 +128,22 @@ function MaterialsPage() {
   const [editingPayment, setEditingPayment] = useState<SupplierPayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SupplierPayment | null>(null);
 
-  // Filters
-  const [reqProjectFilter, setReqProjectFilter] = useState<string>("all");
-  const [poProjectFilter, setPoProjectFilter] = useState<string>("all");
-  const [grnProjectFilter, setGrnProjectFilter] = useState<string>("all");
-  const [payProjectFilter, setPayProjectFilter] = useState<string>("all");
+  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
+  const projectIds = useMemo(() => (projects.data ?? []).map((p) => p.id), [projects.data]);
+  const [sharedProjectFilter, setSharedProjectFilter] = useSharedProjectFilter(projectIds);
+
+  // Filters - unified project filter backed by shared project state
+  const reqProjectFilter = sharedProjectFilter;
+  const setReqProjectFilter = setSharedProjectFilter;
+  const poProjectFilter = sharedProjectFilter;
+  const setPoProjectFilter = setSharedProjectFilter;
+  const grnProjectFilter = sharedProjectFilter;
+  const setGrnProjectFilter = setSharedProjectFilter;
+  const payProjectFilter = sharedProjectFilter;
+  const setPayProjectFilter = setSharedProjectFilter;
   const [paySupplierFilter, setPaySupplierFilter] = useState<string>("all");
 
-  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
+
   const suppliers = useRows<{ id: string; name: string }>("suppliers", { select: "id,name" });
 
   const requests = useRows<Request>("material_requests_view", {
@@ -169,18 +183,20 @@ function MaterialsPage() {
   const canModifySite = canWriteSite || isMD;
   const canModifyFinance = canWriteFinance || isMD;
 
-  // Filtered lists
+  // Filtered lists (excluding voided records unless showVoided is toggled on)
   const filteredRequests = useMemo(() => {
     let list = requests.data ?? [];
+    if (!showVoided) list = list.filter((r) => !(r as any).is_void);
     if (reqProjectFilter !== "all") list = list.filter((r) => r.project_id === reqProjectFilter);
     return list;
-  }, [requests.data, reqProjectFilter]);
+  }, [requests.data, reqProjectFilter, showVoided]);
 
   const filteredPos = useMemo(() => {
     let list = pos.data ?? [];
+    if (!showVoided) list = list.filter((p) => !(p as any).is_void);
     if (poProjectFilter !== "all") list = list.filter((p) => p.project_id === poProjectFilter);
     return list;
-  }, [pos.data, poProjectFilter]);
+  }, [pos.data, poProjectFilter, showVoided]);
 
   const filteredReceipts = useMemo(() => {
     let list = receipts.data ?? [];
@@ -190,14 +206,28 @@ function MaterialsPage() {
 
   const filteredPayments = useMemo(() => {
     let list = payments.data ?? [];
+    if (!showVoided) list = list.filter((p) => !(p as any).is_void);
     if (payProjectFilter !== "all") list = list.filter((p) => p.project_id === payProjectFilter);
     if (paySupplierFilter !== "all") list = list.filter((p) => p.supplier_id === paySupplierFilter);
     return list;
-  }, [payments.data, payProjectFilter, paySupplierFilter]);
+  }, [payments.data, payProjectFilter, paySupplierFilter, showVoided]);
+
+  const voidedRequestsCount = (requests.data ?? []).filter((r) => (r as any).is_void).length;
+  const voidedPosCount = (pos.data ?? []).filter((p) => (p as any).is_void).length;
+  const voidedPaymentsCount = (payments.data ?? []).filter((p) => (p as any).is_void).length;
 
   // Request Columns
   const requestColumns: Column<Request>[] = [
-    { header: "Indent #", cell: (r) => r.request_number, value: (r) => r.request_number },
+    {
+      header: "Indent #",
+      cell: (r) => (
+        <div className="flex items-center gap-1.5 font-mono">
+          <span>{r.request_number}</span>
+          <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
+        </div>
+      ),
+      value: (r) => r.request_number,
+    },
     {
       header: "Project",
       cell: (r) => projectName(r.project_id),
@@ -263,6 +293,23 @@ function MaterialsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided indent (MD)" : "Void indent"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "material_requests",
+                      id: r.id,
+                      title: `Indent ${r.request_number}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Indent",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-7 text-destructive hover:text-destructive"
                   title="Delete indent"
                   onClick={() => setDeletingRequest(r)}
@@ -278,7 +325,16 @@ function MaterialsPage() {
 
   // PO Columns
   const poColumns: Column<Po>[] = [
-    { header: "PO #", cell: (r) => r.po_number, value: (r) => r.po_number },
+    {
+      header: "PO #",
+      cell: (r) => (
+        <div className="flex items-center gap-1.5 font-mono">
+          <span>{r.po_number}</span>
+          <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
+        </div>
+      ),
+      value: (r) => r.po_number,
+    },
     {
       header: "Project",
       cell: (r) => projectName(r.project_id),
@@ -384,6 +440,23 @@ function MaterialsPage() {
                   onClick={() => setEditingPo(r)}
                 >
                   <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided PO (MD)" : "Void PO"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "purchase_orders",
+                      id: r.id,
+                      title: `PO ${r.po_number}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Purchase Order",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -548,6 +621,23 @@ function MaterialsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided payment (MD)" : "Void payment"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "supplier_payments",
+                      id: r.id,
+                      title: `Payment of ${currency(r.amount)}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Supplier Payment",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-7 text-destructive hover:text-destructive"
                   onClick={() => setDeletingPayment(r)}
                 >
@@ -624,8 +714,9 @@ function MaterialsPage() {
             Pending supplier payments
             {(() => {
               const pendingCount = (pos.data ?? []).filter((p) => {
+                if ((p as any).is_void) return false;
                 const paid = (payments.data ?? [])
-                  .filter((pay) => pay.po_id === p.id)
+                  .filter((pay) => pay.po_id === p.id && !(pay as any).is_void)
                   .reduce((sum, pay) => sum + (pay.amount || 0), 0);
                 return p.total_amount - paid > 0;
               }).length;
@@ -649,8 +740,9 @@ function MaterialsPage() {
               </Button>
             )}
 
-            {/* Indent Project Filter */}
+            {/* Indent Project Filter & Void Toggle */}
             <div className="no-print flex items-center gap-2">
+              <VoidToggle showVoided={showVoided} onToggle={setShowVoided} voidCount={voidedRequestsCount} />
               <div>
                 <Select value={reqProjectFilter} onValueChange={setReqProjectFilter}>
                   <SelectTrigger className="w-44 h-8 text-xs">
@@ -740,8 +832,9 @@ function MaterialsPage() {
               </Button>
             )}
 
-            {/* PO Project Filter */}
+            {/* PO Project Filter & Void Toggle */}
             <div className="no-print flex items-center gap-2">
+              <VoidToggle showVoided={showVoided} onToggle={setShowVoided} voidCount={voidedPosCount} />
               <div>
                 <Select value={poProjectFilter} onValueChange={setPoProjectFilter}>
                   <SelectTrigger className="w-44 h-8 text-xs">
@@ -1200,6 +1293,18 @@ function MaterialsPage() {
         receipt={viewingReceipt}
         onClose={() => setViewingReceipt(null)}
       />
+      {/* Void Confirmation Modal */}
+      {voidingTarget && (
+        <ConfirmVoidDialog
+          open={!!voidingTarget}
+          onOpenChange={(v) => !v && setVoidingTarget(null)}
+          tableName={voidingTarget.table}
+          recordId={voidingTarget.id}
+          recordTitle={voidingTarget.title}
+          isAlreadyVoid={voidingTarget.isVoid}
+          label={voidingTarget.label}
+        />
+      )}
     </div>
     </RequirePermission>
   );

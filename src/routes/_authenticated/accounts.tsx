@@ -1,9 +1,14 @@
+import { ConfirmVoidDialog } from "@/components/ConfirmVoidDialog";
+import { VoidToggle, VoidBadge } from "@/components/VoidControls";
+import { Ban } from "lucide-react";
+import { PrintableClientReceipt, type PrintableReceiptData } from "@/components/PrintableClientReceipt";
+import { useSharedProjectFilter } from "@/hooks/useSharedProjectFilter";
 import { useRowMarkers, getRowMarkerClass } from "@/hooks/useRowMarkers";
 import { RowMarkerBadge, RowMarkerLegend } from "@/components/RowMarkerBadge";
 import { RequirePermission } from "@/components/RequirePermission";
 import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { BookOpen, HandCoins, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, HandCoins, Info, Pencil, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -114,18 +119,34 @@ function AccountsPage() {
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [deletingTransfer, setDeletingTransfer] = useState<Transfer | null>(null);
 
-  // Filters
-  const [expenseProjectFilter, setExpenseProjectFilter] = useState<string>("all");
-  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
-  const [closingProjectFilter, setClosingProjectFilter] = useState<string>("all");
-  const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
-  const [transferProjectFilter, setTransferProjectFilter] = useState<string>("all");
-  const [paymentProjectFilter, setPaymentProjectFilter] = useState<string>("all");
-  const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<string>("all");
-  const [ledgerProjectFilter, setLedgerProjectFilter] = useState<string>("all");
-  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
+  const [editingPayment, setEditingPayment] = useState<ClientPayment | null>(null);
+  const [voidingTarget, setVoidingTarget] = useState<{ table: string; id: string; title: string; isVoid: boolean; label: string } | null>(null);
+  const [showVoided, setShowVoided] = useState(false);
+  const [addPaymentOpen, setAddPaymentOpen] = useState(false);
+  const [printingPayment, setPrintingPayment] = useState<PrintableReceiptData | null>(null);
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
+  const projectIds = useMemo(() => (projects.data ?? []).map((p) => p.id), [projects.data]);
+  const [sharedProjectFilter, setSharedProjectFilter] = useSharedProjectFilter(projectIds);
+
+  // Filters - project filter unified and synced across Materials & Accounts
+  const expenseProjectFilter = sharedProjectFilter;
+  const setExpenseProjectFilter = setSharedProjectFilter;
+  const closingProjectFilter = sharedProjectFilter;
+  const setClosingProjectFilter = setSharedProjectFilter;
+  const transferProjectFilter = sharedProjectFilter;
+  const setTransferProjectFilter = setSharedProjectFilter;
+  const paymentProjectFilter = sharedProjectFilter;
+  const setPaymentProjectFilter = setSharedProjectFilter;
+  const ledgerProjectFilter = sharedProjectFilter;
+  const setLedgerProjectFilter = setSharedProjectFilter;
+
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
+  const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
+  const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<string>("all");
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
+
+
   const categories = useRows<{ id: string; name: string }>("expense_categories", {
     select: "id,name",
   });
@@ -265,15 +286,17 @@ function AccountsPage() {
 
   const saveTransfer = useSaveRow("account_transfers", "Transfer");
   const deleteTransfer = useDeleteRow("account_transfers", "Transfer");
+  const saveClientPayment = useSaveRow("client_payments", "Client Receipt");
 
   const projectName = useCallback((id: string | null) => projects.data?.find((p) => p.id === id)?.name ?? "—", [projects.data]);
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const canModify = canWriteFinance || isMD;
 
-  // Filtered expenses
+  // Filtered expenses (excludes voided unless showVoided is true)
   const filteredExpenses = useMemo(() => {
     let list = expenses.data ?? [];
+    if (!showVoided) list = list.filter((e) => !(e as any).is_void);
     if (expenseProjectFilter !== "all") {
       list = list.filter((e) => e.project_id === expenseProjectFilter);
     }
@@ -281,11 +304,12 @@ function AccountsPage() {
       list = list.filter((e) => e.category === expenseCategoryFilter);
     }
     return list;
-  }, [expenses.data, expenseProjectFilter, expenseCategoryFilter]);
+  }, [expenses.data, expenseProjectFilter, expenseCategoryFilter, showVoided]);
 
   // Filtered closings
   const filteredClosings = useMemo(() => {
     let list = closings.data ?? [];
+    if (!showVoided) list = list.filter((c) => !(c as any).is_void);
     if (closingProjectFilter !== "all") {
       list = list.filter((c) => c.project_id === closingProjectFilter);
     }
@@ -293,20 +317,22 @@ function AccountsPage() {
       list = list.filter((c) => (c.account_type || "petty_cash") === closingAccountFilter);
     }
     return list;
-  }, [closings.data, closingProjectFilter, closingAccountFilter]);
+  }, [closings.data, closingProjectFilter, closingAccountFilter, showVoided]);
 
   // Filtered transfers
   const filteredTransfers = useMemo(() => {
     let list = transfers.data ?? [];
+    if (!showVoided) list = list.filter((t) => !(t as any).is_void);
     if (transferProjectFilter !== "all") {
       list = list.filter((t) => t.project_id === transferProjectFilter);
     }
     return list;
-  }, [transfers.data, transferProjectFilter]);
+  }, [transfers.data, transferProjectFilter, showVoided]);
 
   // Filtered client payments
   const filteredClientPayments = useMemo(() => {
     let list = clientPayments.data ?? [];
+    if (!showVoided) list = list.filter((p) => !(p as any).is_void);
     if (paymentProjectFilter !== "all") {
       list = list.filter((p) => p.project_id === paymentProjectFilter);
     }
@@ -314,7 +340,12 @@ function AccountsPage() {
       list = list.filter((p) => p.payment_category === paymentCategoryFilter);
     }
     return list;
-  }, [clientPayments.data, paymentProjectFilter, paymentCategoryFilter]);
+  }, [clientPayments.data, paymentProjectFilter, paymentCategoryFilter, showVoided]);
+
+  const voidedExpensesCount = (expenses.data ?? []).filter((e) => (e as any).is_void).length;
+  const voidedPaymentsCount = (clientPayments.data ?? []).filter((p) => (p as any).is_void).length;
+  const voidedTransfersCount = (transfers.data ?? []).filter((t) => (t as any).is_void).length;
+  const voidedClosingsCount = (closings.data ?? []).filter((c) => (c as any).is_void).length;
 
   // ================= UNIFIED LEDGER (R9) =================
   type LedgerTransaction = {
@@ -339,8 +370,9 @@ function AccountsPage() {
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
 
-    // 1. Client Receipts (Inflow)
+    // 1. Client Receipts (Inflow - excludes voided)
     for (const cp of clientPayments.data ?? []) {
+      if ((cp as any).is_void) continue;
       list.push({
         id: `cp-${cp.id}`,
         date: cp.payment_date,
@@ -356,8 +388,9 @@ function AccountsPage() {
       });
     }
 
-    // 2. Supplier Payments (Outflow)
+    // 2. Supplier Payments (Outflow - excludes voided)
     for (const sp of supplierPayments.data ?? []) {
+      if ((sp as any).is_void) continue;
       list.push({
         id: `sp-${sp.id}`,
         date: sp.payment_date,
@@ -567,6 +600,62 @@ function AccountsPage() {
     },
   ];
 
+  // Auto-generate a receipt number
+  const genReceiptNum = () => `RCP-${Date.now().toString().slice(-6)}`;
+
+  const clientPaymentFields: Field[] = [
+    { name: "receipt_number", label: "Receipt Number", type: "text", required: false, placeholder: "Auto-generated (e.g. RCP-123456)" },
+    {
+      name: "project_id",
+      label: "Project *",
+      type: "select",
+      required: true,
+      options: (projects.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+    },
+    { name: "payment_date", label: "Receipt Date *", type: "date", required: true },
+    {
+      name: "payment_method",
+      label: "Payment Mode *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Transfer (NEFT/RTGS/IMPS)" },
+        { value: "upi", label: "UPI" },
+        { value: "cheque", label: "Cheque" },
+        { value: "cash", label: "Cash" },
+        { value: "neft", label: "NEFT" },
+        { value: "rtgs", label: "RTGS" },
+      ],
+    },
+    { name: "reference_number", label: "Reference / Cheque / UTR No.", type: "text", placeholder: "Cheque no., UTR, transaction ID..." },
+    { name: "amount", label: "Amount Received (Rs) *", type: "number", required: true },
+    {
+      name: "payment_category",
+      label: "Payment Category *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "advance", label: "Advance" },
+        { value: "progress", label: "Progress Payment" },
+        { value: "final", label: "Final Settlement" },
+        { value: "reversal", label: "Reversal / Correction" },
+        { value: "other", label: "Other" },
+      ],
+    },
+    {
+      name: "account_type",
+      label: "Credited To *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    { name: "invoice_reference", label: "Invoice / Bill Reference", type: "text", placeholder: "Invoice no. this receipt is against..." },
+    { name: "notes", label: "Remarks", type: "textarea", placeholder: "Any additional notes..." },
+  ];
+
   const paymentColumns: Column<ClientPayment>[] = [
     {
       header: "Receipt #",
@@ -627,6 +716,65 @@ function AccountsPage() {
       value: (r) => r.amount,
       className: "text-right",
     },
+    ...(canModify
+      ? [
+          {
+            header: "",
+            cell: (r: ClientPayment) => (
+              <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-primary hover:text-primary"
+                  onClick={() =>
+                    setPrintingPayment({
+                      receipt_number: r.receipt_number,
+                      payment_date: r.payment_date,
+                      project_name: projectName(r.project_id),
+                      amount: r.amount,
+                      payment_method: r.payment_method,
+                      reference_number: r.reference_number,
+                      payment_category: r.payment_category,
+                      account_type: r.account_type,
+                      invoice_reference: r.invoice_reference,
+                      notes: r.notes,
+                    })
+                  }
+                  title="Print receipt voucher"
+                >
+                  <Printer className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided receipt (MD)" : "Void receipt"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "client_payments",
+                      id: r.id,
+                      title: `Receipt ${r.receipt_number}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Client Receipt",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setEditingPayment(r)}
+                  title="Edit receipt"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              </div>
+            ),
+          } satisfies Column<ClientPayment>,
+        ]
+      : []),
   ];
 
   const expenseColumns: Column<Expense>[] = [
@@ -636,7 +784,16 @@ function AccountsPage() {
       cell: (r) => projectName(r.project_id),
       value: (r) => projectName(r.project_id),
     },
-    { header: "Category", cell: (r) => r.category, value: (r) => r.category },
+    {
+      header: "Category",
+      cell: (r) => (
+        <div className="flex items-center gap-1.5">
+          <span>{r.category}</span>
+          <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
+        </div>
+      ),
+      value: (r) => r.category,
+    },
     {
       header: "Material",
       cell: (r) => r.material_name || "—",
@@ -676,6 +833,23 @@ function AccountsPage() {
                   onClick={() => setEditingExpense(r)}
                 >
                   <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided expense (MD)" : "Void expense"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "expenses",
+                      id: r.id,
+                      title: `${r.category} (${currency(r.amount)})`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Expense",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -757,6 +931,23 @@ function AccountsPage() {
                   onClick={() => setEditingClosing(r)}
                 >
                   <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided closing (MD)" : "Void closing"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "cash_closing",
+                      id: r.id,
+                      title: `Closing ${dateFmt(r.closing_date)}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Cash Closing",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -885,6 +1076,23 @@ function AccountsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  title={(r as any).is_void ? "Restore voided transfer (MD)" : "Void transfer"}
+                  onClick={() =>
+                    setVoidingTarget({
+                      table: "account_transfers",
+                      id: r.id,
+                      title: `Transfer of ${currency(r.amount)}`,
+                      isVoid: Boolean((r as any).is_void),
+                      label: "Account Transfer",
+                    })
+                  }
+                >
+                  <Ban className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-7 text-destructive hover:text-destructive"
                   onClick={() => setDeletingTransfer(r)}
                 >
@@ -925,10 +1133,19 @@ function AccountsPage() {
     { name: "remarks", label: "Remarks", type: "textarea" },
   ];
 
-  const latestPettyClosing = closings.data?.find(
-    (c) => (c.account_type || "petty_cash") === "petty_cash"
+  // Sort filtered closings descending to find the latest within selected date range
+  const closingsDesc = useMemo(() => {
+    return [...(closings.data ?? [])].sort((a, b) => (b.closing_date || "").localeCompare(a.closing_date || ""));
+  }, [closings.data]);
+
+  const latestPettyClosing = useMemo(
+    () => closingsDesc.find((c) => (c.account_type || "petty_cash") === "petty_cash"),
+    [closingsDesc]
   );
-  const latestBankClosing = closings.data?.find((c) => c.account_type === "bank");
+  const latestBankClosing = useMemo(
+    () => closingsDesc.find((c) => c.account_type === "bank"),
+    [closingsDesc]
+  );
 
   return (
     <RequirePermission permission="canViewMaterialContractorCosts" label="Accounts & Cash">
@@ -966,13 +1183,15 @@ function AccountsPage() {
           tone="success"
         />
         <StatCard
-          label="Petty cash balance"
+          label={latestPettyClosing?.closing_date ? `Petty cash (as of ${dateFmt(latestPettyClosing.closing_date)})` : "Petty cash balance"}
           value={currency(latestPettyClosing ? latestPettyClosing.closing_cash : 0)}
+          hint={latestPettyClosing?.closing_date ? `Latest closing in date range` : "No closing in range"}
         />
         <StatCard
-          label="Bank account balance"
+          label={latestBankClosing?.closing_date ? `Bank balance (as of ${dateFmt(latestBankClosing.closing_date)})` : "Bank account balance"}
           value={currency(latestBankClosing ? latestBankClosing.closing_cash : 0)}
           tone="warning"
+          hint={latestBankClosing?.closing_date ? `Latest closing in date range` : "No closing in range"}
         />
       </div>
 
@@ -1133,6 +1352,7 @@ function AccountsPage() {
 
             {/* Expense Filters */}
             <div className="no-print flex flex-wrap items-end gap-2">
+              <VoidToggle showVoided={showVoided} onToggle={setShowVoided} voidCount={voidedExpensesCount} />
               <div>
                 <Select value={expenseProjectFilter} onValueChange={setExpenseProjectFilter}>
                   <SelectTrigger className="w-40 h-8 text-xs">
@@ -1289,7 +1509,14 @@ function AccountsPage() {
               </p>
             </div>
 
+            {canModify && (
+              <Button size="sm" onClick={() => { setAddPaymentOpen(true); }} className="no-print">
+                <Plus className="mr-1.5 size-3.5" /> Add Client Receipt
+              </Button>
+            )}
+
             <div className="no-print flex flex-wrap items-end gap-2">
+              <VoidToggle showVoided={showVoided} onToggle={setShowVoided} voidCount={voidedPaymentsCount} />
               <div>
                 <Select value={paymentProjectFilter} onValueChange={setPaymentProjectFilter}>
                   <SelectTrigger className="w-40 h-8 text-xs">
@@ -1353,6 +1580,124 @@ function AccountsPage() {
               ...(paymentCategoryFilter !== "all" ? { Category: paymentCategoryFilter } : {}),
             }}
           />
+
+          {/* Help note for Accounts data-entry operator */}
+          <div className="no-print rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 flex gap-2">
+            <Info className="size-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+            <div className="text-xs text-blue-800 dark:text-blue-300">
+              <span className="font-semibold">How to enter a Client Receipt:</span>{" "}
+              Click <strong>+ Add Client Receipt</strong>, then fill in: <strong>Project</strong>, <strong>Receipt Date</strong>,
+              <strong>Amount</strong>, <strong>Payment Mode</strong> (Bank / Cheque / UPI / Cash), and the
+              <strong>Reference No.</strong> (UTR / cheque number / transaction ID).
+              The Receipt Number is auto-generated. Click <strong>Save</strong> to record. Use the
+              <Pencil className="inline size-3 mx-0.5" /> button to edit a saved receipt.
+            </div>
+          </div>
+
+          {/* Add Client Receipt dialog */}
+          {addPaymentOpen && (
+            <FormDialog
+              open={addPaymentOpen}
+              onOpenChange={(v) => !v && setAddPaymentOpen(false)}
+              title="Add Client Receipt"
+              fields={clientPaymentFields}
+              submitting={saveClientPayment.isPending}
+              initial={{
+                receipt_number: genReceiptNum(),
+                payment_date: today(),
+                payment_method: "bank",
+                payment_category: "progress",
+                account_type: "bank",
+              }}
+              onSubmit={async (values) => {
+                const recNum = (values["receipt_number"] as string)?.trim() || genReceiptNum();
+                await saveClientPayment.mutateAsync({
+                  values: {
+                    receipt_number: recNum,
+                    project_id: values["project_id"] || null,
+                    payment_date: values["payment_date"],
+                    payment_method: values["payment_method"] || "bank",
+                    reference_number: values["reference_number"] || null,
+                    amount: Number(values["amount"] ?? 0),
+                    payment_category: values["payment_category"] || "progress",
+                    account_type: values["account_type"] || "bank",
+                    invoice_reference: values["invoice_reference"] || null,
+                    notes: values["notes"] || null,
+                    status: "confirmed",
+                  },
+                });
+                setAddPaymentOpen(false);
+              }}
+            />
+          )}
+
+          {/* Edit Client Receipt dialog */}
+          {editingPayment && (
+            <FormDialog
+              open={!!editingPayment}
+              onOpenChange={(v) => !v && setEditingPayment(null)}
+              title="Edit Client Receipt"
+              fields={clientPaymentFields}
+              submitting={saveClientPayment.isPending}
+              initial={{
+                receipt_number: editingPayment.receipt_number,
+                project_id: editingPayment.project_id ?? "",
+                payment_date: editingPayment.payment_date,
+                payment_method: editingPayment.payment_method,
+                reference_number: editingPayment.reference_number ?? "",
+                amount: editingPayment.amount,
+                payment_category: editingPayment.payment_category,
+                account_type: editingPayment.account_type,
+                invoice_reference: editingPayment.invoice_reference ?? "",
+                notes: editingPayment.notes ?? "",
+              }}
+              onSubmit={async (values) => {
+                await logRecordFieldDiffs(
+                  "client_payments",
+                  editingPayment.id,
+                  "accounts",
+                  editingPayment as Record<string, unknown>,
+                  {
+                    receipt_number: values["receipt_number"],
+                    project_id: values["project_id"],
+                    payment_date: values["payment_date"],
+                    payment_method: values["payment_method"],
+                    reference_number: values["reference_number"] || null,
+                    amount: Number(values["amount"] ?? 0),
+                    payment_category: values["payment_category"],
+                    account_type: values["account_type"],
+                    invoice_reference: values["invoice_reference"] || null,
+                    notes: values["notes"] || null,
+                  },
+                  ["receipt_number", "project_id", "payment_date", "payment_method", "reference_number", "amount", "payment_category", "account_type", "invoice_reference", "notes"]
+                );
+                await saveClientPayment.mutateAsync({
+                  id: editingPayment.id,
+                  values: {
+                    receipt_number: (values["receipt_number"] as string)?.trim() || editingPayment.receipt_number,
+                    project_id: values["project_id"] || null,
+                    payment_date: values["payment_date"],
+                    payment_method: values["payment_method"] || "bank",
+                    reference_number: values["reference_number"] || null,
+                    amount: Number(values["amount"] ?? 0),
+                    payment_category: values["payment_category"] || "progress",
+                    account_type: values["account_type"] || "bank",
+                    invoice_reference: values["invoice_reference"] || null,
+                    notes: values["notes"] || null,
+                  },
+                });
+                setEditingPayment(null);
+              }}
+            />
+          )}
+
+          {/* Printable Receipt Voucher Modal */}
+          <PrintableClientReceipt
+            receipt={printingPayment}
+            open={!!printingPayment}
+            onOpenChange={(v) => !v && setPrintingPayment(null)}
+          />
+
         </TabsContent>
 
         {/* ================= CASH CLOSING ================= */}
@@ -1711,6 +2056,18 @@ function AccountsPage() {
           />
         </TabsContent>
       </Tabs>
+      {/* Void Confirmation Modal */}
+      {voidingTarget && (
+        <ConfirmVoidDialog
+          open={!!voidingTarget}
+          onOpenChange={(v) => !v && setVoidingTarget(null)}
+          tableName={voidingTarget.table}
+          recordId={voidingTarget.id}
+          recordTitle={voidingTarget.title}
+          isAlreadyVoid={voidingTarget.isVoid}
+          label={voidingTarget.label}
+        />
+      )}
     </div>
     </RequirePermission>
   );

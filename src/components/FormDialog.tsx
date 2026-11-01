@@ -173,6 +173,7 @@ export function FormDialog({
                     type={f.type ?? "text"}
                     step={f.type === "number" ? "any" : undefined}
                     value={(values[f.name] as string | number) ?? ""}
+                    onFocus={f.type === "number" ? (e) => e.target.select() : undefined}
                     onChange={(e) => set(f.name, e.target.value)}
                     placeholder={f.placeholder}
                     className={hasError ? "border-destructive focus-visible:ring-destructive" : undefined}

@@ -1,3 +1,6 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase as typedSupabase } from "@/integrations/supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -19,6 +22,7 @@ import {
   User,
   Users,
   Wallet,
+  UserCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -32,6 +36,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -226,6 +231,7 @@ function AttendanceWeeklySheetPage() {
   const [siteInput, setSiteInput] = useState("");
   const [isLeaveInput, setIsLeaveInput] = useState(false);
   const [dayValueInput, setDayValueInput] = useState("1.5");
+  const [saveStatus, setSaveStatus] = useState<Record<string, "success" | "error">>({});
 
   // Local state for weekly adjustments (bus/petrol and advance) to support instant edits
   const [adjustmentsOverride, setAdjustmentsOverride] = useState<Record<string, { busPetrol: number; advance: number }>>({});
@@ -408,6 +414,7 @@ function AttendanceWeeklySheetPage() {
     advance: number,
     paymentMethod?: string | null,
     referenceNumber?: string | null,
+    fieldKey?: string,
   ) => {
     const existing = (weeklyAdjustments.data ?? []).find(
       (adj) => adj.employee_id === empId && adj.week_start_date === weekStartISO,
@@ -418,17 +425,144 @@ function AttendanceWeeklySheetPage() {
       [empId]: { busPetrol, advance },
     }));
 
-    await saveAdjustment.mutateAsync({
-      id: existing?.id,
-      values: {
-        employee_id: empId,
-        week_start_date: weekStartISO,
-        bus_petrol: busPetrol,
-        advance_paid: advance,
-        payment_method: paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null)),
-        reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
-      },
-    });
+    try {
+      await saveAdjustment.mutateAsync({
+        id: existing?.id,
+        values: {
+          employee_id: empId,
+          week_start_date: weekStartISO,
+          bus_petrol: busPetrol,
+          advance_paid: advance,
+          payment_method: paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null)),
+          reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
+        },
+      });
+      if (fieldKey) {
+        setSaveStatus((prev) => ({ ...prev, [fieldKey]: "success" }));
+        setTimeout(() => {
+          setSaveStatus((prev) => {
+            const next = { ...prev };
+            delete next[fieldKey];
+            return next;
+          });
+        }, 1500);
+      }
+    } catch (err: any) {
+      if (fieldKey) {
+        setSaveStatus((prev) => ({ ...prev, [fieldKey]: "error" }));
+      }
+      toast.error(`Failed to save adjustment: ${err?.message || "Unknown error"}`);
+    }
+  };
+
+  const qc = useQueryClient();
+  const [markAllOpen, setMarkAllOpen] = useState(false);
+  const [markAllTarget, setMarkAllTarget] = useState<"week" | string>("week"); // "week" or specific ISO date
+  const [markAllOverwrite, setMarkAllOverwrite] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+
+  // Active workers count
+  const activeWorkers = useMemo(() => {
+    return (employees.data ?? []).filter((e) => (e as any).active !== false);
+  }, [employees.data]);
+
+  // Target dates for Mark All Present
+  const targetDatesList = useMemo(() => {
+    if (markAllTarget === "week") {
+      return weekDates.map((d) => formatDateISO(d));
+    }
+    return [markAllTarget];
+  }, [markAllTarget, weekDates]);
+
+  // Calculate how many cells will be filled
+  const markAllStats = useMemo(() => {
+    const attList = attendance.data ?? [];
+    let toFill = 0;
+    for (const emp of activeWorkers) {
+      for (const iso of targetDatesList) {
+        const existing = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
+        if (markAllOverwrite || !existing || existing.day_value === 0 || existing.status === "absent") {
+          toFill++;
+        }
+      }
+    }
+    return { workerCount: activeWorkers.length, totalCells: toFill };
+  }, [activeWorkers, targetDatesList, attendance.data, markAllOverwrite]);
+
+  const handleExecuteMarkAllPresent = async () => {
+    if (activeWorkers.length === 0) {
+      toast.error("No active workers found to mark present.");
+      return;
+    }
+
+    setMarkingAll(true);
+    try {
+      const attList = attendance.data ?? [];
+      const defaultSiteName = sites.data?.[0]?.name ?? "Site 637";
+      const recordsToUpsert: any[] = [];
+
+      for (const emp of activeWorkers) {
+        const dailyWage = Math.round(1.0 * (emp.wage_rate || 0));
+        for (const iso of targetDatesList) {
+          const existing = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
+          if (!markAllOverwrite && existing && existing.day_value && existing.day_value > 0) {
+            continue; // Skip already marked cells unless overwrite is checked
+          }
+
+          recordsToUpsert.push({
+            ...(existing?.id ? { id: existing.id } : {}),
+            employee_id: emp.id,
+            attendance_date: iso,
+            kind: "labour",
+            status: "present",
+            in_time: "08:00",
+            out_time: "17:00",
+            site_name: existing?.site_name || defaultSiteName,
+            is_leave: false,
+            day_value: 1.0,
+            wage_rate: emp.wage_rate || 0,
+            calculated_wage: dailyWage,
+            working_hours: 8,
+            ot_hours: 0,
+          });
+        }
+      }
+
+      if (recordsToUpsert.length === 0) {
+        toast.info("All target cells already have attendance recorded. Tick 'Overwrite existing' to update them.");
+        setMarkAllOpen(false);
+        setMarkingAll(false);
+        return;
+      }
+
+      // Single batched upsert
+      const supabase = typedSupabase as any;
+      const { error } = await supabase.from("attendance").upsert(recordsToUpsert, {
+        onConflict: "employee_id,attendance_date",
+      });
+
+      if (error) {
+        // Fallback: save individually if onConflict composite unique index differs
+        for (const row of recordsToUpsert) {
+          if (row.id) {
+            await supabase.from("attendance").update(row).eq("id", row.id);
+          } else {
+            await supabase.from("attendance").insert(row);
+          }
+        }
+      }
+
+      // Invalidate queries so grid and wage totals refresh immediately
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["attendance_view"] });
+
+      toast.success(`Successfully marked ${recordsToUpsert.length} attendance records as Present (1.0 Day).`);
+      setMarkAllOpen(false);
+    } catch (err: any) {
+      toast.error(`Error marking attendance: ${err?.message || "Failed to mark all present."}`);
+    } finally {
+      setMarkingAll(false);
+    }
   };
 
   // Computed Main Grid Rows
@@ -821,6 +955,21 @@ function AttendanceWeeklySheetPage() {
             </div>
           )}
 
+          {/* Mark All Present (Weekly mode only, for Accounts & MD) */}
+          {viewMode === "weekly" && permissions.canEnterAttendance && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setMarkAllTarget("week");
+                setMarkAllOverwrite(false);
+                setMarkAllOpen(true);
+              }}
+              className="h-9 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-xs"
+            >
+              <UserCheck className="size-3.5" /> Mark All Present
+            </Button>
+          )}
+
           {/* Export & Print */}
           <Button
             variant="outline"
@@ -851,6 +1000,16 @@ function AttendanceWeeklySheetPage() {
       {/* 3A. MAIN ATTENDANCE GRID: WEEKLY VIEW */}
       {/* ========================================================================= */}
       {viewMode === "weekly" ? (
+        <>
+        {/* Attendance help note for data-entry operator */}
+        <div className="no-print rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 flex gap-2">
+          <Info className="size-4 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+          <div className="text-xs text-blue-800 dark:text-blue-300 space-y-0.5">
+            <p><span className="font-semibold">How to enter weekly attendance:</span> Click any cell in the grid to log that worker's attendance for that day.</p>
+            <p>Enter <strong>In-time</strong>, <strong>Out-time</strong>, <strong>Site</strong>, and <strong>Day value</strong> (1.0 = full day, 0.5 = half day, 0 = absent). The wage is auto-calculated.</p>
+            <p>For <strong>Bus/Petrol</strong> and <strong>Advance</strong> deductions, type the amount in the column and press <kbd className="rounded border px-1 font-mono">Tab</kbd> or <kbd className="rounded border px-1 font-mono">Enter</kbd> to save.</p>
+          </div>
+        </div>
         <Card className="overflow-hidden border shadow-xs">
           <div className="overflow-x-auto">
             <Table className="text-xs">
@@ -981,18 +1140,33 @@ function AttendanceWeeklySheetPage() {
                             <span className="hidden print:inline font-mono">
                               {r.busPetrol ? r.busPetrol : "0"}
                             </span>
-                            <Input
-                              type="number"
-                              defaultValue={r.busPetrol || ""}
-                              placeholder="0"
-                              onBlur={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                if (val !== r.busPetrol) {
-                                  void handleSaveAdjustment(r.employee.id, val, r.advance);
-                                }
-                              }}
-                              className="no-print h-7 w-20 text-right text-xs font-mono ml-auto"
-                            />
+                            {(() => {
+                              const key = `${r.employee.id}_bus`;
+                              const status = saveStatus[key];
+                              return (
+                                <div className="relative inline-flex items-center ml-auto">
+                                  <Input
+                                    type="number"
+                                    defaultValue={r.busPetrol || ""}
+                                    placeholder="0"
+                                    onFocus={(e) => e.target.select()}
+                                    onBlur={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      if (val !== r.busPetrol) {
+                                        void handleSaveAdjustment(r.employee.id, val, r.advance, undefined, undefined, key);
+                                      }
+                                    }}
+                                    className={`no-print h-7 w-20 text-right text-xs font-mono transition-all duration-300 ${
+                                      status === "success"
+                                        ? "border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30"
+                                        : status === "error"
+                                        ? "border-destructive ring-2 ring-destructive/30 bg-destructive/10"
+                                        : ""
+                                    }`}
+                                  />
+                                </div>
+                              );
+                            })()}
                           </TableCell>
 
                           {/* Advance (Editable inline on screen, formatted text on print, with Payment Method trigger) */}
@@ -1001,18 +1175,31 @@ function AttendanceWeeklySheetPage() {
                               {r.advance ? r.advance : "0"}
                             </span>
                             <div className="no-print flex items-center justify-end gap-1">
-                              <Input
-                                type="number"
-                                defaultValue={r.advance || ""}
-                                placeholder="0"
-                                onBlur={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  if (val !== r.advance) {
-                                    void handleSaveAdjustment(r.employee.id, r.busPetrol, val);
-                                  }
-                                }}
-                                className="h-7 w-20 text-right text-xs font-mono"
-                              />
+                              {(() => {
+                                const key = `${r.employee.id}_adv`;
+                                const status = saveStatus[key];
+                                return (
+                                  <Input
+                                    type="number"
+                                    defaultValue={r.advance || ""}
+                                    placeholder="0"
+                                    onFocus={(e) => e.target.select()}
+                                    onBlur={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      if (val !== r.advance) {
+                                        void handleSaveAdjustment(r.employee.id, r.busPetrol, val, undefined, undefined, key);
+                                      }
+                                    }}
+                                    className={`h-7 w-20 text-right text-xs font-mono transition-all duration-300 ${
+                                      status === "success"
+                                        ? "border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30"
+                                        : status === "error"
+                                        ? "border-destructive ring-2 ring-destructive/30 bg-destructive/10"
+                                        : ""
+                                    }`}
+                                  />
+                                );
+                              })()}
                               {r.advance > 0 && (
                                 <button
                                   type="button"
@@ -1080,6 +1267,7 @@ function AttendanceWeeklySheetPage() {
             </Table>
           </div>
         </Card>
+        </>
       ) : (
         /* ========================================================================= */
         /* 3B. MAIN ATTENDANCE GRID: MONTHLY VIEW */
@@ -1782,6 +1970,87 @@ function AttendanceWeeklySheetPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Mark All Present Confirmation Dialog */}
+      <Dialog open={markAllOpen} onOpenChange={setMarkAllOpen}>
+        <DialogContent className="max-w-md sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
+              <UserCheck className="size-5 text-emerald-600" /> Mark All Workers Present
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Batch-fill daily attendance (1.0 Day Value, 08:00 to 17:00, 8 hours) for active workers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div>
+              <Label className="text-xs mb-1 block font-semibold">Select Target Period</Label>
+              <Select value={markAllTarget} onValueChange={(v) => setMarkAllTarget(v as any)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Choose period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">Full 7-Day Week ({formatDateDisplay(weekStartDate)} to {formatDateDisplay(weekDates[6] ?? weekStartDate)})</SelectItem>
+                  {weekDates.map((d) => {
+                    const iso = formatDateISO(d);
+                    return (
+                      <SelectItem key={iso} value={iso}>
+                        Single Day: {formatDateDisplay(d)} ({d.toLocaleDateString("en-US", { weekday: "long" })})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+              <div className="flex justify-between font-medium">
+                <span className="text-muted-foreground">Active Workers:</span>
+                <span className="font-bold font-mono">{markAllStats.workerCount} workers</span>
+              </div>
+              <div className="flex justify-between font-medium">
+                <span className="text-muted-foreground">Target Period:</span>
+                <span className="font-bold">{markAllTarget === "week" ? "7 Days" : "1 Day"}</span>
+              </div>
+              <div className="flex justify-between font-medium text-emerald-700 dark:text-emerald-400 border-t pt-1.5 mt-1.5">
+                <span>Cells to be filled / updated:</span>
+                <span className="font-bold font-mono">{markAllStats.totalCells} attendance entries</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20 p-3">
+              <Checkbox
+                id="overwrite-check"
+                checked={markAllOverwrite}
+                onCheckedChange={(c) => setMarkAllOverwrite(Boolean(c))}
+                className="mt-0.5"
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="overwrite-check" className="text-xs font-semibold cursor-pointer text-amber-900 dark:text-amber-200">
+                  Overwrite existing attendance values
+                </Label>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Default is unchecked (skips workers who already have a day value recorded).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setMarkAllOpen(false)} disabled={markingAll}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleExecuteMarkAllPresent}
+              disabled={markingAll || markAllStats.totalCells === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            >
+              {markingAll ? "Filling Attendance..." : `Confirm & Fill (${markAllStats.totalCells} Entries)`}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

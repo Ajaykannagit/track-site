@@ -164,7 +164,7 @@ function Dashboard() {
   const allExpenses = useRows<ExpenseRow>("expenses", {
     select: "id,amount,expense_date,category,material_name,description,project_id,payment_method,receipt_path",
     order: { col: "expense_date", asc: false },
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: permissions.canViewCompanyFinancials || permissions.canViewOfficeExpense,
   });
   const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance_view", {
     select: "calculated_wage,attendance_date",
@@ -315,7 +315,7 @@ function Dashboard() {
   );
 
   // Office Expenses: have no project (project_id is null)
-  const officeExpensesList = (allExpenses.data ?? []).filter((e) => !e.project_id);
+  const officeExpensesList = (allExpenses.data ?? []).filter((e) => !e.project_id && !(e as any).is_void);
   const totalOfficeExpenses = sum(officeExpensesList, (e) => e.amount);
 
   const defaultOfficeCategories = [

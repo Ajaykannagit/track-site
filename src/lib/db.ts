@@ -92,6 +92,18 @@ export function formatDbError(e: unknown, defaultAction = "modify"): string {
   return msg || `Failed to ${defaultAction} record.`;
 }
 
+/**
+ * Map of base table names → view names that should also be invalidated after a save/delete.
+ * Fixes the bug where list queries read from *_view but mutation invalidates only the base table key.
+ */
+const VIEW_ALIASES: Record<string, string[]> = {
+  attendance: ["attendance_view"],
+  material_requests: ["material_requests_view"],
+  material_receipts: ["material_receipts_view"],
+  employees: ["employees_view"],
+  projects: ["projects_view"],
+};
+
 export function useSaveRow(table: string, label = "Record") {
   const qc = useQueryClient();
   return useMutation({
@@ -112,8 +124,14 @@ export function useSaveRow(table: string, label = "Record") {
       return (data as { id: string }).id;
     },
     onSuccess: () => {
+      // Invalidate the base table query key
       qc.invalidateQueries({ queryKey: [table] });
+      // Invalidate the _view variant (legacy pattern used in some places)
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      // Invalidate any view aliases that are used in list queries
+      for (const alias of VIEW_ALIASES[table] ?? []) {
+        qc.invalidateQueries({ queryKey: [alias] });
+      }
       toast.success(`${label} saved`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "save")),
@@ -134,6 +152,9 @@ export function useDeleteRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      for (const alias of VIEW_ALIASES[table] ?? []) {
+        qc.invalidateQueries({ queryKey: [alias] });
+      }
       toast.success(`${label} deleted successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "delete")),
@@ -154,6 +175,9 @@ export function useRestoreRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      for (const alias of VIEW_ALIASES[table] ?? []) {
+        qc.invalidateQueries({ queryKey: [alias] });
+      }
       toast.success(`${label} restored successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "restore")),
@@ -162,3 +186,51 @@ export function useRestoreRow(table: string, label = "Record") {
 
 export const sum = <T>(rows: T[], pick: (r: T) => number | null | undefined) =>
   rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
+
+export function useVoidRow(table: string, label = "Record") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { data, error } = await supabase.rpc("void_record", {
+        p_table_name: table,
+        p_record_id: id,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [table] });
+      qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      for (const alias of VIEW_ALIASES[table] ?? []) {
+        qc.invalidateQueries({ queryKey: [alias] });
+      }
+      toast.success(`${label} marked as Void.`);
+    },
+    onError: (e: Error) => toast.error(formatDbError(e, "void")),
+  });
+}
+
+export function useUnvoidRow(table: string, label = "Record") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { data, error } = await supabase.rpc("unvoid_record", {
+        p_table_name: table,
+        p_record_id: id,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [table] });
+      qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      for (const alias of VIEW_ALIASES[table] ?? []) {
+        qc.invalidateQueries({ queryKey: [alias] });
+      }
+      toast.success(`${label} unvoided successfully.`);
+    },
+    onError: (e: Error) => toast.error(formatDbError(e, "unvoid")),
+  });
+}

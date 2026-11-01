@@ -220,6 +220,10 @@ export function MultiMaterialPoDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requestId) {
+      toast.error("Please create an indent first. A Purchase Order must be linked to a Material Indent.");
+      return;
+    }
     if (!projectId) {
       toast.error("Please select a project.");
       return;
@@ -334,7 +338,7 @@ export function MultiMaterialPoDialog({
               {editingPo ? `Edit Purchase Order — ${editingPo.po_number}` : "Create Purchase Order (PO)"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Issue a purchase order to a supplier. You can import materials from an Indent or enter multiple materials manually.
+              Issue a purchase order to a supplier. Select a Material Indent first — it auto-fills the materials list. A PO cannot be raised without an approved indent.
             </DialogDescription>
           </DialogHeader>
 
@@ -350,13 +354,17 @@ export function MultiMaterialPoDialog({
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">Against Indent (Optional)</Label>
-              <Select value={requestId || "none"} onValueChange={(v) => handleIndentSelected(v === "none" ? "" : v)}>
+              <Label className="text-xs mb-1 block">Material Indent (Required) *</Label>
+              {indentOptions.length === 0 ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                  No approved indents found. Please create a Material Indent first before raising a Purchase Order.
+                </div>
+              ) : (
+              <Select value={requestId} onValueChange={(v) => handleIndentSelected(v)}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Select indent..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None (Direct PO)</SelectItem>
                   {indentOptions.map((i) => (
                     <SelectItem key={i.value} value={i.value}>
                       {i.label}
@@ -364,6 +372,7 @@ export function MultiMaterialPoDialog({
                   ))}
                 </SelectContent>
               </Select>
+              )}
             </div>
             <div>
               <Label className="text-xs mb-1 block">Project *</Label>
@@ -485,7 +494,8 @@ export function MultiMaterialPoDialog({
                           type="number"
                           min={0}
                           step="any"
-                          value={item.quantity || ""}
+                          value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateItem(idx, "quantity", e.target.value)}
                           required
                           className="h-8 text-xs text-right"
@@ -496,7 +506,8 @@ export function MultiMaterialPoDialog({
                           type="number"
                           min={0}
                           step="any"
-                          value={item.rate || ""}
+                          value={item.rate !== undefined && item.rate !== null ? item.rate : ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateItem(idx, "rate", e.target.value)}
                           required
                           className="h-8 text-xs text-right"

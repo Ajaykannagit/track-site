@@ -126,17 +126,12 @@ export function calculateSuggestedDayValue(
   if (!inTime || !outTime) return 0;
 
   const hours = parseHoursBetween(inTime, outTime);
+  if (hours <= 0) return 0;
 
-  if (hours >= WAGE_RULES.hoursForOvertimeDay) {
-    return 1.5;
-  }
-  if (hours >= WAGE_RULES.hoursForFullDay) {
-    return 1.0;
-  }
-  if (hours >= WAGE_RULES.hoursForHalfDay) {
-    return 0.5;
-  }
-  return 0;
+  // Round hours/8 to the nearest 0.25 (e.g. 1.0, 1.25, 1.5, 1.75)
+  const rawDayValue = hours / 8;
+  const rounded = Math.round(rawDayValue * 4) / 4;
+  return rounded;
 }
 
 /**

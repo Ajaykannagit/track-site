@@ -75,6 +75,15 @@ const emptyItem = (): MaterialLineItem => ({
   amount: 0,
 });
 
+function getDefaultRequiredDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function MultiMaterialIndentDialog({
   trigger,
   open: controlledOpen,
@@ -90,7 +99,7 @@ export function MultiMaterialIndentDialog({
   const [requestNumber, setRequestNumber] = useState("");
   const [projectId, setProjectId] = useState("");
   const [requestDate, setRequestDate] = useState(today());
-  const [requiredDate, setRequiredDate] = useState("");
+  const [requiredDate, setRequiredDate] = useState(getDefaultRequiredDate());
   const [status, setStatus] = useState("draft");
   const [remarks, setRemarks] = useState("");
   const [editReason, setEditReason] = useState("");
@@ -147,7 +156,7 @@ export function MultiMaterialIndentDialog({
         setRequestNumber(`MR-${Date.now().toString().slice(-8)}`);
         setProjectId(projectOptions[0]?.value ?? "");
         setRequestDate(today());
-        setRequiredDate("");
+        setRequiredDate(getDefaultRequiredDate());
         setStatus("draft");
         setRemarks("");
         setEditReason("");
@@ -433,7 +442,8 @@ export function MultiMaterialIndentDialog({
                           type="number"
                           min={0}
                           step="any"
-                          value={item.quantity || ""}
+                          value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateItem(idx, "quantity", e.target.value)}
                           required
                           className="h-8 text-xs text-right"
@@ -444,7 +454,8 @@ export function MultiMaterialIndentDialog({
                           type="number"
                           min={0}
                           step="any"
-                          value={item.rate || ""}
+                          value={item.rate !== undefined && item.rate !== null ? item.rate : ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateItem(idx, "rate", e.target.value)}
                           className="h-8 text-xs text-right"
                         />
