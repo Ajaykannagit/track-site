@@ -38,6 +38,14 @@ export const Route = createFileRoute("/_authenticated/masters")({
   component: MastersPage,
 });
 
+type JobType = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
 type Client = {
   id: string;
   name: string;
@@ -98,6 +106,12 @@ function MastersPage() {
   const { isMD, canWriteSite, permissions } = useAuth();
 
   // Selected item states for Edit and Delete
+  const [editingJobType, setEditingJobType] = useState<JobType | null>(null);
+  const [deletingJobType, setDeletingJobType] = useState<JobType | null>(null);
+
+  const jobTypes = useRows<JobType>("job_types", { order: { col: "name" } });
+  const saveJobType = useSaveRow("job_types", "Job type");
+  const deleteJobType = useDeleteRow("job_types", "Job type");
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deletingClient, setDeletingClient] = useState<Client | null>(null);
 
@@ -468,6 +482,7 @@ function MastersPage() {
             <TabsTrigger value="contractors">Contractors</TabsTrigger>
             <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
             <TabsTrigger value="machines">Machines</TabsTrigger>
+            <TabsTrigger value="job_types">Job Types</TabsTrigger>
           </TabsList>
         </div>
 

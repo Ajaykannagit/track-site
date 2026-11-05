@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
 import { RequirePermission } from "@/components/RequirePermission";
+import { TeamManagementDialog } from "@/components/TeamManagementDialog";
 import { useRows, useSaveRow, sum } from "@/lib/db";
 import { currency, dateFmt } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
@@ -270,6 +271,10 @@ function AttendanceWeeklySheetPage() {
 
   const teams = useRows<Team>("teams", {
     order: { col: "name", asc: true },
+  });
+
+  const teamMembers = useRows<any>("team_members", {
+    order: { col: "effective_from", asc: false },
   });
 
   const sites = useRows<Site>("sites", {
@@ -603,7 +608,15 @@ function AttendanceWeeklySheetPage() {
 
       const paymentMethod = existingAdj?.payment_method ?? null;
       const referenceNumber = existingAdj?.reference_number ?? null;
-      const team = (teams.data ?? []).find((t) => t.id === emp.team_id)?.name ?? "Unassigned Team";
+      // Check team membership window for this specific week (Request 3)
+      const empMemberships = (teamMembers.data ?? []).filter((tm: any) => tm.employee_id === emp.id);
+      const activeMembershipForWeek = empMemberships.find((tm: any) => {
+        const startOk = tm.effective_from <= weekEndISO;
+        const endOk = !tm.left_on || tm.left_on >= weekStartISO;
+        return startOk && endOk;
+      });
+      const effectiveTeamId = activeMembershipForWeek ? activeMembershipForWeek.team_id : emp.team_id;
+      const team = (teams.data ?? []).find((t) => t.id === effectiveTeamId)?.name ?? "Unassigned Team";
 
       return {
         sno: idx + 1,
@@ -620,7 +633,7 @@ function AttendanceWeeklySheetPage() {
         wageBalance,
       };
     });
-  }, [employees.data, attendance.data, weeklyAdjustments.data, weekDates, weekStartISO, teams.data, adjustmentsOverride]);
+  }, [employees.data, attendance.data, weeklyAdjustments.data, weekDates, weekStartISO, weekEndISO, teams.data, teamMembers.data, adjustmentsOverride]);
 
   // Grand Totals (Weekly)
   const grandTotalDays = sum(workerRows, (r) => r.totalDays);

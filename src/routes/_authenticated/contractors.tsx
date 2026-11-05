@@ -1,4 +1,7 @@
 import { RequirePermission } from "@/components/RequirePermission";
+import { GroupPaymentDialog } from "@/components/GroupPaymentDialog";
+import { Badge } from "@/components/ui/badge";
+import { Layers } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
@@ -42,6 +45,7 @@ export const Route = createFileRoute("/_authenticated/contractors")({
 
 type Wo = {
   id: string;
+  job_type_id?: string | null;
   work_order_number: string;
   project_id: string;
   contractor_id: string;
@@ -132,6 +136,11 @@ function ContractorsPage() {
   // Common Filters
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [contractorFilter, setContractorFilter] = useState<string>("all");
+  const [jobTypeFilter, setJobTypeFilter] = useState<string>("all");
+
+  const jobTypes = useRows<{ id: string; name: string }>("job_types", { order: { col: "name" } });
+  const groupPayments = useRows<any>("group_payments", { order: { col: "payment_date", asc: false } });
+  const jobTypeName = (id: string | null) => jobTypes.data?.find((j: any) => j.id === id)?.name ?? "—";
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const contractors = useRows<{ id: string; name: string }>("contractors", { select: "id,name" });
@@ -178,6 +187,7 @@ function ContractorsPage() {
     let list = wos.data ?? [];
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
+    if (jobTypeFilter !== "all") list = list.filter((r) => r.job_type_id === jobTypeFilter);
     return list;
   }, [wos.data, projectFilter, contractorFilter]);
 
@@ -205,6 +215,15 @@ function ContractorsPage() {
   // Columns
   const woColumns: Column<Wo>[] = [
     { header: "WO #", cell: (r) => r.work_order_number, value: (r) => r.work_order_number },
+    {
+      header: "Job Type",
+      cell: (r) => (
+        <span className="font-medium text-xs text-primary">
+          {jobTypeName(r.job_type_id ?? null)}
+        </span>
+      ),
+      value: (r) => jobTypeName(r.job_type_id ?? null),
+    },
     {
       header: "Project",
       cell: (r) => projectName(r.project_id),
@@ -485,6 +504,15 @@ function ContractorsPage() {
       required: true,
       options: contractorOptions,
     },
+    {
+      name: "job_type_id",
+      label: "Job Type / Specification",
+      type: "select",
+      options: [
+        { value: "", label: "None / Standard" },
+        ...(jobTypes.data ?? []).map((j) => ({ value: j.id, label: j.name })),
+      ],
+    },
     { name: "wo_date", label: "WO date", type: "date", required: true },
     { name: "contract_amount", label: "Contract amount (₹)", type: "number", required: true },
     { name: "rate", label: "Rate (₹)", type: "number" },
@@ -667,7 +695,24 @@ function ContractorsPage() {
           </Select>
         </div>
 
-        {(projectFilter !== "all" || contractorFilter !== "all") && (
+                <div>
+          <Label className="mb-1.5 block text-xs font-medium">Job Type</Label>
+          <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+            <SelectTrigger className="w-44 h-8 text-xs">
+              <SelectValue placeholder="All Job Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Job Types</SelectItem>
+              {(jobTypes.data ?? []).map((j) => (
+                <SelectItem key={j.id} value={j.id}>
+                  {j.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {(projectFilter !== "all" || contractorFilter !== "all" || jobTypeFilter !== "all") && (
           <Button
             variant="ghost"
             size="sm"
@@ -735,6 +780,7 @@ function ContractorsPage() {
                     start_date: values["start_date"] || null,
                     end_date: values["end_date"] || null,
                     contract_amount: Number(values["contract_amount"] ?? 0),
+                    job_type_id: values["job_type_id"] || null,
                     rate: Number(values["rate"] ?? 0),
                     quantity: Number(values["quantity"] ?? 0),
                   },

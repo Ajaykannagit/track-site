@@ -234,3 +234,90 @@ export function useUnvoidRow(table: string, label = "Record") {
     onError: (e: Error) => toast.error(formatDbError(e, "unvoid")),
   });
 }
+
+
+export type GroupPaymentPayload = {
+  payment_type: "contractor" | "supplier";
+  party_id: string;
+  payment_date: string;
+  total_amount: number;
+  payment_mode: string;
+  reference_number?: string | null;
+  bank_account_id?: string | null;
+  remarks?: string | null;
+  allocations: Array<{
+    project_id: string;
+    work_order_id?: string | null;
+    contractor_bill_id?: string | null;
+    po_id?: string | null;
+    allocated_amount: number;
+    remarks?: string | null;
+  }>;
+};
+
+export function useCreateGroupPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: GroupPaymentPayload) => {
+      const { data, error } = await supabase.rpc("create_group_payment", {
+        p_payment_type: payload.payment_type,
+        p_party_id: payload.party_id,
+        p_payment_date: payload.payment_date,
+        p_total_amount: payload.total_amount,
+        p_payment_mode: payload.payment_mode,
+        p_reference_number: payload.reference_number || null,
+        p_bank_account_id: payload.bank_account_id || null,
+        p_remarks: payload.remarks || null,
+        p_allocations: payload.allocations,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["group_payments"] });
+      qc.invalidateQueries({ queryKey: ["group_payment_allocations"] });
+      qc.invalidateQueries({ queryKey: ["contractor_payments"] });
+      qc.invalidateQueries({ queryKey: ["supplier_payments"] });
+      qc.invalidateQueries({ queryKey: ["work_orders"] });
+      qc.invalidateQueries({ queryKey: ["contractor_bills"] });
+      qc.invalidateQueries({ queryKey: ["purchase_orders"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["cash_closing"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      toast.success(
+        variables.payment_type === "contractor"
+          ? "Contractor group payment recorded successfully."
+          : "Supplier group payment recorded successfully."
+      );
+    },
+    onError: (e: Error) => toast.error(formatDbError(e, "create group payment")),
+  });
+}
+
+export function useVoidGroupPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { data, error } = await supabase.rpc("void_group_payment", {
+        p_group_id: id,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["group_payments"] });
+      qc.invalidateQueries({ queryKey: ["group_payment_allocations"] });
+      qc.invalidateQueries({ queryKey: ["contractor_payments"] });
+      qc.invalidateQueries({ queryKey: ["supplier_payments"] });
+      qc.invalidateQueries({ queryKey: ["work_orders"] });
+      qc.invalidateQueries({ queryKey: ["contractor_bills"] });
+      qc.invalidateQueries({ queryKey: ["purchase_orders"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["cash_closing"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Group payment marked as Void.");
+    },
+    onError: (e: Error) => toast.error(formatDbError(e, "void group payment")),
+  });
+}
