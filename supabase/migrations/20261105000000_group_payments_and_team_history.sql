@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.group_payments (
   total_amount numeric(14,2) NOT NULL CHECK (total_amount > 0),
   payment_mode text NOT NULL DEFAULT 'Bank',
   reference_number text,
-  bank_account_id uuid REFERENCES public.bank_accounts(id) ON DELETE SET NULL,
+  bank_account_id text,
   remarks text,
   is_void boolean NOT NULL DEFAULT false,
   voided_at timestamptz,
@@ -179,13 +179,13 @@ CREATE INDEX IF NOT EXISTS idx_team_members_team ON public.team_members(team_id)
 CREATE INDEX IF NOT EXISTS idx_team_members_emp ON public.team_members(employee_id);
 CREATE INDEX IF NOT EXISTS idx_team_members_dates ON public.team_members(effective_from, left_on);
 
--- Backfill from current employees.team_id (idempotent)
+-- Backfill from current employees.team_id (idempotent, defaults is_active = true)
 INSERT INTO public.team_members (team_id, employee_id, effective_from, is_active)
 SELECT 
   e.team_id, 
   e.id, 
   COALESCE(e.joining_date, '2026-01-01'::date),
-  COALESCE(e.status = 'active', true)
+  true
 FROM public.employees e
 WHERE e.team_id IS NOT NULL
   AND NOT EXISTS (
@@ -209,7 +209,7 @@ CREATE OR REPLACE FUNCTION public.create_group_payment(
   p_total_amount numeric,
   p_payment_mode text,
   p_reference_number text,
-  p_bank_account_id uuid,
+  p_bank_account_id text,
   p_remarks text,
   p_allocations jsonb -- array of { project_id, work_order_id, contractor_bill_id, po_id, allocated_amount, remarks }
 ) RETURNS uuid
@@ -225,7 +225,6 @@ DECLARE
   v_seq integer;
   v_sum_alloc numeric := 0;
   v_alloc record;
-  v_party_name text;
 BEGIN
   -- 1. Authorization: MD or Accounts
   SELECT (public.is_md() OR public.has_role(v_user_id, 'accounts')) INTO v_is_authorized;
@@ -335,7 +334,6 @@ BEGIN
         amount,
         payment_mode,
         reference_number,
-        bank_account_id,
         remarks,
         created_by
       ) VALUES (
@@ -347,7 +345,6 @@ BEGIN
         v_alloc.allocated_amount,
         p_payment_mode,
         COALESCE(p_reference_number, v_payment_number),
-        p_bank_account_id,
         COALESCE(v_alloc.remarks, p_remarks, 'Group payment ' || v_payment_number),
         v_user_id
       );
@@ -361,7 +358,6 @@ BEGIN
         amount,
         payment_mode,
         reference_number,
-        bank_account_id,
         remarks,
         created_by
       ) VALUES (
@@ -373,7 +369,6 @@ BEGIN
         v_alloc.allocated_amount,
         p_payment_mode,
         COALESCE(p_reference_number, v_payment_number),
-        p_bank_account_id,
         COALESCE(v_alloc.remarks, p_remarks, 'Group payment ' || v_payment_number),
         v_user_id
       );
@@ -410,10 +405,10 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.create_group_payment(text, uuid, date, numeric, text, text, uuid, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_group_payment(text, uuid, date, numeric, text, text, text, text, jsonb) TO authenticated;
 
 -- -------------------------------------------------------------------------
--- PART 5: RPC for Voiding / Unvoiding Group Payment (Atomic across all splits)
+-- PART 5: RPC for Voiding Group Payment (Atomic across all splits)
 -- -------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.void_group_payment(
