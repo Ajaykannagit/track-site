@@ -1,10 +1,11 @@
-import { useQueryClient } from "@tanstack/react-query";
+﻿import { useQueryClient } from "@tanstack/react-query";
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Calendar,
+  Banknote,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -64,7 +65,7 @@ import { useAuth } from "@/lib/auth";
 import { RequirePermission } from "@/components/RequirePermission";
 import { TeamManagementDialog } from "@/components/TeamManagementDialog";
 import { useRows, useSaveRow, sum } from "@/lib/db";
-import { currency, dateFmt } from "@/lib/format";
+import { currency, dateFmt, today } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
 import { calculateSuggestedDayValue, calculateWorkerWeeklyWage } from "@/lib/wageRules";
 import { toast } from "sonner";
@@ -139,6 +140,18 @@ type WeeklyAdjustment = {
   payment_method?: string | null;
   reference_number?: string | null;
   remarks?: string | null;
+};
+
+type LabourWagePayment = {
+  id?: string;
+  employee_id: string;
+  week_start_date: string;
+  payment_date: string;
+  amount_paid: number;
+  payment_method: string;
+  reference_number?: string | null;
+  remarks?: string | null;
+  is_void?: boolean;
 };
 
 // Helper to get standard 7 dates of the week starting from given Sunday
@@ -247,6 +260,24 @@ function AttendanceWeeklySheetPage() {
     referenceNumber: string;
   } | null>(null);
 
+  // Pay-wage modal state: open per worker from weekly row
+  const [wagePayModal, setWagePayModal] = useState<{
+    employeeId: string;
+    employeeName: string;
+    weekStart: string;
+    totalWage: number;
+    totalPaid: number;
+    wageBalance: number;
+    paymentDate: string;
+    amount: string;
+    paymentMethod: string;
+    referenceNumber: string;
+    remarks: string;
+  } | null>(null);
+
+  // Monthly view: show week-by-week wage breakdown toggle
+  const [showWeeklyBreakdown, setShowWeeklyBreakdown] = useState(false);
+
   // Query Data (Weekly)
   const weekStartISO = formatDateISO(weekStartDate);
   const weekDates = useMemo(() => getWeekDates(weekStartDate), [weekStartDate]);
@@ -331,6 +362,22 @@ function AttendanceWeeklySheetPage() {
   const saveAttendance = useSaveRow("attendance", "Attendance");
   const saveAdjustment = useSaveRow("weekly_wage_adjustments", "Weekly Adjustment");
   const saveEmployee = useSaveRow("employees", "Worker");
+  const saveWagePayment = useSaveRow("labour_wage_payments", "Wage Payment");
+
+  // Labour wage payments: cumulative paid amounts per employee per week (and cross-week carry)
+  const wagePayments = useRows<LabourWagePayment>("labour_wage_payments", {
+    filters: [
+      { col: "is_void", op: "eq", value: "false" },
+      { col: "week_start_date", op: "gte", value: weekStartISO },
+    ],
+    enabled: permissions.canViewWagesAndPayments,
+  });
+
+  // All-time labour wage payments for cumulative balance (all weeks up to current)
+  const allWagePayments = useRows<LabourWagePayment>("labour_wage_payments", {
+    filters: [{ col: "is_void", op: "eq", value: "false" }],
+    enabled: permissions.canViewWagesAndPayments,
+  });
 
   // Navigation handlers
   const handlePrevWeek = () => {
@@ -460,6 +507,36 @@ function AttendanceWeeklySheetPage() {
     }
   };
 
+  // Handle recording a wage payment instalment
+  const handleSaveWagePayment = async () => {
+    if (!wagePayModal) return;
+    const amount = parseFloat(wagePayModal.amount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Please enter a valid payment amount.");
+      return;
+    }
+    if (amount > wagePayModal.wageBalance) {
+      toast.error(`Amount (${currency(amount)}) exceeds outstanding balance (${currency(wagePayModal.wageBalance)}). Please enter a lesser amount.`);
+      return;
+    }
+    try {
+      await saveWagePayment.mutateAsync({
+        values: {
+          employee_id: wagePayModal.employeeId,
+          week_start_date: wagePayModal.weekStart,
+          payment_date: wagePayModal.paymentDate,
+          amount_paid: amount,
+          payment_method: wagePayModal.paymentMethod,
+          reference_number: wagePayModal.referenceNumber.trim() || null,
+          remarks: wagePayModal.remarks.trim() || null,
+        },
+      });
+      toast.success(`${currency(amount)} recorded as wage payment for ${wagePayModal.employeeName}.`);
+      setWagePayModal(null);
+    } catch (err: any) {
+      toast.error(`Failed to save wage payment: ${err?.message || "Unknown error"}`);
+    }
+  };
   const qc = useQueryClient();
   const [markAllOpen, setMarkAllOpen] = useState(false);
   const [markAllTarget, setMarkAllTarget] = useState<"week" | string>("week"); // "week" or specific ISO date
@@ -608,6 +685,17 @@ function AttendanceWeeklySheetPage() {
 
       const paymentMethod = existingAdj?.payment_method ?? null;
       const referenceNumber = existingAdj?.reference_number ?? null;
+
+      // Labour wage payments recorded for this week for this employee
+      const weekWagePayments = (allWagePayments.data ?? []).filter(
+        (p) => p.employee_id === emp.id && p.week_start_date === weekStartISO,
+      );
+      const totalPaidThisWeek = weekWagePayments.reduce((s, p) => s + Number(p.amount_paid), 0);
+
+      // Cumulative: all weeks' wage balance minus all payments ever made
+      // wageBalance already reflects advance; additionally subtract direct wage payments this week
+      const finalBalance = Math.round(wageBalance - totalPaidThisWeek);
+
       // Check team membership window for this specific week (Request 3)
       const empMemberships = (teamMembers.data ?? []).filter((tm: any) => tm.employee_id === emp.id);
       const activeMembershipForWeek = empMemberships.find((tm: any) => {
@@ -631,16 +719,19 @@ function AttendanceWeeklySheetPage() {
         paymentMethod,
         referenceNumber,
         wageBalance,
+        totalPaidThisWeek,
+        finalBalance,
+        weekWagePayments,
       };
     });
-  }, [employees.data, attendance.data, weeklyAdjustments.data, weekDates, weekStartISO, weekEndISO, teams.data, teamMembers.data, adjustmentsOverride]);
+  }, [employees.data, attendance.data, weeklyAdjustments.data, allWagePayments.data, weekDates, weekStartISO, weekEndISO, teams.data, teamMembers.data, adjustmentsOverride]);
 
   // Grand Totals (Weekly)
   const grandTotalDays = sum(workerRows, (r) => r.totalDays);
   const grandTotalWage = sum(workerRows, (r) => r.wage);
   const grandTotalBusPetrol = sum(workerRows, (r) => r.busPetrol);
   const grandTotalAdvance = sum(workerRows, (r) => r.advance);
-  const grandTotalBalance = sum(workerRows, (r) => r.wageBalance);
+  const grandTotalBalance = sum(workerRows, (r) => r.finalBalance);
 
   // Team-wise payment groupings (Weekly)
   const teamPaymentGroups = useMemo(() => {
@@ -653,7 +744,7 @@ function AttendanceWeeklySheetPage() {
       }
       const group = map.get(tName)!;
       group.members.push(r);
-      group.teamTotal += r.wageBalance;
+      group.teamTotal += (r as any).finalBalance !== undefined ? (r as any).finalBalance : r.wageBalance;
     }
 
     return [...map.values()];
@@ -746,11 +837,55 @@ function AttendanceWeeklySheetPage() {
       }
       const group = map.get(tName)!;
       group.members.push(r);
-      group.teamTotal += r.wageBalance;
+      group.teamTotal += (r as any).finalBalance !== undefined ? (r as any).finalBalance : r.wageBalance;
     }
 
     return [...map.values()];
   }, [monthlyWorkerRows]);
+
+  // Weekly breakdown for monthly view: get all Sundays in the selected month that also have attendance
+  const monthWeeklyBreakdown = useMemo(() => {
+    const empList = employees.data ?? [];
+    const attList = monthlyAttendance.data ?? [];
+    const adjList = monthlyAdjustments.data ?? [];
+    // Find all week start Sundays that overlap with this month
+    const weeks: string[] = [];
+    // Start from first Sunday on or before monthStartISO
+    const monthStart = new Date(selectedMonth.year, selectedMonth.month, 1);
+    const monthEnd = new Date(selectedMonth.year, selectedMonth.month + 1, 0);
+    // Go back to previous Sunday from monthStart
+    const firstSunday = new Date(monthStart);
+    firstSunday.setDate(monthStart.getDate() - monthStart.getDay());
+    let cur = new Date(firstSunday);
+    while (cur <= monthEnd) {
+      weeks.push(formatDateISO(cur));
+      cur = new Date(cur);
+      cur.setDate(cur.getDate() + 7);
+    }
+
+    return weeks.map((ws) => {
+      const we_date = new Date(ws);
+      we_date.setDate(we_date.getDate() + 6);
+      const weISO = formatDateISO(we_date);
+      const rows = empList.map((emp) => {
+        // Days worked this week
+        let totalDays = 0;
+        for (let di = 0; di < 7; di++) {
+          const d = new Date(ws);
+          d.setDate(d.getDate() + di);
+          const iso = formatDateISO(d);
+          const rec = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
+          if (rec && !rec.is_leave) totalDays += Number(rec.day_value ?? 0);
+        }
+        const adj = adjList.find((a) => a.employee_id === emp.id && a.week_start_date === ws);
+        const busPetrol = Number(adj?.bus_petrol ?? 0);
+        const advance = Number(adj?.advance_paid ?? 0);
+        const { wage, wageBalance } = calculateWorkerWeeklyWage(totalDays, emp.wage_rate || 0, busPetrol, advance);
+        return { emp, totalDays, wage, busPetrol, advance, wageBalance };
+      }).filter((r) => r.totalDays > 0);
+      return { weekStart: ws, weekEnd: weISO, rows, weekTotal: rows.reduce((s, r) => s + r.wageBalance, 0) };
+    }).filter((w) => w.rows.length > 0);
+  }, [employees.data, monthlyAttendance.data, monthlyAdjustments.data, selectedMonth]);
 
   // Excel Export Handler (Weekly)
   const handleExportExcel = async () => {
@@ -992,6 +1127,19 @@ function AttendanceWeeklySheetPage() {
           >
             <FileSpreadsheet className="mr-1.5 size-3.5 text-emerald-600" /> Export Excel
           </Button>
+
+          {viewMode === "monthly" && (
+            <Button
+              variant={showWeeklyBreakdown ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowWeeklyBreakdown((v) => !v)}
+              className="h-9 text-xs"
+              title="Toggle week-by-week wage breakdown within monthly view"
+            >
+              <CalendarDays className="mr-1.5 size-3.5" />
+              {showWeeklyBreakdown ? "Hide Weekly Wages" : "Show Weekly Wages"}
+            </Button>
+          )}
 
           <Button variant="outline" size="sm" onClick={() => window.print()} className="h-9 text-xs">
             <Printer className="mr-1.5 size-3.5" /> Print / PDF (Landscape)
