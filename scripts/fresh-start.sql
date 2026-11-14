@@ -17,11 +17,13 @@ DECLARE
     'payment_milestones',
     'team_members',
     'notifications',
+    'notification_reads',
     'audit_logs',
     'deletion_requests',
     'material_receipts',
     'contractor_bills',
     'measurement_books',
+    'measurement_items',
     'supplier_payments',
     'contractor_payments',
     'subcontractor_payments',
@@ -39,6 +41,9 @@ DECLARE
     'material_requests',
     'work_orders',
     'project_quotations',
+    'project_documents',
+    'project_budgets',
+    'project_assignments',
     'projects',
     'teams',
     'employees',
@@ -46,14 +51,18 @@ DECLARE
     'suppliers',
     'clients',
     'machines',
-    'job_types'
+    'machine_movements',
+    'job_types',
+    'payroll',
+    'payroll_items',
+    'sites'
   ];
   v_known_kept text[] := ARRAY[
     'account_opening_balances',
     'expense_categories',
     'user_roles',
-    'user_permissions',
-    'company_settings',
+    'profiles',
+    'app_settings',
     'schema_migrations'
   ];
 BEGIN
@@ -82,8 +91,10 @@ DELETE FROM public.group_payment_allocations;
 DELETE FROM public.purchase_order_items;
 DELETE FROM public.material_receipt_items;
 DELETE FROM public.material_request_items;
+DELETE FROM public.measurement_items;
 DELETE FROM public.payment_milestones;
 DELETE FROM public.team_members;
+DELETE FROM public.notification_reads;
 DELETE FROM public.notifications;
 DELETE FROM public.audit_logs;
 DELETE FROM public.deletion_requests;
@@ -101,6 +112,8 @@ DELETE FROM public.group_payments;
 DELETE FROM public.labour_wage_payments;
 DELETE FROM public.wage_payments;
 DELETE FROM public.weekly_wage_adjustments;
+DELETE FROM public.payroll_items;
+DELETE FROM public.payroll;
 DELETE FROM public.attendance;
 DELETE FROM public.expenses;
 DELETE FROM public.md_investments;
@@ -108,11 +121,15 @@ DELETE FROM public.client_payments;
 DELETE FROM public.account_transfers;
 DELETE FROM public.cash_closing;
 
--- 4. Orders & Requests
+-- 4. Orders, Requests & Quotations
 DELETE FROM public.purchase_orders;
 DELETE FROM public.material_requests;
 DELETE FROM public.work_orders;
 DELETE FROM public.project_quotations;
+DELETE FROM public.project_documents;
+DELETE FROM public.project_budgets;
+DELETE FROM public.project_assignments;
+DELETE FROM public.machine_movements;
 
 -- 5. Projects
 DELETE FROM public.projects;
@@ -125,6 +142,7 @@ DELETE FROM public.suppliers;
 DELETE FROM public.clients;
 DELETE FROM public.machines;
 DELETE FROM public.job_types;
+DELETE FROM public.sites;
 
 -- 7. Reset Opening Balances to 0.00
 UPDATE public.account_opening_balances

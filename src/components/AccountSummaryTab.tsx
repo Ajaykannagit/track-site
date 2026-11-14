@@ -243,15 +243,15 @@ export function AccountSummaryTab({
             <TableRow className="text-xs bg-muted/60">
               <TableHead className="w-[50%]">Account Head</TableHead>
               <TableHead className="text-center w-[15%]">Transactions</TableHead>
-              <TableHead className="text-right w-[17%]">Debit (Dr ₹)</TableHead>
-              <TableHead className="text-right w-[18%]">Credit (Cr ₹)</TableHead>
+              <TableHead className="text-right w-[17%]">Debit (Outflows Dr ₹)</TableHead>
+              <TableHead className="text-right w-[18%]">Credit (Inflows Cr ₹)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* 1. EQUITY */}
             <TableRow className="bg-primary/5 font-bold text-xs uppercase tracking-wider">
               <TableCell colSpan={4} className="py-2 text-primary">
-                1. Equity & Capital
+                1. Equity & Capital (Credit Inflows)
               </TableCell>
             </TableRow>
             {Array.from(groupedData.get("Equity")?.entries() || []).length === 0 ? (
@@ -291,7 +291,7 @@ export function AccountSummaryTab({
             {/* 2. INCOME */}
             <TableRow className="bg-emerald-500/10 font-bold text-xs uppercase tracking-wider">
               <TableCell colSpan={4} className="py-2 text-emerald-800 dark:text-emerald-300">
-                2. Income / Revenue
+                2. Income / Revenue (Credit Inflows)
               </TableCell>
             </TableRow>
             {Array.from(groupedData.get("Income")?.entries() || []).length === 0 ? (
@@ -331,7 +331,7 @@ export function AccountSummaryTab({
             {/* 3. EXPENSES */}
             <TableRow className="bg-rose-500/10 font-bold text-xs uppercase tracking-wider">
               <TableCell colSpan={4} className="py-2 text-rose-800 dark:text-rose-300">
-                3. Expenses & Disbursements
+                3. Expenses & Disbursements (Debit Outflows)
               </TableCell>
             </TableRow>
             {Array.from(groupedData.get("Expense")?.entries() || []).length === 0 ? (
@@ -370,7 +370,12 @@ export function AccountSummaryTab({
 
             {/* GRAND TOTAL */}
             <TableRow className="bg-muted/50 font-bold text-xs border-t-2">
-              <TableCell className="pl-6 text-sm">Grand Totals (Trial Balance Balance Check):</TableCell>
+              <TableCell className="pl-6 text-sm">
+                <span>Period Grand Totals:</span>
+                <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                  * Note: In project control accounting without dual-entry journal postings, total outflows (Debits) and total inflows (Credits) will only balance if net cash change is zero. Refer to the Reconciliation block below for the mathematical balance proof.
+                </span>
+              </TableCell>
               <TableCell className="text-center font-mono">{filtered.length} entries</TableCell>
               <TableCell className="text-right font-mono text-sm text-rose-800">
                 {currency(expenseTotal)}
