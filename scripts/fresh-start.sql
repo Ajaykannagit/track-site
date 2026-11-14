@@ -1,19 +1,18 @@
 -- =============================================================================
--- BRICKWELD TRACK-SITE: FRESH START SCRIPT
+-- BRICKWELD TRACK-SITE: FRESH START SCRIPT (FULL WIPE)
 -- =============================================================================
--- ⚠️  WARNING: THIS SCRIPT PERMANENTLY DELETES ALL BUSINESS DATA.
+-- ⚠️  WARNING: THIS SCRIPT PERMANENTLY DELETES ALL BUSINESS & MASTER DATA.
 -- ⚠️  It is IRREVERSIBLE. There is NO undo. Take a full database backup first.
 --
 -- PURPOSE:
---   Wipe all transactional data so the company can start live operations on a
---   clean slate. Preserves everything needed for the system to work:
---   - auth.users, user_roles, permissions (all logins intact)
---   - app_settings and system configuration
---   - expense_categories lookup table (including Advertisement & Marketing,
---     Commission, Loading, Bank Charges seeded in migration)
---   - job_types, sites (project lookup tables)
---   - account_opening_balances rows (reset to 0 by default — see below)
---   - machines (equipment master)
+--   Wipe ALL test/fake transactional data AND master data (clients, employees,
+--   teams, team_members, contractors, suppliers, machines, job_types created as test data).
+--   Preserves ONLY:
+--   - Schema / Table structures
+--   - auth.users, user_roles, user_permissions (all logins and credentials intact)
+--   - app_settings and system configurations
+--   - lookup lists: expense_categories (including 4 new ones), units, payment modes
+--   - account_opening_balances table rows (reset to zero)
 --
 -- HOW TO RUN (run ONLY after all tests pass, as the VERY LAST step):
 --   psql "$SUPABASE_DB_URL" -f scripts/fresh-start.sql \
@@ -38,7 +37,7 @@ END $$;
 -- ============ BEGIN FRESH START ============
 BEGIN;
 
--- ============ 1. TRANSACTIONAL / FINANCIAL DATA ============
+-- ============ 1. TRANSACTIONAL & FINANCIAL DATA ============
 TRUNCATE TABLE
   public.group_payment_allocations,
   public.group_payments,
@@ -55,7 +54,7 @@ TRUNCATE TABLE
   public.cash_closing
 CASCADE;
 
--- ============ 2. MATERIAL / PURCHASE DATA ============
+-- ============ 2. MATERIAL & PURCHASE DATA ============
 TRUNCATE TABLE
   public.material_receipt_items,
   public.material_receipts,
@@ -66,7 +65,7 @@ TRUNCATE TABLE
   public.indents
 CASCADE;
 
--- ============ 3. WORK / CONTRACT DATA ============
+-- ============ 3. WORK & CONTRACT DATA ============
 TRUNCATE TABLE
   public.measurement_books,
   public.contractor_bills,
@@ -78,32 +77,40 @@ TRUNCATE TABLE
   public.attendance
 CASCADE;
 
--- ============ 5. PROJECT DATA (projects, quotations, milestones) ============
--- NOTE: Clients and contractors are preserved (master data).
--- Only project-level transactional records are deleted.
+-- ============ 5. PROJECTS & MILESTONES ============
 TRUNCATE TABLE
   public.payment_milestones,
   public.project_quotations,
   public.projects
 CASCADE;
 
--- ============ 6. NOTIFICATIONS & AUDIT LOGS ============
+-- ============ 6. MASTER DATA (TEST DATA WIPED AS REQUESTED) ============
+TRUNCATE TABLE
+  public.team_members,
+  public.teams,
+  public.employees,
+  public.contractors,
+  public.suppliers,
+  public.clients,
+  public.machines,
+  public.job_types
+CASCADE;
+
+-- ============ 7. NOTIFICATIONS, AUDIT LOGS, DELETION REQUESTS ============
 TRUNCATE TABLE
   public.notifications,
   public.audit_logs,
   public.deletion_requests
 CASCADE;
 
--- ============ 7. RESET OPENING BALANCES TO ZERO ============
--- (Optional: comment out if you want to keep existing opening balances)
+-- ============ 8. RESET OPENING BALANCES TO ZERO ============
 UPDATE public.account_opening_balances
 SET opening_balance = 0,
     as_of_date      = CURRENT_DATE,
     updated_at      = now()
 WHERE account_type IN ('bank', 'petty_cash');
 
--- ============ 8. RESET SEQUENCES ============
--- Document number sequences — reset to start fresh
+-- ============ 9. RESET NUMBERING SEQUENCES ============
 DO $$
 DECLARE
   seq_name text;
@@ -129,21 +136,12 @@ BEGIN
   END LOOP;
 END $$;
 
--- ============ PRESERVED (NOT deleted) ============
--- ✅ auth.users              — all user logins intact
--- ✅ user_roles              — all role assignments intact
--- ✅ app_settings            — all system settings intact
--- ✅ expense_categories      — all categories (including Advertisement & Marketing, Commission, Loading, Bank Charges)
--- ✅ job_types               — all job type lookup values
--- ✅ sites                   — all site records
--- ✅ machines                — all equipment master records
--- ✅ clients                 — all client master records
--- ✅ employees               — all employee records (with staff_type classification)
--- ✅ contractors             — all contractor master records
--- ✅ suppliers               — all supplier master records
--- ✅ teams                   — all team master records
--- ✅ account_opening_balances — rows kept, amounts reset to 0
--- ✅ permissions / role_permissions — all role-based access control
+-- ============ PRESERVED TABLES (NOT DELETED) ============
+-- ✅ auth.users / auth identities   — user logins intact
+-- ✅ user_roles / role_permissions  — MD, Accounts, Supervisor, Viewer roles intact
+-- ✅ app_settings                   — company profile and config settings
+-- ✅ expense_categories             — standard categories + 4 newly seeded categories
+-- ✅ account_opening_balances rows  — bank & petty_cash rows preserved, balance reset to 0
 
 COMMIT;
 
@@ -152,8 +150,8 @@ DO $$
 BEGIN
   RAISE NOTICE '==========================================================';
   RAISE NOTICE ' FRESH START COMPLETE.';
-  RAISE NOTICE ' All transactional data has been permanently deleted.';
-  RAISE NOTICE ' Users, roles, masters, and lookup tables are preserved.';
-  RAISE NOTICE ' Opening balances have been reset to zero.';
+  RAISE NOTICE ' All transactional data and master data wiped clean.';
+  RAISE NOTICE ' Users, roles, permissions, settings & lookup lists preserved.';
+  RAISE NOTICE ' Bank and Petty Cash opening balances reset to 0.00.';
   RAISE NOTICE '==========================================================';
 END $$;
