@@ -25,6 +25,7 @@ BEGIN
 END $$;
 
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS staff_type text;
+ALTER TABLE public.labour_wage_payments ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 
 -- Classify existing employees based on employee_type and designation:
 UPDATE public.employees
