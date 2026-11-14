@@ -162,7 +162,7 @@
   }
 }
 
-@utility stat-card {
+.stat-card {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
@@ -170,7 +170,7 @@
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
-@utility stat-card:hover {
+.stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.08);
   border-color: var(--color-primary);
