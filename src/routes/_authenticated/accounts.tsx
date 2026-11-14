@@ -1,3 +1,6 @@
+import { MdInvestmentDialog } from "@/components/MdInvestmentDialog";
+import { useAccountBalances } from "@/lib/db";
+import { Landmark } from "lucide-react";
 import { ConfirmVoidDialog } from "@/components/ConfirmVoidDialog";
 import { VoidToggle, VoidBadge } from "@/components/VoidControls";
 import { Ban } from "lucide-react";
@@ -103,6 +106,113 @@ type ClientPayment = {
   created_at: string;
 };
 
+
+// ============================================================
+// Opening Balances Tab (editable by MD or Accounts)
+// ============================================================
+function OpeningBalancesTab() {
+  const { isMD, canWriteFinance } = useAuth();
+  const canEdit = isMD || canWriteFinance;
+  const { data: balances, isLoading, refetch } = useRows<{
+    id: string;
+    account_type: string;
+    opening_balance: number;
+    as_of_date: string;
+  }>("account_opening_balances", { order: { col: "account_type" } });
+
+  const saveBalance = useSaveRow("account_opening_balances", "Opening Balance");
+
+  const [editingBalance, setEditingBalance] = useState<{ id: string; account_type: string; opening_balance: number; as_of_date: string } | null>(null);
+
+  const balanceFields: Field[] = [
+    {
+      name: "account_type",
+      label: "Account",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    { name: "opening_balance", label: "Opening Balance (₹)", type: "number", required: true },
+    { name: "as_of_date", label: "As of Date", type: "date", required: true },
+  ];
+
+  return (
+    <TabsContent value="opening_balances" className="mt-4 space-y-4">
+      <div>
+        <h3 className="text-sm font-bold">Bank &amp; Petty Cash Opening Balances</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Set the starting balance for Bank and Petty Cash. This is the initial amount before any transactions.
+          The running balance (shown in stat cards) is calculated as: Opening + All Inflows − All Outflows.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 text-xs text-blue-800 dark:text-blue-300">
+        <strong>How Opening Balances relate to Cash Closing:</strong> Opening Balances are the system's starting point (set once at go-live).
+        Cash Closing records are daily/periodic reconciliation entries for auditing purposes — they do not affect the running balance calculation.
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : (
+          (balances ?? []).map((bal) => (
+            <div key={bal.id} className="rounded-lg border bg-card p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm flex items-center gap-1.5">
+                  <Landmark className="size-4 text-primary" />
+                  {bal.account_type === "bank" ? "Bank Account" : "Petty Cash"}
+                </span>
+                {canEdit && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingBalance(bal)}>
+                    <Pencil className="size-3 mr-1" /> Edit
+                  </Button>
+                )}
+              </div>
+              <div className="text-2xl font-mono font-bold text-foreground">
+                {currency(bal.opening_balance)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                As of: {dateFmt(bal.as_of_date)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {editingBalance && (
+        <FormDialog
+          open={!!editingBalance}
+          onOpenChange={(v) => !v && setEditingBalance(null)}
+          title={`Edit Opening Balance — ${editingBalance.account_type === "bank" ? "Bank Account" : "Petty Cash"}`}
+          fields={balanceFields}
+          submitting={saveBalance.isPending}
+          initial={{
+            account_type: editingBalance.account_type,
+            opening_balance: editingBalance.opening_balance,
+            as_of_date: editingBalance.as_of_date,
+          }}
+          onSubmit={async (values) => {
+            await saveBalance.mutateAsync({
+              id: editingBalance.id,
+              values: {
+                account_type: values["account_type"],
+                opening_balance: Number(values["opening_balance"] ?? 0),
+                as_of_date: values["as_of_date"],
+                updated_at: new Date().toISOString(),
+              },
+            });
+            setEditingBalance(null);
+            refetch();
+          }}
+        />
+      )}
+    </TabsContent>
+  );
+}
+
 function AccountsPage() {
   const { canWriteFinance, isMD } = useAuth();
   const [from, setFrom] = useState(monthStart());
@@ -117,6 +227,11 @@ function AccountsPage() {
   const [deletingClosing, setDeletingClosing] = useState<Closing | null>(null);
 
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [mdInvestmentOpen, setMdInvestmentOpen] = useState(false);
+  const { data: liveBalances } = useAccountBalances();
+  const mdInvestments = useRows<any>("md_investments", {
+    order: { col: "investment_date", asc: false },
+  });
   const [deletingTransfer, setDeletingTransfer] = useState<Transfer | null>(null);
 
   const [editingPayment, setEditingPayment] = useState<ClientPayment | null>(null);
@@ -351,7 +466,7 @@ function AccountsPage() {
   type LedgerTransaction = {
     id: string;
     date: string;
-    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance";
+    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance" | "MD Investment";
     direction: "inflow" | "outflow";
     party: string;
     project_id: string | null;
@@ -369,6 +484,24 @@ function AccountsPage() {
 
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
+
+    // 0. MD Investments (Inflow - excludes voided)
+    for (const inv of mdInvestments.data ?? []) {
+      if ((inv as any).is_void) continue;
+      list.push({
+        id: `mdi-${inv.id}`,
+        date: inv.investment_date,
+        type: "MD Investment",
+        direction: "inflow",
+        party: "Managing Director (Capital Infusion)",
+        project_id: null,
+        projectName: "Head Office / Equity",
+        amount: Number(inv.amount || 0),
+        payment_method: inv.payment_source === "bank" ? "Bank" : "Petty Cash",
+        reference_number: inv.reference_number || "—",
+        description: inv.remarks || "MD Capital / Liquidity Infusion",
+      });
+    }
 
     // 1. Client Receipts (Inflow - excludes voided)
     for (const cp of clientPayments.data ?? []) {
@@ -809,6 +942,19 @@ function AccountsPage() {
       value: (r) => r.payment_method || "Not recorded",
     },
     {
+      header: "Source",
+      cell: (r) => (
+        <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+          (r as any).payment_source === "bank"
+            ? "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
+            : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        }`}>
+          {(r as any).payment_source === "bank" ? "Bank" : (r as any).payment_source === "petty_cash" ? "Petty Cash" : "—"}
+        </span>
+      ),
+      value: (r) => (r as any).payment_source || "—",
+    },
+    {
       header: "Amount",
       cell: (r) => currency(r.amount),
       value: (r) => r.amount,
@@ -995,6 +1141,16 @@ function AccountsPage() {
       label: "Payment method",
       type: "select",
       options: ["cash", "bank", "upi", "cheque"].map((m) => ({ value: m, label: m })),
+    },
+    {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
     },
     { name: "amount", label: "Amount (₹)", type: "number", required: true },
     { name: "description", label: "Description", type: "textarea" },
@@ -1183,15 +1339,15 @@ function AccountsPage() {
           tone="success"
         />
         <StatCard
-          label={latestPettyClosing?.closing_date ? `Petty cash (as of ${dateFmt(latestPettyClosing.closing_date)})` : "Petty cash balance"}
-          value={currency(latestPettyClosing ? latestPettyClosing.closing_cash : 0)}
-          hint={latestPettyClosing?.closing_date ? `Latest closing in date range` : "No closing in range"}
+          label="Petty Cash Running Balance"
+          value={currency(liveBalances?.petty_cash?.balance ?? (latestPettyClosing ? latestPettyClosing.closing_cash : 0))}
+          hint={`In: ${currency(liveBalances?.petty_cash?.inflows ?? 0)} | Out: ${currency(liveBalances?.petty_cash?.outflows ?? 0)}`}
         />
         <StatCard
-          label={latestBankClosing?.closing_date ? `Bank balance (as of ${dateFmt(latestBankClosing.closing_date)})` : "Bank account balance"}
-          value={currency(latestBankClosing ? latestBankClosing.closing_cash : 0)}
+          label="Bank Account Running Balance"
+          value={currency(liveBalances?.bank?.balance ?? (latestBankClosing ? latestBankClosing.closing_cash : 0))}
           tone="warning"
-          hint={latestBankClosing?.closing_date ? `Latest closing in date range` : "No closing in range"}
+          hint={`In: ${currency(liveBalances?.bank?.inflows ?? 0)} | Out: ${currency(liveBalances?.bank?.outflows ?? 0)}`}
         />
       </div>
 
@@ -1206,6 +1362,14 @@ function AccountsPage() {
           </TabsTrigger>
           <TabsTrigger value="cash">Cash closing</TabsTrigger>
           <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
+          {isMD && (
+            <TabsTrigger value="md_investments">
+              <Landmark className="mr-1.5 size-3.5" /> MD Investments ({(mdInvestments.data ?? []).length})
+            </TabsTrigger>
+          )}
+          {(isMD || canWriteFinance) && (
+            <TabsTrigger value="opening_balances">Opening Balances</TabsTrigger>
+          )}
         </TabsList>
 
         {/* ================= UNIFIED LEDGER ================= */}
@@ -1334,6 +1498,7 @@ function AccountsPage() {
                         project_id: values["project_id"] || null,
                         material_name: values["material_name"] || null,
                         amount: Number(values["amount"] ?? 0),
+                        payment_source: values["payment_source"] || "petty_cash",
                       },
                     });
                   }}
@@ -2055,6 +2220,55 @@ function AccountsPage() {
             }}
           />
         </TabsContent>
+        {/* ================= MD INVESTMENTS ================= */}
+        {isMD && (
+          <TabsContent value="md_investments" className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold flex items-center gap-1.5">
+                  <Landmark className="size-4 text-primary" /> MD Capital Investments
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Managing Director capital infusions credited to Bank or Petty Cash.
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setMdInvestmentOpen(true)} className="no-print">
+                <Plus className="mr-1.5 size-3.5" /> + MD Investment
+              </Button>
+            </div>
+            <DataTable
+              rows={(mdInvestments.data ?? []).filter((inv: any) => !inv.is_void)}
+              columns={[
+                { header: "Date", cell: (r: any) => dateFmt(r.investment_date), value: (r: any) => r.investment_date },
+                {
+                  header: "Source",
+                  cell: (r: any) => (
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.payment_source === "bank" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>
+                      {r.payment_source === "bank" ? "Bank Account" : "Petty Cash"}
+                    </span>
+                  ),
+                  value: (r: any) => r.payment_source,
+                },
+                { header: "Reference", cell: (r: any) => r.reference_number || "—", value: (r: any) => r.reference_number },
+                { header: "Remarks", cell: (r: any) => r.remarks || "—", value: (r: any) => r.remarks },
+                {
+                  header: "Amount",
+                  cell: (r: any) => <span className="font-mono font-bold text-emerald-700">+{currency(r.amount)}</span>,
+                  value: (r: any) => r.amount,
+                  className: "text-right",
+                },
+              ]}
+              loading={mdInvestments.isLoading}
+              exportName="brickweld-md-investments"
+              exportTitle="MD Capital Investments"
+            />
+          </TabsContent>
+        )}
+
+        {/* ================= OPENING BALANCES ================= */}
+        {(isMD || canWriteFinance) && (
+          <OpeningBalancesTab />
+        )}
       </Tabs>
       {/* Void Confirmation Modal */}
       {voidingTarget && (

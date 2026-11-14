@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { PrintablePoDialog, type PrintablePoData } from "@/components/PrintablePoDialog";
+import { Printer } from "lucide-react";
 import { useState } from "react";
 import { ListPlus } from "lucide-react";
 import { useRows } from "@/lib/db";
@@ -32,10 +35,15 @@ type PoItem = {
 type PoRow = {
   id: string;
   po_number: string;
+  po_date?: string;
   status: string;
   total_amount: number;
   tax_percent: number;
   subtotal: number;
+  travel_charges?: number;
+  terms?: string | null;
+  supplier_id?: string | null;
+  project_id?: string | null;
 };
 
 interface Props {
@@ -50,16 +58,34 @@ export function PoItemsSheet({ po, onClose }: Props) {
     enabled: !!po,
   });
 
+  const [printOpen, setPrintOpen] = useState(false);
   const total = (items.data ?? []).reduce((s, i) => s + Number(i.amount ?? 0), 0);
+  const travelAmt = Number(po?.travel_charges ?? 0);
+  const gstAmt = po?.tax_percent ? Math.round((total * po.tax_percent) / 100) : 0;
+  const subtotalWithGst = total + gstAmt;
+  const finalTotal = subtotalWithGst + travelAmt;
 
   return (
+    <>
     <Sheet open={!!po} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full max-w-2xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle className="flex items-center gap-2">
-            <ListPlus className="size-4 text-primary" />
-            PO Line Items — {po?.po_number}
-          </SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="flex items-center gap-2">
+              <ListPlus className="size-4 text-primary" />
+              PO Line Items — {po?.po_number}
+            </SheetTitle>
+            {po && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPrintOpen(true)}
+                className="gap-1.5 h-8 text-xs"
+              >
+                <Printer className="size-3.5" /> Print PO / PDF
+              </Button>
+            )}
+          </div>
           <SheetDescription>
             Materials and agreed pricing for Purchase Order {po?.po_number}. Status: {po?.status?.toUpperCase()}
           </SheetDescription>
@@ -98,25 +124,60 @@ export function PoItemsSheet({ po, onClose }: Props) {
                 ))}
               </TableBody>
             </Table>
-            <div className="p-3 border-t bg-muted/40 text-xs space-y-1 text-right">
+            <div className="p-3 border-t bg-muted/40 text-xs space-y-1.5 text-right">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal:</span>
+                <span className="text-muted-foreground">Materials Subtotal:</span>
                 <span className="font-mono">{currency(total)}</span>
               </div>
-              {po && po.tax_percent > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">GST / Tax ({po.tax_percent}%):</span>
-                  <span className="font-mono">{currency(Math.round((total * po.tax_percent) / 100))}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-sm border-t pt-1">
-                <span>Total PO Value:</span>
-                <span className="font-mono text-primary">{currency(po?.total_amount ?? total)}</span>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">GST Tax ({po?.tax_percent ?? 0}%):</span>
+                <span className="font-mono">{currency(gstAmt)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1 font-semibold">
+                <span>Materials Total (with GST):</span>
+                <span className="font-mono">{currency(subtotalWithGst)}</span>
+              </div>
+              <div className="flex justify-between text-amber-800 dark:text-amber-300">
+                <span>+ Travel / Transport Charge (Untaxed):</span>
+                <span className="font-mono font-bold">{currency(travelAmt)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm border-t-2 pt-1">
+                <span>Final PO Total:</span>
+                <span className="font-mono text-primary text-base">{currency(finalTotal)}</span>
               </div>
             </div>
           </div>
         )}
       </SheetContent>
     </Sheet>
+
+    {po && (
+      <PrintablePoDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        po={{
+          po_number: po.po_number,
+          po_date: po.po_date || new Date().toISOString(),
+          status: po.status,
+          project_name: po.project_id || undefined,
+          supplier_name: po.supplier_id || undefined,
+          terms: po.terms,
+          items: (items.data ?? []).map((i) => ({
+            material: i.material,
+            specification: i.specification,
+            unit: i.unit,
+            quantity: i.quantity,
+            rate: i.rate,
+            amount: i.amount,
+          })),
+          subtotal: total,
+          total_gst: gstAmt,
+          subtotal_with_gst: subtotalWithGst,
+          travel_charges: travelAmt,
+          final_total: finalTotal,
+        }}
+      />
+    )}
+    </>
   );
 }

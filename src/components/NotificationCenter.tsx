@@ -47,13 +47,14 @@ export function NotificationCenter() {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
 
   const loadData = async () => {
-    try {
-      const notifs = await fetchNotificationsForCurrentUser();
-      setNotifications(notifs);
-    } catch (err) {
-      console.error("NotificationCenter: failed to load notifications", err);
-    }
+    // Notifications table has MD-only SELECT via RLS; only fetch if MD to avoid needless 403s
     if (isMD) {
+      try {
+        const notifs = await fetchNotificationsForCurrentUser();
+        setNotifications(notifs);
+      } catch (err) {
+        console.error("NotificationCenter: failed to load notifications", err);
+      }
       try {
         const dels = await fetchDeletionRequests();
         setDeletions(dels);
@@ -61,6 +62,7 @@ export function NotificationCenter() {
         console.error("NotificationCenter: failed to load deletion requests", err);
       }
     }
+    // Non-MD users: skip fetching — RLS returns nothing anyway, but avoid the round-trip
   };
 
   useEffect(() => {

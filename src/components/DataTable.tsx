@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Download, FileSpreadsheet, Search } from "lucide-react";
+import { ChevronDown, Download, FileSpreadsheet, Search, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,7 +148,10 @@ export function DataTable<T extends { id?: string }>({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">{filtered.length} records</span>
+          <Button variant="outline" size="sm" onClick={() => window.print()} title="Print or Save as PDF" className="gap-1.5">
+              <Printer className="size-3.5" /> Print / PDF
+            </Button>
+            <span className="ml-auto text-xs text-muted-foreground">{filtered.length} records</span>
         </div>
       )}
 

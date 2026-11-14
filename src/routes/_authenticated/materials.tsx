@@ -77,6 +77,7 @@ type Po = {
   subtotal: number;
   tax_percent: number;
   tax_amount: number;
+  travel_charges?: number;
   total_amount: number;
   terms?: string | null;
 };

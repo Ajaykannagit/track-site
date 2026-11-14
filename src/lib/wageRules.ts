@@ -128,10 +128,21 @@ export function calculateSuggestedDayValue(
   const hours = parseHoursBetween(inTime, outTime);
   if (hours <= 0) return 0;
 
-  // Round hours/8 to the nearest 0.25 (e.g. 1.0, 1.25, 1.5, 1.75)
-  const rawDayValue = hours / 8;
-  const rounded = Math.round(rawDayValue * 4) / 4;
-  return rounded;
+  // Benchmark threshold rules:
+  // - 12 hours or more      -> 1.5 days (e.g. 6 to 6 = 12h)
+  // - 8 to under 12 hours   -> 1.0 day  (e.g. 9 to 6 = 9h, 6 to 2 = 8h)
+  // - 4 to under 8 hours    -> 0.5 day  (e.g. 12 noon to 6 = 6h)
+  // - under 4 hours / Leave -> 0.0
+  if (hours >= WAGE_RULES.hoursForOvertimeDay) {
+    return 1.5;
+  }
+  if (hours >= WAGE_RULES.hoursForFullDay) {
+    return 1.0;
+  }
+  if (hours >= WAGE_RULES.hoursForHalfDay) {
+    return 0.5;
+  }
+  return 0;
 }
 
 /**

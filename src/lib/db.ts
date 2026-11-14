@@ -141,10 +141,13 @@ export function useSaveRow(table: string, label = "Record") {
 export function useDeleteRow(table: string, label = "Record") {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (arg: string | { id: string; reason?: string }) => {
+      const id = typeof arg === "string" ? arg : arg.id;
+      const reason = typeof arg === "object" ? arg.reason : undefined;
       const { data, error } = await supabase.rpc("soft_delete_record", {
         p_table_name: table,
         p_record_id: id,
+        p_reason: reason || null,
       });
       if (error) throw error;
       return data;
@@ -152,6 +155,8 @@ export function useDeleteRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       for (const alias of VIEW_ALIASES[table] ?? []) {
         qc.invalidateQueries({ queryKey: [alias] });
       }
@@ -242,6 +247,7 @@ export type GroupPaymentPayload = {
   payment_date: string;
   total_amount: number;
   payment_mode: string;
+  payment_source?: "bank" | "petty_cash";
   reference_number?: string | null;
   bank_account_id?: string | null;
   remarks?: string | null;
@@ -269,6 +275,7 @@ export function useCreateGroupPayment() {
         p_bank_account_id: payload.bank_account_id || null,
         p_remarks: payload.remarks || null,
         p_allocations: payload.allocations,
+        p_payment_source: payload.payment_source || (payload.payment_mode?.toLowerCase() === "cash" ? "petty_cash" : "bank"),
       });
       if (error) throw error;
       return data;
@@ -319,5 +326,73 @@ export function useVoidGroupPayment() {
       toast.success("Group payment marked as Void.");
     },
     onError: (e: Error) => toast.error(formatDbError(e, "void group payment")),
+  });
+}
+
+
+export type AccountBalances = {
+  bank: { opening: number; inflows: number; outflows: number; balance: number };
+  petty_cash: { opening: number; inflows: number; outflows: number; balance: number };
+  combined: { opening: number; inflows: number; outflows: number; balance: number };
+};
+
+export function useAccountBalances() {
+  return useQuery({
+    queryKey: ['account_balances'],
+    queryFn: async (): Promise<AccountBalances> => {
+      const { data, error } = await supabase.rpc('get_account_balances');
+      if (error) {
+        console.error('Failed to fetch account balances:', error);
+        return {
+          bank: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
+          petty_cash: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
+          combined: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
+        };
+      }
+      const rows = (data || []) as Array<{
+        account_type: string;
+        opening_balance: number;
+        total_inflows: number;
+        total_outflows: number;
+        current_balance: number;
+      }>;
+      const bankRow = rows.find((r) => r.account_type === 'bank') || {
+        opening_balance: 0,
+        total_inflows: 0,
+        total_outflows: 0,
+        current_balance: 0,
+      };
+      const pettyRow = rows.find((r) => r.account_type === 'petty_cash') || {
+        opening_balance: 0,
+        total_inflows: 0,
+        total_outflows: 0,
+        current_balance: 0,
+      };
+
+      const bank = {
+        opening: Number(bankRow.opening_balance || 0),
+        inflows: Number(bankRow.total_inflows || 0),
+        outflows: Number(bankRow.total_outflows || 0),
+        balance: Number(bankRow.current_balance || 0),
+      };
+      const petty_cash = {
+        opening: Number(pettyRow.opening_balance || 0),
+        inflows: Number(pettyRow.total_inflows || 0),
+        outflows: Number(pettyRow.total_outflows || 0),
+        balance: Number(pettyRow.current_balance || 0),
+      };
+
+      return {
+        bank,
+        petty_cash,
+        combined: {
+          opening: bank.opening + petty_cash.opening,
+          inflows: bank.inflows + petty_cash.inflows,
+          outflows: bank.outflows + petty_cash.outflows,
+          balance: bank.balance + petty_cash.balance,
+        },
+      };
+    },
+    staleTime: 1000 * 15,
   });
 }

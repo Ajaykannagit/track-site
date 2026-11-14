@@ -24,6 +24,7 @@ import {
   Users,
   Wallet,
   UserCheck,
+  Trash2,
 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -64,10 +65,12 @@ import {
 import { useAuth } from "@/lib/auth";
 import { RequirePermission } from "@/components/RequirePermission";
 import { TeamManagementDialog } from "@/components/TeamManagementDialog";
-import { useRows, useSaveRow, sum } from "@/lib/db";
+import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
 import { calculateSuggestedDayValue, calculateWorkerWeeklyWage } from "@/lib/wageRules";
+import { PrintableWageSheet, type PrintableWorkerRow } from "@/components/PrintableWageSheet";
+import { PayTeamWageDialog, type TeamWagePayTarget } from "@/components/PayTeamWageDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
@@ -261,6 +264,8 @@ function AttendanceWeeklySheetPage() {
   } | null>(null);
 
   // Pay-wage modal state: open per worker from weekly row
+  const [teamWagePayTarget, setTeamWagePayTarget] = useState<TeamWagePayTarget | null>(null);
+  const [wagePrintModal, setWagePrintModal] = useState<"weekly" | "monthly" | null>(null);
   const [wagePayModal, setWagePayModal] = useState<{
     employeeId: string;
     employeeName: string;
@@ -360,6 +365,7 @@ function AttendanceWeeklySheetPage() {
   });
 
   const saveAttendance = useSaveRow("attendance", "Attendance");
+  const deleteAttendance = useDeleteRow("attendance", "Attendance");
   const saveAdjustment = useSaveRow("weekly_wage_adjustments", "Weekly Adjustment");
   const saveEmployee = useSaveRow("employees", "Worker");
   const saveWagePayment = useSaveRow("labour_wage_payments", "Wage Payment");
@@ -1141,8 +1147,23 @@ function AttendanceWeeklySheetPage() {
             </Button>
           )}
 
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="h-9 text-xs">
-            <Printer className="mr-1.5 size-3.5" /> Print / PDF (Landscape)
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWagePrintModal("weekly")}
+            className="h-9 text-xs"
+            title="Weekly Wage Print (Labour Only: excludes supervisors and officers)"
+          >
+            <Printer className="mr-1.5 size-3.5" /> Weekly Wage PDF (Labour Only)
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWagePrintModal("monthly")}
+            className="h-9 text-xs"
+            title="Monthly Wage Print (All Staff: labour, supervisors and officers)"
+          >
+            <Printer className="mr-1.5 size-3.5" /> Monthly Wage PDF (All Staff)
           </Button>
         </div>
       </div>
@@ -1620,9 +1641,33 @@ function AttendanceWeeklySheetPage() {
                     <CardTitle className="text-xs font-bold uppercase tracking-wide">
                       {grp.teamName}
                     </CardTitle>
-                    <Badge variant="outline" className="font-mono text-xs font-bold text-primary">
-                      {currency(grp.teamTotal)}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="font-mono text-xs font-bold text-primary">
+                        {currency(grp.teamTotal)}
+                      </Badge>
+                      {permissions.canViewWagesAndPayments && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-6 text-[11px] px-2 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-none"
+                          onClick={() => {
+                            const teamObj = (teams.data ?? []).find((t) => t.name === grp.teamName);
+                            const tId = teamObj?.id || (grp.members[0] as any)?.employee?.team_id || "";
+                            setTeamWagePayTarget({
+                              teamId: tId,
+                              teamName: grp.teamName,
+                              weekStart: weekStartISO,
+                              membersCount: grp.members.length,
+                              totalWageDue: grp.teamTotal,
+                              alreadyPaid: 0,
+                              pendingAmount: grp.teamTotal,
+                            });
+                          }}
+                        >
+                          <Banknote className="size-3" /> Pay Team
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="p-0">
                     <Table className="text-xs">
@@ -1812,13 +1857,39 @@ function AttendanceWeeklySheetPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setEditCell(null)}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveDayAttendance} disabled={saveAttendance.isPending}>
-                <Save className="mr-1.5 size-3.5" /> Save Attendance
-              </Button>
+            <div className="flex items-center justify-between pt-2">
+              {editCell?.existing?.id ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 text-xs gap-1 h-8 px-2"
+                  disabled={deleteAttendance.isPending}
+                  onClick={async () => {
+                    if (!editCell?.existing?.id) return;
+                    try {
+                      await deleteAttendance.mutateAsync({
+                        id: editCell.existing.id,
+                        reason: `Deleted attendance for ${editCell.employee.full_name} on ${formatDateISO(editCell.date)}`,
+                      });
+                      toast.success(`Attendance entry removed for ${editCell.employee.full_name}`);
+                      setEditCell(null);
+                    } catch (err: any) {
+                      toast.error(err?.message || "Failed to delete attendance");
+                    }
+                  }}
+                >
+                  <Trash2 className="size-3.5" /> Delete Entry
+                </Button>
+              ) : <div />}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditCell(null)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveDayAttendance} disabled={saveAttendance.isPending}>
+                  <Save className="mr-1.5 size-3.5" /> Save Attendance
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

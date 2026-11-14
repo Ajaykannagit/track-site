@@ -159,7 +159,7 @@ function Dashboard() {
   const expenses = useRows<ExpenseRow>("expenses", {
     filters: [{ col: "expense_date", op: "gte", value: from }],
     order: { col: "expense_date" },
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: isMD,
   });
   const allExpenses = useRows<ExpenseRow>("expenses", {
     select: "id,amount,expense_date,category,material_name,description,project_id,payment_method,receipt_path",
@@ -169,7 +169,7 @@ function Dashboard() {
   const attendance = useRows<{ calculated_wage: number; attendance_date: string }>("attendance_view", {
     select: "calculated_wage,attendance_date",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: isMD,
   });
   const bills = useRows<{
     id: string;
@@ -221,31 +221,31 @@ function Dashboard() {
     select: "calculated_wage,attendance_date,employee_id",
     filters: [{ col: "attendance_date", op: "gte", value: from }],
     order: { col: "attendance_date" },
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: isMD,
   });
 
   const allAttendance = useRows<{ project_id: string | null; calculated_wage: number }>(
     "attendance_view",
     {
       select: "project_id,calculated_wage",
-      enabled: permissions.canViewProjectFinancials,
+      enabled: isMD,
     },
   );
   const allReceipts = useRows<MaterialReceiptRow>("material_receipts_view", {
     select: "id,receipt_number,receipt_date,total_amount,project_id,supplier_id",
-    enabled: permissions.canViewProjectFinancials,
+    enabled: isMD,
   });
   const allBills = useRows<{ project_id: string | null; net_amount: number }>("contractor_bills", {
     select: "project_id,net_amount",
-    enabled: permissions.canViewProjectFinancials,
+    enabled: isMD,
   });
   const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
     select: "project_id,amount",
-    enabled: permissions.canViewProjectFinancials,
+    enabled: isMD,
   });
   const allClientPayments = useRows<ClientPaymentRow>("client_payments", {
     select: "id,project_id,amount,payment_date,payment_category,payment_method,receipt_number,reference_number,status",
-    enabled: permissions.canViewCompanyFinancials,
+    enabled: isMD,
   });
 
   const [receivedDialogOpen, setReceivedDialogOpen] = useState(false);
@@ -704,7 +704,7 @@ function Dashboard() {
                         {p.project_code} · started {dateFmt(p.start_date)}
                       </p>
                     </div>
-                    {permissions.canViewProjectFinancials && (
+                    {isMD ? (
                       <div className="text-right">
                         <p className="text-sm font-semibold">
                           {currency(getProjectContractValue(p))}
@@ -715,6 +715,12 @@ function Dashboard() {
                             {currency(breakdown.cost)}
                           </span>
                         </p>
+                      </div>
+                    ) : (
+                      <div className="text-right">
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          {p.status || "Active"}
+                        </span>
                       </div>
                     )}
                   </Link>
@@ -1081,7 +1087,7 @@ function Dashboard() {
                   Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
                 </DialogDescription>
               </div>
-              {canManageOfficeExpense && (
+              {isMD && (
                 <Button size="sm" onClick={handleOpenAddExpense} className="gap-1.5 shrink-0">
                   <Plus className="size-4" /> Add Expense
                 </Button>
@@ -1133,7 +1139,7 @@ function Dashboard() {
                           </TableCell>
                           <TableCell className="text-xs font-mono">{e.receipt_path || "—"}</TableCell>
                           <TableCell className="text-right font-semibold font-mono">{currency(e.amount)}</TableCell>
-                          {canManageOfficeExpense && (
+                          {isMD && (
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <Button

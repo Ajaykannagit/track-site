@@ -57,18 +57,20 @@ interface Props {
     tax_percent: number;
     tax_amount: number;
     total_amount: number;
+    travel_charges?: number;
     terms?: string | null;
   } | null;
   onSuccess?: () => void;
 }
 
-const emptyItem = (): MaterialLineItem => ({
+const emptyItem = (): MaterialLineItem & { gst_percent?: number } => ({
   material: "",
   specification: "",
   unit: "bag",
   quantity: 1,
   rate: 0,
   amount: 0,
+  gst_percent: 18,
 });
 
 export function MultiMaterialPoDialog({
@@ -92,6 +94,7 @@ export function MultiMaterialPoDialog({
   const [poDate, setPoDate] = useState(today());
   const [status, setStatus] = useState("draft");
   const [taxPercent, setTaxPercent] = useState<number>(18);
+  const [travelCharges, setTravelCharges] = useState<number>(0);
   const [terms, setTerms] = useState("");
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<MaterialLineItem[]>([emptyItem()]);
@@ -215,8 +218,16 @@ export function MultiMaterialPoDialog({
   };
 
   const subtotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const taxAmount = Math.round((subtotal * (Number(taxPercent) || 0)) / 100);
-  const totalAmount = subtotal + taxAmount;
+  // Calculate item-wise GST (or fallback to PO-level taxPercent)
+  const taxAmount = Math.round(
+    items.reduce((sum, item) => {
+      const rateGst = (item as any).gst_percent !== undefined ? Number((item as any).gst_percent) : Number(taxPercent || 0);
+      return sum + ((Number(item.amount) || 0) * rateGst) / 100;
+    }, 0) * 100
+  ) / 100;
+  const subtotalWithGst = Math.round((subtotal + taxAmount) * 100) / 100;
+  const parsedTravel = Number(travelCharges) || 0;
+  const totalAmount = Math.round((subtotalWithGst + parsedTravel) * 100) / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,6 +287,7 @@ export function MultiMaterialPoDialog({
             tax_percent: taxPercent,
             tax_amount: taxAmount,
             total_amount: totalAmount,
+            travel_charges: parsedTravel,
             terms: terms || null,
           },
         });
@@ -292,6 +304,7 @@ export function MultiMaterialPoDialog({
             tax_percent: taxPercent,
             tax_amount: taxAmount,
             total_amount: totalAmount,
+            travel_charges: parsedTravel,
             terms: terms || null,
           },
         });
@@ -558,12 +571,12 @@ export function MultiMaterialPoDialog({
                 </div>
 
                 <div className="space-y-1.5 text-xs text-right sm:border-l sm:pl-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal:</span>
+                  <div className="flex justify-between py-0.5">
+                    <span className="text-muted-foreground">Materials Subtotal:</span>
                     <span className="font-mono font-medium">{currency(subtotal)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">GST / Tax Rate:</span>
+                  <div className="flex items-center justify-between gap-2 py-0.5">
+                    <span className="text-muted-foreground">GST % (Materials Only):</span>
                     <div className="flex items-center gap-1">
                       <Input
                         type="number"
@@ -576,12 +589,33 @@ export function MultiMaterialPoDialog({
                       <span>%</span>
                     </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tax Amount:</span>
+                  <div className="flex justify-between py-0.5">
+                    <span className="text-muted-foreground">GST Tax Amount:</span>
                     <span className="font-mono font-medium">{currency(taxAmount)}</span>
                   </div>
-                  <div className="flex justify-between border-t pt-1.5 text-sm font-bold">
-                    <span>PO Total Amount:</span>
+                  <div className="flex justify-between py-1 border-t font-semibold">
+                    <span>Material Total with GST:</span>
+                    <span className="font-mono">{currency(subtotalWithGst)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 py-1 bg-amber-500/10 px-2 rounded border border-amber-300 dark:border-amber-900/50">
+                    <span className="font-medium text-amber-900 dark:text-amber-200">
+                      + Travel / Transport (Untaxed):
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">₹</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={travelCharges}
+                        onChange={(e) => setTravelCharges(Number(e.target.value) || 0)}
+                        className="w-24 h-7 text-xs text-right font-mono font-bold"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between border-t-2 pt-1.5 text-sm font-bold">
+                    <span>Final PO Total:</span>
                     <span className="font-mono text-primary text-base">{currency(totalAmount)}</span>
                   </div>
                 </div>

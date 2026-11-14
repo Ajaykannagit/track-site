@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PaymentAllocationInput, type PayableItem } from "@/components/PaymentAllocationInput";
+import { PaymentSourceSelect, type PaymentSourceType } from "@/components/PaymentSourceSelect";
+import { useAccountBalances } from "@/lib/db";
 import { useCreateGroupPayment } from "@/lib/db";
 import { today } from "@/lib/format";
 import { Layers } from "lucide-react";
@@ -45,6 +47,8 @@ export function SupplierGroupPaymentDialog({
   const [paymentDate, setPaymentDate] = useState<string>(today());
   const [totalAmount, setTotalAmount] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<string>("Bank");
+  const [paymentSource, setPaymentSource] = useState<PaymentSourceType | "">("bank");
+  const { data: balances } = useAccountBalances();
   const [referenceNumber, setReferenceNumber] = useState<string>("");
   const [bankAccountId, setBankAccountId] = useState<string>("");
   const [remarks, setRemarks] = useState<string>("");
@@ -172,6 +176,7 @@ export function SupplierGroupPaymentDialog({
         payment_date: paymentDate,
         total_amount: totalAmount,
         payment_mode: paymentMode,
+        payment_source: (paymentSource || "bank") as any,
         reference_number: referenceNumber || null,
         bank_account_id: bankAccountId || null,
         remarks: remarks || null,

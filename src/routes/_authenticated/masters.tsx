@@ -60,6 +60,7 @@ type Employee = {
   employee_code: string;
   full_name: string;
   employee_type: string;
+  staff_type?: "labour" | "supervisor" | "officer";
   designation: string | null;
   wage_type: string;
   wage_rate: number;
@@ -181,7 +182,14 @@ function MastersPage() {
   // Filtered lists
   const filteredEmployees = useMemo(() => {
     let list = employees.data ?? [];
-    if (empTypeFilter !== "all") list = list.filter((e) => e.employee_type === empTypeFilter);
+    if (empTypeFilter !== "all") {
+      // Check both employee_type and staff_type
+      if (empTypeFilter === "labour" || empTypeFilter === "supervisor" || empTypeFilter === "officer") {
+        list = list.filter((e) => ((e as any).staff_type || "labour") === empTypeFilter);
+      } else {
+        list = list.filter((e) => e.employee_type === empTypeFilter);
+      }
+    }
     if (empStatusFilter !== "all")
       list = list.filter((e) => (empStatusFilter === "active" ? e.active : !e.active));
     return list;
@@ -251,6 +259,18 @@ function MastersPage() {
   const employeeColumns: Column<Employee>[] = [
     { header: "Code", cell: (r) => r.employee_code, value: (r) => r.employee_code },
     { header: "Name", cell: (r) => r.full_name, value: (r) => r.full_name },
+    {
+      header: "Staff Type",
+      cell: (r) => {
+        const st = (r as any).staff_type || "labour";
+        return (
+          <Badge variant={st === "officer" ? "default" : st === "supervisor" ? "secondary" : "outline"} className="text-[10px]">
+            {st === "officer" ? "Officer" : st === "supervisor" ? "Supervisor" : "Labour"}
+          </Badge>
+        );
+      },
+      value: (r) => (r as any).staff_type || "labour",
+    },
     { header: "Type", cell: (r) => r.employee_type, value: (r) => r.employee_type },
     { header: "Designation", cell: (r) => r.designation ?? "—", value: (r) => r.designation },
     {
@@ -422,8 +442,19 @@ function MastersPage() {
     { name: "employee_code", label: "Employee code", required: true },
     { name: "full_name", label: "Full name", required: true },
     {
+      name: "staff_type",
+      label: "Staff Classification (Mandatory)",
+      type: "select",
+      required: true,
+      options: [
+        { value: "labour", label: "Labour (Worker / Helper)" },
+        { value: "supervisor", label: "Site Supervisor" },
+        { value: "officer", label: "Officer / Engineer / Office Staff" },
+      ],
+    },
+    {
       name: "employee_type",
-      label: "Employee type",
+      label: "Payroll category",
       type: "select",
       options: ["labour", "office"].map((t) => ({ value: t, label: t })),
     },
@@ -555,7 +586,7 @@ function MastersPage() {
               <FormDialog
                 title="Add employee"
                 description="Labour and office staff with their wage basis."
-                initial={{ employee_type: "labour", wage_type: "daily", active: "true" }}
+                initial={{ staff_type: "labour", employee_type: "labour", wage_type: "daily", active: "true" }}
                 fields={employeeFields}
                 trigger={addButton("Add employee")}
                 submitting={saveEmployee.isPending}
@@ -584,8 +615,10 @@ function MastersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="labour">Labour</SelectItem>
-                    <SelectItem value="office">Office</SelectItem>
+                    <SelectItem value="labour">Labour (Workers)</SelectItem>
+                    <SelectItem value="supervisor">Supervisor</SelectItem>
+                    <SelectItem value="officer">Officer / Engineer</SelectItem>
+                    <SelectItem value="office">Office Staff (legacy)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -628,6 +661,7 @@ function MastersPage() {
               initial={{
                 employee_code: editingEmployee.employee_code,
                 full_name: editingEmployee.full_name,
+                staff_type: (editingEmployee as any).staff_type || "labour",
                 employee_type: editingEmployee.employee_type,
                 designation: editingEmployee.designation ?? "",
                 wage_type: editingEmployee.wage_type,

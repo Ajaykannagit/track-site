@@ -12,13 +12,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { submitDeletionRequest } from "@/lib/approvals";
+import { supabase as typedSupabase } from "@/integrations/supabase/client";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const supabase = typedSupabase as any;
 
 export function ConfirmDeleteDialog({
   title = "Delete record",
-  description = "Are you sure you want to delete this record? This action requires MD approval.",
+  description = "Are you sure you want to delete this record? This action will remove it from active records.",
   tableName,
   recordId,
   recordTitle,
@@ -39,7 +42,8 @@ export function ConfirmDeleteDialog({
   onOpenChange?: (open: boolean) => void;
   onConfirm?: (reason?: string) => Promise<void> | void;
 }) {
-  const { isMD } = useAuth();
+  const { isMD, roles } = useAuth();
+  const canDirectDelete = isMD || roles.includes("accounts");
   const [uncontrolled, setUncontrolled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState("");
@@ -49,37 +53,27 @@ export function ConfirmDeleteDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) {
-      toast.error("Please enter a reason for deletion.");
-      return;
-    }
 
     try {
       setBusy(true);
 
-      if (isMD && onConfirm) {
-        // MD can execute deletion directly with audit
-        await onConfirm(reason.trim());
-        toast.success("Record deleted.");
+      if (onConfirm) {
+        // Direct deletion with audit logging and MD notification
+        await onConfirm(reason.trim() || undefined);
       } else if (tableName && recordId) {
-        // Submit deletion request to MD
-        await submitDeletionRequest({
-          tableName,
-          recordId,
-          recordTitle: recordTitle || title,
-          recordData: recordData || {},
-          reason: reason.trim(),
+        const { error } = await supabase.rpc("soft_delete_record", {
+          p_table_name: tableName,
+          p_record_id: recordId,
+          p_reason: reason.trim() || null,
         });
-        toast.info("Deletion request submitted to MD for approval. The data will remain unchanged until approved.");
-      } else if (onConfirm) {
-        // Fallback to onConfirm if tableName/recordId not explicitly provided
-        await onConfirm(reason.trim());
+        if (error) throw error;
+        toast.success("Record deleted successfully.");
       }
 
       setReason("");
       setOpen(false);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to process deletion request.");
+      toast.error(err?.message || "Failed to process deletion.");
     } finally {
       setBusy(false);
     }
@@ -99,29 +93,28 @@ export function ConfirmDeleteDialog({
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            {!isMD && (
-              <div className="rounded-md bg-amber-500/10 border border-amber-300 dark:border-amber-900/60 p-2.5 text-xs text-amber-800 dark:text-amber-300">
-                <strong>MD Approval Required:</strong> Submitting this request sends the item details and your reason to the MD. It will only be permanently deleted after MD approves it.
+            {!isMD && canDirectDelete && (
+              <div className="rounded-md bg-blue-500/10 border border-blue-300 dark:border-blue-900/60 p-2.5 text-xs text-blue-800 dark:text-blue-300">
+                <strong>Accountant Action:</strong> Deleting this record directly removes it from active views and balances. An automated notification will be sent to the MD.
               </div>
             )}
 
             <div>
               <Label htmlFor="del-reason" className="text-xs font-medium mb-1 block">
-                Reason for deletion <span className="text-destructive">*</span>
+                Reason for deletion <span className="text-muted-foreground text-[10px]">(Optional)</span>
               </Label>
               <Textarea
                 id="del-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Explain why this record needs to be deleted..."
-                required
+                placeholder="Briefly state why this record is being removed..."
+                className="text-xs resize-none"
                 rows={3}
-                className="text-xs"
               />
             </div>
           </div>
 
-          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
             <Button
               type="button"
               variant="outline"
@@ -133,22 +126,13 @@ export function ConfirmDeleteDialog({
             </Button>
             <Button
               type="submit"
-              size="sm"
               variant="destructive"
-              disabled={busy || !reason.trim()}
-              className="bg-destructive hover:bg-destructive/90"
+              size="sm"
+              disabled={busy}
+              className="gap-1.5"
             >
-              {busy ? (
-                "Processing…"
-              ) : isMD ? (
-                <>
-                  <Trash2 className="mr-1.5 size-3.5" /> Delete
-                </>
-              ) : (
-                <>
-                  <Send className="mr-1.5 size-3.5" /> Submit to MD for Approval
-                </>
-              )}
+              <Trash2 className="size-3.5" />
+              {busy ? "Deleting..." : "Delete Record"}
             </Button>
           </DialogFooter>
         </form>
