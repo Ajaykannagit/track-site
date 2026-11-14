@@ -115,15 +115,16 @@ BEGIN
   FOREACH tbl IN ARRAY money_tables LOOP
     -- Add column nullable first
     EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS payment_source text;', tbl);
-    -- Backfill existing rows (based on payment_method if available)
+    -- Backfill existing rows safely regardless of whether table has payment_method or payment_mode
     EXECUTE format('
       UPDATE public.%I
       SET payment_source = CASE
-        WHEN lower(COALESCE(payment_method, '''')) IN (''cash'') THEN ''petty_cash''
+        WHEN (to_jsonb(public.%I.*)->>''payment_method'') ILIKE ''%%cash%%'' 
+          OR (to_jsonb(public.%I.*)->>''payment_mode'') ILIKE ''%%cash%%'' THEN ''petty_cash''
         ELSE ''bank''
       END
       WHERE payment_source IS NULL;
-    ', tbl);
+    ', tbl, tbl, tbl);
     -- Add check constraint if not exists
     BEGIN
       EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT chk_%I_payment_source CHECK (payment_source IN (''bank'', ''petty_cash''));', tbl, tbl);
