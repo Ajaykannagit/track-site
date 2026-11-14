@@ -42,13 +42,13 @@ WHERE staff_type IS NULL;
 
 ALTER TABLE public.employees ALTER COLUMN staff_type SET DEFAULT 'labour';
 ALTER TABLE public.employees ALTER COLUMN staff_type SET NOT NULL;
-DO  BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'chk_employees_staff_type'
   ) THEN
     ALTER TABLE public.employees ADD CONSTRAINT chk_employees_staff_type CHECK (staff_type IN ('labour', 'supervisor', 'officer'));
   END IF;
-END ;
+END $$;
 
 -- Update employees_view to include staff_type
 DROP VIEW IF EXISTS public.employees_view CASCADE;
