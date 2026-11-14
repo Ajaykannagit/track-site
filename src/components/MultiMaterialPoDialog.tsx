@@ -93,7 +93,7 @@ export function MultiMaterialPoDialog({
   const [requestId, setRequestId] = useState("");
   const [poDate, setPoDate] = useState(today());
   const [status, setStatus] = useState("draft");
-  const [taxPercent, setTaxPercent] = useState<number>(18);
+  const [taxPercent, setTaxPercent] = useState<number>(0);
   const [travelCharges, setTravelCharges] = useState<number>(0);
   const [terms, setTerms] = useState("");
   const [editReason, setEditReason] = useState("");
@@ -144,7 +144,7 @@ export function MultiMaterialPoDialog({
         setRequestId("");
         setPoDate(today());
         setStatus("draft");
-        setTaxPercent(18);
+        setTaxPercent(0);
         setTerms("");
         setEditReason("");
         setItems([emptyItem()]);
@@ -578,14 +578,21 @@ export function MultiMaterialPoDialog({
                   <div className="flex items-center justify-between gap-2 py-0.5">
                     <span className="text-muted-foreground">GST % (Materials Only):</span>
                     <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={taxPercent}
-                        onChange={(e) => setTaxPercent(Number(e.target.value) || 0)}
-                        className="w-16 h-7 text-xs text-right font-mono"
-                      />
+                      <Select
+                        value={String(taxPercent)}
+                        onValueChange={(val) => setTaxPercent(Number(val) || 0)}
+                      >
+                        <SelectTrigger className="w-24 h-7 text-xs font-mono">
+                          <SelectValue placeholder="0%" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">0%</SelectItem>
+                          <SelectItem value="5">5%</SelectItem>
+                          <SelectItem value="12">12%</SelectItem>
+                          <SelectItem value="18">18%</SelectItem>
+                          <SelectItem value="28">28%</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <span>%</span>
                     </div>
                   </div>

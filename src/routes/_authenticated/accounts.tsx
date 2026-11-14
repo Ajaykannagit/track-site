@@ -1,6 +1,6 @@
 import { MdInvestmentDialog } from "@/components/MdInvestmentDialog";
 import { useAccountBalances } from "@/lib/db";
-import { Landmark } from "lucide-react";
+import { Landmark, AlertCircle } from "lucide-react";
 import { ConfirmVoidDialog } from "@/components/ConfirmVoidDialog";
 import { VoidToggle, VoidBadge } from "@/components/VoidControls";
 import { Ban } from "lucide-react";
@@ -1326,6 +1326,17 @@ function AccountsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
       </div>
+
+      {/* Notice if Opening Balances are not yet configured */}
+      {liveBalances && liveBalances.bank.opening === 0 && liveBalances.petty_cash.opening === 0 && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 p-3.5 flex items-start gap-3">
+          <AlertCircle className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900 dark:text-amber-200 flex-1">
+            <span className="font-bold">Initial Setup Required:</span> Bank and Petty Cash opening balances are currently ₹0.00.
+            Please go to the <strong>Opening Balances</strong> tab to enter your true starting balances as of your go-live date.
+          </div>
+        </div>
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

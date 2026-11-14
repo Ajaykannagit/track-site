@@ -1,24 +1,26 @@
 -- =============================================================================
--- BRICKWELD TRACK-SITE: FRESH START SCRIPT (FULL WIPE)
+-- BRICKWELD TRACK-SITE: FRESH START SCRIPT (SAFE ORDERED DELETE)
 -- =============================================================================
 -- ⚠️  WARNING: THIS SCRIPT PERMANENTLY DELETES ALL BUSINESS & MASTER DATA.
 -- ⚠️  It is IRREVERSIBLE. There is NO undo. Take a full database backup first.
 --
 -- PURPOSE:
 --   Wipe ALL test/fake transactional data AND master data (clients, employees,
---   teams, team_members, contractors, suppliers, machines, job_types created as test data).
---   Preserves ONLY:
---   - Schema / Table structures
---   - auth.users, user_roles, user_permissions (all logins and credentials intact)
---   - app_settings and system configurations
---   - lookup lists: expense_categories (including 4 new ones), units, payment modes
---   - account_opening_balances table rows (reset to zero)
+--   teams, team_members, contractors, suppliers, machines, job_types).
 --
--- HOW TO RUN (run ONLY after all tests pass, as the VERY LAST step):
+-- SAFETY ASSURANCE:
+--   - Does NOT use TRUNCATE ... CASCADE (which could cascade to unlisted tables).
+--   - Uses explicit DELETE in strict foreign-key dependency order (children first).
+--   - Preserves ONLY:
+--     * auth schema (auth.users, identities, sessions) - 100% untouched
+--     * user_roles & role_permissions (logins and RBAC intact)
+--     * app_settings (company configurations)
+--     * expense_categories (including 4 new seeded categories)
+--     * account_opening_balances rows (reset to zero)
+--
+-- HOW TO RUN:
 --   psql "$SUPABASE_DB_URL" -f scripts/fresh-start.sql \
 --        -v confirm="I UNDERSTAND ALL DATA WILL BE DELETED"
---
--- DO NOT place this file in supabase/migrations/ — it must NEVER auto-run.
 -- =============================================================================
 
 -- ============ SAFETY GATE ============
@@ -34,83 +36,67 @@ BEGIN
   END IF;
 END $$;
 
--- ============ BEGIN FRESH START ============
+-- ============ BEGIN TRANSACTION ============
 BEGIN;
 
--- ============ 1. TRANSACTIONAL & FINANCIAL DATA ============
-TRUNCATE TABLE
-  public.group_payment_allocations,
-  public.group_payments,
-  public.supplier_payments,
-  public.contractor_payments,
-  public.subcontractor_payments,
-  public.client_payments,
-  public.wage_payments,
-  public.labour_wage_payments,
-  public.weekly_wage_adjustments,
-  public.expenses,
-  public.md_investments,
-  public.account_transfers,
-  public.cash_closing
-CASCADE;
+-- 1. Child Allocations & Audit/Notification logs (depend on parents)
+DELETE FROM public.group_payment_allocations;
+DELETE FROM public.purchase_order_items;
+DELETE FROM public.material_receipt_items;
+DELETE FROM public.material_request_items;
+DELETE FROM public.payment_milestones;
+DELETE FROM public.team_members;
+DELETE FROM public.notifications;
+DELETE FROM public.audit_logs;
+DELETE FROM public.deletion_requests;
 
--- ============ 2. MATERIAL & PURCHASE DATA ============
-TRUNCATE TABLE
-  public.material_receipt_items,
-  public.material_receipts,
-  public.material_request_items,
-  public.material_requests,
-  public.purchase_order_items,
-  public.purchase_orders,
-  public.indents
-CASCADE;
+-- 2. Receipts & Bills
+DELETE FROM public.material_receipts;
+DELETE FROM public.contractor_bills;
+DELETE FROM public.measurement_books;
 
--- ============ 3. WORK & CONTRACT DATA ============
-TRUNCATE TABLE
-  public.measurement_books,
-  public.contractor_bills,
-  public.work_orders
-CASCADE;
+-- 3. Payments & Adjustments
+DELETE FROM public.supplier_payments;
+DELETE FROM public.contractor_payments;
+DELETE FROM public.subcontractor_payments;
+DELETE FROM public.group_payments;
+DELETE FROM public.labour_wage_payments;
+DELETE FROM public.wage_payments;
+DELETE FROM public.weekly_wage_adjustments;
+DELETE FROM public.attendance;
+DELETE FROM public.expenses;
+DELETE FROM public.md_investments;
+DELETE FROM public.client_payments;
+DELETE FROM public.account_transfers;
+DELETE FROM public.cash_closing;
 
--- ============ 4. ATTENDANCE ============
-TRUNCATE TABLE
-  public.attendance
-CASCADE;
+-- 4. Orders & Requests
+DELETE FROM public.purchase_orders;
+DELETE FROM public.material_requests;
+DELETE FROM public.indents;
+DELETE FROM public.work_orders;
+DELETE FROM public.project_quotations;
 
--- ============ 5. PROJECTS & MILESTONES ============
-TRUNCATE TABLE
-  public.payment_milestones,
-  public.project_quotations,
-  public.projects
-CASCADE;
+-- 5. Projects
+DELETE FROM public.projects;
 
--- ============ 6. MASTER DATA (TEST DATA WIPED AS REQUESTED) ============
-TRUNCATE TABLE
-  public.team_members,
-  public.teams,
-  public.employees,
-  public.contractors,
-  public.suppliers,
-  public.clients,
-  public.machines,
-  public.job_types
-CASCADE;
+-- 6. Masters (Fake / Test Master Data)
+DELETE FROM public.teams;
+DELETE FROM public.employees;
+DELETE FROM public.contractors;
+DELETE FROM public.suppliers;
+DELETE FROM public.clients;
+DELETE FROM public.machines;
+DELETE FROM public.job_types;
 
--- ============ 7. NOTIFICATIONS, AUDIT LOGS, DELETION REQUESTS ============
-TRUNCATE TABLE
-  public.notifications,
-  public.audit_logs,
-  public.deletion_requests
-CASCADE;
-
--- ============ 8. RESET OPENING BALANCES TO ZERO ============
+-- 7. Reset Opening Balances to 0.00
 UPDATE public.account_opening_balances
 SET opening_balance = 0,
     as_of_date      = CURRENT_DATE,
     updated_at      = now()
 WHERE account_type IN ('bank', 'petty_cash');
 
--- ============ 9. RESET NUMBERING SEQUENCES ============
+-- 8. Reset Numbering Sequences
 DO $$
 DECLARE
   seq_name text;
@@ -129,29 +115,17 @@ BEGIN
   FOREACH seq_name IN ARRAY seq_list LOOP
     BEGIN
       EXECUTE format('ALTER SEQUENCE IF EXISTS public.%I RESTART WITH 1;', seq_name);
-      RAISE NOTICE 'Reset sequence: %', seq_name;
     EXCEPTION WHEN undefined_object THEN
-      -- Sequence doesn't exist — skip silently
+      -- Sequence doesn't exist — skip
     END;
   END LOOP;
 END $$;
 
--- ============ PRESERVED TABLES (NOT DELETED) ============
--- ✅ auth.users / auth identities   — user logins intact
--- ✅ user_roles / role_permissions  — MD, Accounts, Supervisor, Viewer roles intact
--- ✅ app_settings                   — company profile and config settings
--- ✅ expense_categories             — standard categories + 4 newly seeded categories
--- ✅ account_opening_balances rows  — bank & petty_cash rows preserved, balance reset to 0
+-- ============ PRESERVED (NOT deleted) ============
+-- ✅ auth.users / identities / sessions  — completely untouched
+-- ✅ user_roles / role_permissions       — user roles intact
+-- ✅ app_settings                        — system configuration intact
+-- ✅ expense_categories                  — seeded categories intact
+-- ✅ account_opening_balances rows       — rows preserved, balances reset to 0
 
 COMMIT;
-
--- ============ CONFIRMATION ============
-DO $$
-BEGIN
-  RAISE NOTICE '==========================================================';
-  RAISE NOTICE ' FRESH START COMPLETE.';
-  RAISE NOTICE ' All transactional data and master data wiped clean.';
-  RAISE NOTICE ' Users, roles, permissions, settings & lookup lists preserved.';
-  RAISE NOTICE ' Bank and Petty Cash opening balances reset to 0.00.';
-  RAISE NOTICE '==========================================================';
-END $$;

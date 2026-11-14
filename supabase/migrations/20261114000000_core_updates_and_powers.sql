@@ -650,6 +650,7 @@ DECLARE
   v_gp numeric;
   v_lwp numeric;
   v_wp numeric;
+  v_adv numeric;
 BEGIN
   FOREACH v_src IN ARRAY v_sources LOOP
     -- 1. Opening balance
@@ -718,7 +719,12 @@ BEGIN
     FROM public.account_transfers
     WHERE from_account = v_src AND is_void = false AND deleted_at IS NULL;
 
-    v_outflows := v_exp + v_sp + v_cp + v_subp + v_gp + v_lwp + v_wp + v_trans_out;
+    -- Worker advances (actual cash/bank handed over when advance was paid)
+    SELECT COALESCE(SUM(advance_paid), 0) INTO v_adv
+    FROM public.weekly_wage_adjustments
+    WHERE payment_source = v_src AND advance_paid > 0 AND deleted_at IS NULL;
+
+    v_outflows := v_exp + v_sp + v_cp + v_subp + v_gp + v_lwp + v_wp + v_adv + v_trans_out;
 
     account_type := v_src;
     opening_balance := v_open;
