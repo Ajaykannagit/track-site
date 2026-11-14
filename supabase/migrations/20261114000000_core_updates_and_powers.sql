@@ -240,16 +240,19 @@ ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS amount numeric(14,2);
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "notifications select" ON public.notifications;
 DROP POLICY IF EXISTS "notifications_select_policy" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_md_only_select" ON public.notifications;
 CREATE POLICY "notifications_md_only_select" ON public.notifications
   FOR SELECT TO authenticated
   USING (public.is_md());
 
 DROP POLICY IF EXISTS "notifications insert" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_insert_all" ON public.notifications;
 CREATE POLICY "notifications_insert_all" ON public.notifications
   FOR INSERT TO authenticated
   WITH CHECK (true);
 
 DROP POLICY IF EXISTS "notifications update" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_md_update" ON public.notifications;
 CREATE POLICY "notifications_md_update" ON public.notifications
   FOR UPDATE TO authenticated
   USING (public.is_md())
