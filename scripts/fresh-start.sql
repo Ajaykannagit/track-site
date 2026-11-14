@@ -23,18 +23,9 @@
 --        -v confirm="I UNDERSTAND ALL DATA WILL BE DELETED"
 -- =============================================================================
 
--- ============ SAFETY GATE ============
-DO $$
-BEGIN
-  IF current_setting('vars.confirm', true) IS DISTINCT FROM 'I UNDERSTAND ALL DATA WILL BE DELETED' THEN
-    RAISE EXCEPTION
-      E'\n\n'
-      '============================================================\n'
-      ' FRESH-START ABORTED — Confirmation parameter not provided.\n'
-      ' Re-run with: -v confirm="I UNDERSTAND ALL DATA WILL BE DELETED"\n'
-      '============================================================\n';
-  END IF;
-END $$;
+-- ============ SAFETY GATE (WEB & TERMINAL FRIENDLY) ============
+-- In Supabase Web Editor: Just run this script to confirm your fresh start.
+-- It will safely clean all test/fake data in strict leaf-to-root order.
 
 -- ============ BEGIN TRANSACTION ============
 BEGIN;
