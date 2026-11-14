@@ -1,4 +1,4 @@
-﻿import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
@@ -2206,7 +2206,7 @@ function AttendanceWeeklySheetPage() {
       </Dialog>
       {/* Mark All Present Confirmation Dialog */}
       <Dialog open={markAllOpen} onOpenChange={setMarkAllOpen}>
-        <DialogContent className="max-w-md sm:max-w-md">
+        <DialogContent className="max-w-md sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
               <UserCheck className="size-5 text-emerald-600" /> Mark All Workers Present

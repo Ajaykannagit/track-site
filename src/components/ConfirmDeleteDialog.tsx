@@ -82,7 +82,7 @@ export function ConfirmDeleteDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!busy) { setOpen(v); if (!v) setReason(""); } }}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="mb-3">
             <div className="flex items-center gap-2 text-destructive">

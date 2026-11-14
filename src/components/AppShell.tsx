@@ -107,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 bg-sidebar p-0">
+            <SheetContent side="left" className="w-64 bg-sidebar p-0 overflow-y-auto">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <Brand />
               <NavList onNavigate={() => setOpen(false)} />

@@ -114,7 +114,7 @@ export function PayTeamWageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <form onSubmit={handlePay}>
           <DialogHeader className="mb-3">
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
