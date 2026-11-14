@@ -1,36 +1,13 @@
 -- =============================================================================
--- BRICKWELD TRACK-SITE: FRESH START SCRIPT (SAFE ORDERED DELETE)
+-- BRICKWELD TRACK-SITE: FRESH START SCRIPT (CLEAN BATCH DELETE)
 -- =============================================================================
--- ⚠️  WARNING: THIS SCRIPT PERMANENTLY DELETES ALL BUSINESS & MASTER DATA.
--- ⚠️  It is IRREVERSIBLE. There is NO undo. Take a full database backup first.
---
--- PURPOSE:
---   Wipe ALL test/fake transactional data AND master data (clients, employees,
---   teams, team_members, contractors, suppliers, machines, job_types).
---
--- SAFETY ASSURANCE:
---   - Does NOT use TRUNCATE ... CASCADE (which could cascade to unlisted tables).
---   - Uses explicit DELETE in strict foreign-key dependency order (children first).
---   - Preserves ONLY:
---     * auth schema (auth.users, identities, sessions) - 100% untouched
---     * user_roles & role_permissions (logins and RBAC intact)
---     * app_settings (company configurations)
---     * expense_categories (including 4 new seeded categories)
---     * account_opening_balances rows (reset to zero)
---
--- HOW TO RUN:
---   psql "$SUPABASE_DB_URL" -f scripts/fresh-start.sql \
---        -v confirm="I UNDERSTAND ALL DATA WILL BE DELETED"
+-- ⚠️  WARNING: PERMANENTLY DELETES TEST BUSINESS & TEST MASTER DATA.
+--     PRESERVES: User logins, roles, permissions, settings, and expense categories.
 -- =============================================================================
 
--- ============ SAFETY GATE (WEB & TERMINAL FRIENDLY) ============
--- In Supabase Web Editor: Just run this script to confirm your fresh start.
--- It will safely clean all test/fake data in strict leaf-to-root order.
-
--- ============ BEGIN TRANSACTION ============
 BEGIN;
 
--- 1. Child Allocations & Audit/Notification logs (depend on parents)
+-- 1. Child Allocations & Audit/Notification logs
 DELETE FROM public.group_payment_allocations;
 DELETE FROM public.purchase_order_items;
 DELETE FROM public.material_receipt_items;
@@ -87,36 +64,15 @@ SET opening_balance = 0,
     updated_at      = now()
 WHERE account_type IN ('bank', 'petty_cash');
 
--- 8. Reset Numbering Sequences
-DO $$
-DECLARE
-  seq_name text;
-  seq_list text[] := ARRAY[
-    'group_payment_number_seq',
-    'po_number_seq',
-    'purchase_order_number_seq',
-    'grn_number_seq',
-    'indent_number_seq',
-    'work_order_number_seq',
-    'bill_number_seq',
-    'receipt_number_seq',
-    'payment_number_seq'
-  ];
-BEGIN
-  FOREACH seq_name IN ARRAY seq_list LOOP
-    BEGIN
-      EXECUTE format('ALTER SEQUENCE IF EXISTS public.%I RESTART WITH 1;', seq_name);
-    EXCEPTION WHEN undefined_object THEN
-      -- Sequence doesn't exist — skip
-    END;
-  END LOOP;
-END $$;
-
--- ============ PRESERVED (NOT deleted) ============
--- ✅ auth.users / identities / sessions  — completely untouched
--- ✅ user_roles / role_permissions       — user roles intact
--- ✅ app_settings                        — system configuration intact
--- ✅ expense_categories                  — seeded categories intact
--- ✅ account_opening_balances rows       — rows preserved, balances reset to 0
-
 COMMIT;
+
+-- 8. Reset Numbering Sequences (outside transaction block)
+ALTER SEQUENCE IF EXISTS public.group_payment_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.po_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.purchase_order_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.grn_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.indent_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.work_order_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.bill_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.receipt_number_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS public.payment_number_seq RESTART WITH 1;
