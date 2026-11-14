@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Receipt } from "lucide-react";
+import { Plus, Trash2, Receipt, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,8 @@ import { currency, today } from "@/lib/format";
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAccountBalances } from "@/lib/db";
+import type { PaymentSourceType } from "@/components/PaymentSourceSelect";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase = typedSupabase as any;
@@ -43,6 +45,7 @@ export type ExpenseLineItem = {
   payment_method: string;
   amount: number;
   description: string;
+  payment_source: PaymentSourceType | "";
 };
 
 interface Props {
@@ -62,6 +65,7 @@ const emptyExpense = (defaultDate: string, defaultProj: string, defaultCat: stri
   payment_method: defaultMethod,
   amount: 0,
   description: "",
+  payment_source: "",
 });
 
 export function MultiExpenseDialog({
@@ -81,7 +85,11 @@ export function MultiExpenseDialog({
   const [defaultDate, setDefaultDate] = useState(today());
   const [defaultProject, setDefaultProject] = useState("");
   const [defaultMethod, setDefaultMethod] = useState("cash");
+  // Mandatory batch-level payment source (bank or petty_cash)
+  const [batchPaymentSource, setBatchPaymentSource] = useState<PaymentSourceType | "">("");
   const [saving, setSaving] = useState(false);
+
+  const { data: balances } = useAccountBalances();
 
   const [expenses, setExpenses] = useState<ExpenseLineItem[]>([
     emptyExpense(today(), "", categoryOptions[0]?.value ?? "Fuel", "cash"),
@@ -129,6 +137,12 @@ export function MultiExpenseDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!batchPaymentSource) {
+      toast.error("Please choose a payment source (Bank Account or Petty Cash) before saving.");
+      return;
+    }
+
     const valid = expenses.filter((e) => Number(e.amount) > 0);
     if (valid.length === 0) {
       toast.error("Please enter a valid amount for at least one expense.");
@@ -146,20 +160,35 @@ export function MultiExpenseDialog({
         category: exp.category || "Miscellaneous",
         material_name: exp.material_name?.trim() || null,
         payment_method: exp.payment_method || defaultMethod,
+        payment_source: exp.payment_source || batchPaymentSource,
         amount: Number(exp.amount) || 0,
         description: exp.description?.trim() || null,
         created_by: userId,
       }));
 
       const { error } = await supabase.from("expenses").insert(recordsToInsert);
-      if (error) throw error;
+      if (error) {
+        // Friendly error messages — never show raw Postgres text
+        if (error.message?.includes("payment_source")) {
+          toast.error("Please select a payment source (Bank or Petty Cash) before saving.");
+        } else if (error.message?.includes("not-null") || error.message?.includes("violates not-null")) {
+          toast.error("A required field is missing. Please check all entries and try again.");
+        } else {
+          toast.error("Save failed. Please check your entries and try again.");
+        }
+        return;
+      }
 
       toast.success(`${recordsToInsert.length} expenses saved successfully (Total: ${currency(totalAmount)})`);
       qc.invalidateQueries({ queryKey: ["expenses"] });
       setOpen(false);
       onSuccess?.();
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save expenses.");
+      if (err?.message?.includes("payment_source")) {
+        toast.error("Please select a payment source (Bank or Petty Cash) before saving.");
+      } else {
+        toast.error("Save failed. Please check your entries and try again.");
+      }
     } finally {
       setSaving(false);
     }
@@ -179,6 +208,53 @@ export function MultiExpenseDialog({
               Enter multiple separate expenses (e.g. 10 site purchases) in one screen using "+ Add More" and save all entries at once.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Mandatory Pay From selector */}
+          <div className={`p-3 rounded-lg border-2 ${batchPaymentSource ? "border-emerald-400/60 bg-emerald-50/40 dark:bg-emerald-950/20" : "border-destructive/50 bg-destructive/5"}`}>
+            <Label className="text-xs font-bold mb-2 block flex items-center gap-1.5">
+              <span>Pay From (Bank Account or Petty Cash)</span>
+              <span className="text-destructive font-bold">*  Required</span>
+            </Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchPaymentSource("bank")}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                  batchPaymentSource === "bank"
+                    ? "border-sky-500 bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200"
+                    : "border-muted bg-background text-muted-foreground hover:border-sky-400 hover:bg-sky-50"
+                }`}
+              >
+                🏦 Bank Account
+                {balances?.bank !== undefined && (
+                  <span className={`ml-1 font-mono ${balances.bank.balance < 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}>
+                    ({currency(balances.bank.balance)})
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchPaymentSource("petty_cash")}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                  batchPaymentSource === "petty_cash"
+                    ? "border-amber-500 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                    : "border-muted bg-background text-muted-foreground hover:border-amber-400 hover:bg-amber-50"
+                }`}
+              >
+                💵 Petty Cash
+                {balances?.petty_cash !== undefined && (
+                  <span className={`ml-1 font-mono ${balances.petty_cash.balance < 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}>
+                    ({currency(balances.petty_cash.balance)})
+                  </span>
+                )}
+              </button>
+            </div>
+            {!batchPaymentSource && (
+              <p className="mt-1.5 text-[11px] text-destructive flex items-center gap-1">
+                <AlertCircle className="size-3 shrink-0" /> Select Bank or Petty Cash to unlock Save
+              </p>
+            )}
+          </div>
 
           {/* Quick autofill bar */}
           <div className="p-3 bg-muted/40 rounded-lg border flex flex-wrap items-end gap-3 text-xs">
@@ -396,7 +472,7 @@ export function MultiExpenseDialog({
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={saving || totalAmount <= 0}>
+            <Button type="submit" size="sm" disabled={saving || totalAmount <= 0 || !batchPaymentSource}>
               {saving ? "Saving Expenses…" : `Save ${expenses.length} Expenses`}
             </Button>
           </DialogFooter>

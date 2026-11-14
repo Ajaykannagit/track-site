@@ -75,6 +75,16 @@ export function formatDbError(e: unknown, defaultAction = "modify"): string {
   const err = e as { message?: string; code?: string };
   const msg = err?.message || String(e || "");
   const code = err?.code;
+
+  if (
+    msg.includes("payment_source") &&
+    (msg.includes("violates not-null constraint") || msg.includes("null value in column") || msg.includes("violates check constraint"))
+  ) {
+    return "Please select a payment source (Bank Account or Petty Cash) before saving.";
+  }
+  if (code === "23502" || msg.includes("violates not-null constraint") || msg.includes("null value in column")) {
+    return "A required field is missing. Please check all mandatory fields and try again.";
+  }
   if (
     code === "23503" ||
     msg.includes("violates foreign key constraint") ||
@@ -89,7 +99,15 @@ export function formatDbError(e: unknown, defaultAction = "modify"): string {
   ) {
     return "A record with this code or identifier already exists.";
   }
-  return msg || `Failed to ${defaultAction} record.`;
+  if (code === "23514" || msg.includes("violates check constraint")) {
+    return "The entry entered violates validation rules. Please check values and try again.";
+  }
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    return "Network error. Please check your internet connection.";
+  }
+  return msg.startsWith("PostgresError:") || msg.includes("violates") || msg.includes("syntax error")
+    ? `Failed to ${defaultAction} record. Please verify entries.`
+    : (msg || `Failed to ${defaultAction} record.`);
 }
 
 /**

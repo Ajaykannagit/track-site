@@ -670,6 +670,16 @@ function MaterialsPage() {
       options: (pos.data ?? []).map((p) => ({ value: p.id, label: `${p.po_number} (${currency(p.total_amount)})` })),
     },
     {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    {
       name: "payment_method",
       label: "Method",
       type: "select",
@@ -1132,7 +1142,7 @@ function MaterialsPage() {
                   </Button>
                 }
                 submitting={savePayment.isPending}
-                initial={{ payment_date: today(), payment_method: "bank", amount: 0 }}
+                initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank", amount: 0 }}
                 fields={paymentFields}
                 onSubmit={async (values) => {
                   await savePayment.mutateAsync({
@@ -1140,6 +1150,7 @@ function MaterialsPage() {
                       ...values,
                       po_id: values["po_id"] || null,
                       amount: Number(values["amount"] ?? 0),
+                      payment_source: values["payment_source"],
                     },
                   });
                 }}
@@ -1210,6 +1221,7 @@ function MaterialsPage() {
                 supplier_id: editingPayment.supplier_id,
                 po_id: editingPayment.po_id ?? "",
                 payment_method: editingPayment.payment_method ?? "bank",
+                payment_source: (editingPayment as any).payment_source ?? "bank",
                 amount: editingPayment.amount,
                 reference_number: editingPayment.reference_number ?? "",
                 remarks: editingPayment.remarks ?? "",

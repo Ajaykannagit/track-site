@@ -109,6 +109,7 @@ type ExpenseRow = {
   description?: string | null;
   project_id: string | null;
   payment_method?: string | null;
+  payment_source?: string | null;
   receipt_path?: string | null;
 };
 
@@ -366,6 +367,16 @@ function Dashboard() {
       ],
     },
     {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    {
       name: "receipt_path",
       label: "Receipt reference",
       type: "text",
@@ -386,12 +397,14 @@ function Dashboard() {
         category: editingExpense.category,
         amount: editingExpense.amount,
         payment_method: editingExpense.payment_method ?? "cash",
+        payment_source: editingExpense.payment_source ?? "",
         receipt_path: editingExpense.receipt_path ?? "",
         description: editingExpense.description ?? "",
       }
     : {
         expense_date: new Date().toISOString().slice(0, 10),
         payment_method: "cash",
+        payment_source: "",
       };
 
   const handleOpenAddExpense = () => {
@@ -412,6 +425,7 @@ function Dashboard() {
         category: values["category"],
         amount: Number(values["amount"]),
         payment_method: values["payment_method"] || null,
+        payment_source: values["payment_source"],
         receipt_path: values["receipt_path"] ? String(values["receipt_path"]).trim() : null,
         description: values["description"] ? String(values["description"]).trim() : null,
         project_id: null,

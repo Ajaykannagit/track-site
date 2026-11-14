@@ -473,6 +473,7 @@ function AttendanceWeeklySheetPage() {
     paymentMethod?: string | null,
     referenceNumber?: string | null,
     fieldKey?: string,
+    paymentSource?: "bank" | "petty_cash" | null,
   ) => {
     const existing = (weeklyAdjustments.data ?? []).find(
       (adj) => adj.employee_id === empId && adj.week_start_date === weekStartISO,
@@ -483,6 +484,9 @@ function AttendanceWeeklySheetPage() {
       [empId]: { busPetrol, advance },
     }));
 
+    const method = paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null));
+    const source = paymentSource || (existing as any)?.payment_source || (method === "bank" || method === "upi" || method === "cheque" ? "bank" : "petty_cash");
+
     try {
       await saveAdjustment.mutateAsync({
         id: existing?.id,
@@ -491,7 +495,8 @@ function AttendanceWeeklySheetPage() {
           week_start_date: weekStartISO,
           bus_petrol: busPetrol,
           advance_paid: advance,
-          payment_method: paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null)),
+          payment_method: method,
+          payment_source: source,
           reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
         },
       });
@@ -533,6 +538,7 @@ function AttendanceWeeklySheetPage() {
           payment_date: wagePayModal.paymentDate,
           amount_paid: amount,
           payment_method: wagePayModal.paymentMethod,
+          payment_source: wagePayModal.paymentMethod === "bank" || wagePayModal.paymentMethod === "upi" || wagePayModal.paymentMethod === "cheque" ? "bank" : "petty_cash",
           reference_number: wagePayModal.referenceNumber.trim() || null,
           remarks: wagePayModal.remarks.trim() || null,
         },

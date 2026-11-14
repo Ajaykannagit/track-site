@@ -1509,7 +1509,7 @@ function AccountsPage() {
                         project_id: values["project_id"] || null,
                         material_name: values["material_name"] || null,
                         amount: Number(values["amount"] ?? 0),
-                        payment_source: values["payment_source"] || "petty_cash",
+                        payment_source: values["payment_source"],
                       },
                     });
                   }}
@@ -1603,6 +1603,7 @@ function AccountsPage() {
                 category: editingExpense.category,
                 material_name: editingExpense.material_name ?? "",
                 payment_method: editingExpense.payment_method ?? "cash",
+                payment_source: (editingExpense as any).payment_source ?? "",
                 amount: editingExpense.amount,
                 description: editingExpense.description ?? "",
                 edit_reason: "",
@@ -1797,6 +1798,7 @@ function AccountsPage() {
                     amount: Number(values["amount"] ?? 0),
                     payment_category: values["payment_category"] || "progress",
                     account_type: values["account_type"] || "bank",
+                    payment_source: values["account_type"] || "bank",
                     invoice_reference: values["invoice_reference"] || null,
                     notes: values["notes"] || null,
                     status: "confirmed",
@@ -1858,6 +1860,7 @@ function AccountsPage() {
                     amount: Number(values["amount"] ?? 0),
                     payment_category: values["payment_category"] || "progress",
                     account_type: values["account_type"] || "bank",
+                    payment_source: values["account_type"] || "bank",
                     invoice_reference: values["invoice_reference"] || null,
                     notes: values["notes"] || null,
                   },
