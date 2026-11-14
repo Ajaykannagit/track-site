@@ -44,6 +44,7 @@ ALTER TABLE public.employees ALTER COLUMN staff_type SET NOT NULL;
 ALTER TABLE public.employees ADD CONSTRAINT chk_employees_staff_type CHECK (staff_type IN ('labour', 'supervisor', 'officer'));
 
 -- Update employees_view to include staff_type
+DROP VIEW IF EXISTS public.employees_view CASCADE;
 CREATE OR REPLACE VIEW public.employees_view AS
 SELECT
   id,
