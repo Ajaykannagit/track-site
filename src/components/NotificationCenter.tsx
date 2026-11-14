@@ -22,6 +22,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { dateFmt } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import {
@@ -136,7 +137,7 @@ export function NotificationCenter() {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg flex flex-col p-0">
+      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg flex flex-col h-full max-h-screen p-0 overflow-hidden">
         <SheetHeader className="p-4 border-b">
           <div className="flex items-center justify-between pr-6">
             <SheetTitle className="text-base flex items-center gap-2 font-display">
@@ -161,7 +162,7 @@ export function NotificationCenter() {
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs defaultValue={pendingDeletions > 0 && isMD ? "deletions" : "edits"} className="flex-1 flex flex-col">
+        <Tabs defaultValue={pendingDeletions > 0 && isMD ? "deletions" : "edits"} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="px-4 pt-2 border-b bg-muted/30">
             <TabsList className={`grid w-full ${isMD ? "grid-cols-2" : "grid-cols-1"}`}>
               <TabsTrigger value="edits" className="text-xs relative">
@@ -186,7 +187,9 @@ export function NotificationCenter() {
           </div>
 
           {/* ================= NOTIFICATIONS TAB ================= */}
-          <TabsContent value="edits" className="flex-1 overflow-y-auto p-4 space-y-3 m-0">
+          <TabsContent value="edits" className="flex-1 min-h-0 m-0 overflow-hidden">
+            <ScrollArea className="h-full w-full p-4">
+              <div className="space-y-3 pr-3">
             {notifications.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 <History className="mx-auto size-8 mb-2 opacity-40" />
@@ -253,11 +256,15 @@ export function NotificationCenter() {
                 </div>
               ))
             )}
+              </div>
+            </ScrollArea>
           </TabsContent>
 
           {/* ================= DELETION APPROVALS TAB (MD only) ================= */}
           {isMD && (
-            <TabsContent value="deletions" className="flex-1 overflow-y-auto p-4 space-y-3 m-0">
+            <TabsContent value="deletions" className="flex-1 min-h-0 m-0 overflow-hidden">
+            <ScrollArea className="h-full w-full p-4">
+              <div className="space-y-3 pr-3">
               {deletions.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">
                   <Trash2 className="mx-auto size-8 mb-2 opacity-40" />
@@ -342,7 +349,9 @@ export function NotificationCenter() {
                   );
                 })
               )}
-            </TabsContent>
+              </div>
+            </ScrollArea>
+          </TabsContent>
           )}
         </Tabs>
       </SheetContent>
