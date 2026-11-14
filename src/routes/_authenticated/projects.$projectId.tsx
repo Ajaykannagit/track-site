@@ -331,7 +331,6 @@ function ProjectDetail() {
       options: [
         { value: "bank", label: "Bank Account" },
         { value: "petty_cash", label: "Petty Cash" },
-        { value: "office", label: "Office Central" },
       ],
     },
     {
@@ -1202,6 +1201,7 @@ function ProjectDetail() {
                       reference_number: values["reference_number"] ? String(values["reference_number"]).trim() : null,
                       invoice_reference: values["invoice_reference"] ? String(values["invoice_reference"]).trim() : null,
                       account_type: values["account_type"] || "bank",
+                      payment_source: values["account_type"] || "bank",
                       notes: values["notes"] ? String(values["notes"]).trim() : null,
                       status: "received",
                     },

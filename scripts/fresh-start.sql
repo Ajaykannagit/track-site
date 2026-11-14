@@ -1,9 +1,79 @@
 -- =============================================================================
--- BRICKWELD TRACK-SITE: FRESH START SCRIPT (CLEAN BATCH DELETE)
+-- BRICKWELD TRACK-SITE: COMPREHENSIVE DATA WIPE & MASTER RESET SCRIPT
 -- =============================================================================
--- ⚠️  WARNING: PERMANENTLY DELETES TEST BUSINESS & TEST MASTER DATA.
---     PRESERVES: User logins, roles, permissions, settings, and expense categories.
+-- ⚠️  WARNING: PERMANENTLY CLEARS ALL BUSINESS TRANSACTIONS & TEST MASTER DATA.
+--     ABORTS IMMEDIATELY if any public table is unclassified (neither WIPED nor KEPT).
+--     PRESERVES: Auth users, user roles, system settings, permissions, and expense categories.
 -- =============================================================================
+
+DO $$
+DECLARE
+  v_unclassified text[];
+  v_known_wiped text[] := ARRAY[
+    'group_payment_allocations',
+    'purchase_order_items',
+    'material_receipt_items',
+    'material_request_items',
+    'payment_milestones',
+    'team_members',
+    'notifications',
+    'audit_logs',
+    'deletion_requests',
+    'material_receipts',
+    'contractor_bills',
+    'measurement_books',
+    'supplier_payments',
+    'contractor_payments',
+    'subcontractor_payments',
+    'group_payments',
+    'labour_wage_payments',
+    'wage_payments',
+    'weekly_wage_adjustments',
+    'attendance',
+    'expenses',
+    'md_investments',
+    'client_payments',
+    'account_transfers',
+    'cash_closing',
+    'purchase_orders',
+    'material_requests',
+    'work_orders',
+    'project_quotations',
+    'projects',
+    'teams',
+    'employees',
+    'contractors',
+    'suppliers',
+    'clients',
+    'machines',
+    'job_types'
+  ];
+  v_known_kept text[] := ARRAY[
+    'account_opening_balances',
+    'expense_categories',
+    'user_roles',
+    'user_permissions',
+    'company_settings',
+    'schema_migrations'
+  ];
+BEGIN
+  -- Verify all public tables are classified
+  SELECT array_agg(table_name::text)
+  INTO v_unclassified
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+    AND table_type = 'BASE TABLE'
+    AND table_name != '_prisma_migrations'
+    AND table_name != 'schema_migrations'
+    AND NOT (table_name = ANY(v_known_wiped))
+    AND NOT (table_name = ANY(v_known_kept));
+
+  IF v_unclassified IS NOT NULL AND array_length(v_unclassified, 1) > 0 THEN
+    RAISE EXCEPTION 'ABORTING WIPE: Found unclassified tables in public schema: %', v_unclassified;
+  END IF;
+
+  RAISE NOTICE 'SUCCESS: All public tables verified and accounted for. Proceeding with safe wipe...';
+END $$;
 
 BEGIN;
 
@@ -18,12 +88,12 @@ DELETE FROM public.notifications;
 DELETE FROM public.audit_logs;
 DELETE FROM public.deletion_requests;
 
--- 2. Receipts & Bills
+-- 2. Receipts, Bills & Measurement Books
 DELETE FROM public.material_receipts;
 DELETE FROM public.contractor_bills;
 DELETE FROM public.measurement_books;
 
--- 3. Payments & Adjustments
+-- 3. Payments, Wages & Financial Transactions
 DELETE FROM public.supplier_payments;
 DELETE FROM public.contractor_payments;
 DELETE FROM public.subcontractor_payments;

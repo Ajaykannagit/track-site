@@ -2210,6 +2210,66 @@ function AttendanceWeeklySheetPage() {
           )}
         </DialogContent>
       </Dialog>
+      {/* Pay Team Wage Dialog */}
+      <PayTeamWageDialog
+        target={teamWagePayTarget}
+        open={!!teamWagePayTarget}
+        onOpenChange={(v) => !v && setTeamWagePayTarget(null)}
+        onSuccess={() => {
+          setTeamWagePayTarget(null);
+          qc.invalidateQueries({ queryKey: ["wage_payments"] });
+          qc.invalidateQueries({ queryKey: ["labour_wage_payments"] });
+          qc.invalidateQueries({ queryKey: ["account_balances"] });
+        }}
+      />
+
+      {/* Printable Wage Sheet Dialog */}
+      <PrintableWageSheet
+        type={wagePrintModal || "weekly"}
+        periodLabel={
+          wagePrintModal === "monthly"
+            ? `Month: ${getMonthDisplayName(selectedMonth.year, selectedMonth.month)}`
+            : `Week: ${dateFmt(weekStartISO)} to ${dateFmt(weekEndISO)}`
+        }
+        workers={
+          wagePrintModal === "monthly"
+            ? monthlyWorkerRows.map((r) => ({
+                id: r.employee.id,
+                code: r.employee.employee_code,
+                name: r.employee.full_name,
+                staff_type: (r.employee as any).staff_type || (r.employee.designation?.toLowerCase().includes("supervisor") ? "supervisor" : r.employee.designation?.toLowerCase().includes("officer") ? "officer" : "labour"),
+                designation: r.employee.designation,
+                team_name: r.team,
+                total_days: r.totalDays,
+                rate: r.employee.wage_rate || 0,
+                earned_wage: r.wage,
+                allowances: 0,
+                deductions: 0,
+                net_payable: r.wageBalance,
+                amount_paid: 0,
+                pending_balance: r.wageBalance,
+              }))
+            : workerRows.map((r) => ({
+                id: r.employee.id,
+                code: r.employee.employee_code,
+                name: r.employee.full_name,
+                staff_type: (r.employee as any).staff_type || (r.employee.designation?.toLowerCase().includes("supervisor") ? "supervisor" : r.employee.designation?.toLowerCase().includes("officer") ? "officer" : "labour"),
+                designation: r.employee.designation,
+                team_name: r.team,
+                total_days: r.totalDays,
+                rate: r.employee.wage_rate || 0,
+                earned_wage: r.wage,
+                allowances: r.busPetrol,
+                deductions: r.advance,
+                net_payable: r.wageBalance,
+                amount_paid: r.totalPaidThisWeek,
+                pending_balance: r.finalBalance,
+              }))
+        }
+        open={!!wagePrintModal}
+        onOpenChange={(v) => !v && setWagePrintModal(null)}
+      />
+
       {/* Mark All Present Confirmation Dialog */}
       <Dialog open={markAllOpen} onOpenChange={setMarkAllOpen}>
         <DialogContent className="max-w-md sm:max-w-md max-h-[90vh] overflow-y-auto">

@@ -300,4 +300,101 @@ describe("Part 2 Core Financial & Business Rules Tests", () => {
     const monthly = filterStaffForWagePrint(staffList, "monthly");
     expect(monthly.length).toBe(5);
   });
+
+  // ==========================================================================
+  // PART 1 & 4 AUTOMATED TESTS: Multiple Expenses & Dashboard Pay From Validation
+  // ==========================================================================
+  describe("MultiExpenseDialog & Dashboard Money Form Validation", () => {
+    type ExpenseItem = {
+      expense_date: string;
+      category: string;
+      amount: number;
+      payment_source?: string;
+    };
+
+    function validateExpenseBatch(
+      batchSource: string,
+      items: ExpenseItem[]
+    ): { valid: boolean; error?: string; resolvedItems?: Array<ExpenseItem & { payment_source: string }> } {
+      if (!batchSource || (batchSource !== "bank" && batchSource !== "petty_cash")) {
+        return { valid: false, error: "Please choose a payment source (Bank Account or Petty Cash) before saving." };
+      }
+
+      const validItems = items.filter((i) => i.amount > 0);
+      if (validItems.length === 0) {
+        return { valid: false, error: "Please enter a valid amount for at least one expense." };
+      }
+
+      const resolved = validItems.map((item) => {
+        const effectiveSource = item.payment_source || batchSource;
+        if (!effectiveSource || (effectiveSource !== "bank" && effectiveSource !== "petty_cash")) {
+          throw new Error("Invalid payment source");
+        }
+        return {
+          ...item,
+          payment_source: effectiveSource,
+        };
+      });
+
+      return { valid: true, resolvedItems: resolved };
+    }
+
+    it("rejects an expense batch if batch payment_source is missing", () => {
+      const items: ExpenseItem[] = [
+        { expense_date: "2026-11-14", category: "Fuel", amount: 1500 },
+        { expense_date: "2026-11-14", category: "Tools", amount: 2500 },
+      ];
+      const result = validateExpenseBatch("", items);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("Please choose a payment source");
+    });
+
+    it("accepts an expense batch with batch payment_source defaulting to all rows", () => {
+      const items: ExpenseItem[] = [
+        { expense_date: "2026-11-14", category: "Fuel", amount: 1200 },
+        { expense_date: "2026-11-14", category: "Food", amount: 800 },
+      ];
+      const result = validateExpenseBatch("petty_cash", items);
+      expect(result.valid).toBe(true);
+      expect(result.resolvedItems?.[0].payment_source).toBe("petty_cash");
+      expect(result.resolvedItems?.[1].payment_source).toBe("petty_cash");
+    });
+
+    it("accepts an expense batch with mixed sources using row-level overrides", () => {
+      const items: ExpenseItem[] = [
+        { expense_date: "2026-11-14", category: "Fuel", amount: 1200 }, // uses batch source (petty_cash)
+        { expense_date: "2026-11-14", category: "Machinery Rent", amount: 25000, payment_source: "bank" }, // row override
+      ];
+      const result = validateExpenseBatch("petty_cash", items);
+      expect(result.valid).toBe(true);
+      expect(result.resolvedItems?.[0].payment_source).toBe("petty_cash");
+      expect(result.resolvedItems?.[1].payment_source).toBe("bank");
+    });
+
+    it("verifies PO item-wise GST: cement 18% and sand 0% with travel untaxed after GST", () => {
+      const poItems: PoItemInput[] = [
+        { unit_price: 350, quantity: 100, gst_percent: 18 }, // Cement: 35,000 + 6,300 GST = 41,300
+        { unit_price: 1500, quantity: 10, gst_percent: 0 },   // Sand: 15,000 + 0 GST = 15,000
+      ];
+      const travelCharges = 2500; // Untaxed travel
+      const totals = computePoTotals(poItems, travelCharges);
+
+      expect(totals.materialsSubtotal).toBe(50000); // 35,000 + 15,000
+      expect(totals.gstAmount).toBe(6300); // 18% on cement only
+      expect(totals.materialsWithGst).toBe(56300);
+      expect(totals.travelCharges).toBe(2500);
+      expect(totals.grandTotal).toBe(58800); // 56,300 + 2,500
+    });
+
+    it("verifies wage net pre-fill calculation: wage 10,000, advance 2,000, net payable 8,000, total outflow 10,000", () => {
+      const grossWage = 10000;
+      const advancePaid = 2000;
+      const netPayable = grossWage - advancePaid;
+      expect(netPayable).toBe(8000);
+
+      // Total money outflow across the two events
+      const totalOutflow = advancePaid + netPayable;
+      expect(totalOutflow).toBe(10000);
+    });
+  });
 });

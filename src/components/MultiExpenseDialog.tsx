@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Receipt, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Receipt, AlertCircle, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccountBalances } from "@/lib/db";
 import type { PaymentSourceType } from "@/components/PaymentSourceSelect";
+import { MdInvestmentDialog } from "@/components/MdInvestmentDialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase = typedSupabase as any;
@@ -88,8 +89,9 @@ export function MultiExpenseDialog({
   // Mandatory batch-level payment source (bank or petty_cash)
   const [batchPaymentSource, setBatchPaymentSource] = useState<PaymentSourceType | "">("");
   const [saving, setSaving] = useState(false);
+  const [mdInvestmentOpen, setMdInvestmentOpen] = useState(false);
 
-  const { data: balances } = useAccountBalances();
+  const { data: balances, refetch: refetchBalances } = useAccountBalances();
 
   const [expenses, setExpenses] = useState<ExpenseLineItem[]>([
     emptyExpense(today(), "", categoryOptions[0]?.value ?? "Fuel", "cash"),
@@ -254,6 +256,34 @@ export function MultiExpenseDialog({
                 <AlertCircle className="size-3 shrink-0" /> Select Bank or Petty Cash to unlock Save
               </p>
             )}
+            {batchPaymentSource && balances && (
+              (() => {
+                const liveBal = batchPaymentSource === "bank" ? balances.bank?.balance ?? 0 : balances.petty_cash?.balance ?? 0;
+                const shortfall = totalAmount - liveBal;
+                if (shortfall > 0) {
+                  return (
+                    <div className="mt-2 p-2 rounded bg-amber-500/10 border border-amber-300 dark:border-amber-900/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+                        <AlertCircle className="size-4 shrink-0 text-amber-600" />
+                        <span>
+                          Shortfall Warning: Batch total ({currency(totalAmount)}) exceeds {batchPaymentSource === "bank" ? "Bank" : "Petty Cash"} balance ({currency(liveBal)}) by {currency(shortfall)}.
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMdInvestmentOpen(true)}
+                        className="h-7 text-xs border-amber-600 text-amber-800 hover:bg-amber-100 dark:text-amber-200"
+                      >
+                        <Landmark className="mr-1 size-3.5" /> + MD Investment
+                      </Button>
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
           </div>
 
           {/* Quick autofill bar */}
@@ -330,12 +360,13 @@ export function MultiExpenseDialog({
               <Table>
                 <TableHeader>
                   <TableRow className="text-xs bg-muted/60">
-                    <TableHead className="w-[14%]">Date *</TableHead>
-                    <TableHead className="w-[18%]">Project</TableHead>
-                    <TableHead className="w-[16%]">Category *</TableHead>
-                    <TableHead className="w-[18%]">Material / Item (optional)</TableHead>
-                    <TableHead className="w-[12%]">Method</TableHead>
-                    <TableHead className="w-[12%] text-right">Amount (₹) *</TableHead>
+                    <TableHead className="w-[12%]">Date *</TableHead>
+                    <TableHead className="w-[15%]">Project</TableHead>
+                    <TableHead className="w-[14%]">Category *</TableHead>
+                    <TableHead className="w-[15%]">Material / Item (opt)</TableHead>
+                    <TableHead className="w-[10%]">Method</TableHead>
+                    <TableHead className="w-[14%]">Pay From</TableHead>
+                    <TableHead className="w-[10%] text-right">Amount (₹) *</TableHead>
                     <TableHead className="w-[16%]">Description</TableHead>
                     <TableHead className="w-8" />
                   </TableRow>
@@ -413,6 +444,23 @@ export function MultiExpenseDialog({
                         </Select>
                       </TableCell>
                       <TableCell className="p-1">
+                        <Select
+                          value={exp.payment_source || "batch"}
+                          onValueChange={(v) => updateRow(idx, "payment_source", v === "batch" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-8 text-[11px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="batch">
+                              {batchPaymentSource ? `Batch (${batchPaymentSource === "bank" ? "Bank" : "Cash"})` : "Use Batch"}
+                            </SelectItem>
+                            <SelectItem value="bank">🏦 Bank</SelectItem>
+                            <SelectItem value="petty_cash">💵 Cash</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="p-1">
                         <Input
                           type="number"
                           min={0}
@@ -478,6 +526,16 @@ export function MultiExpenseDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+      {mdInvestmentOpen && (
+        <MdInvestmentDialog
+          open={mdInvestmentOpen}
+          onOpenChange={setMdInvestmentOpen}
+          onSuccess={() => {
+            refetchBalances();
+            qc.invalidateQueries({ queryKey: ["account_balances"] });
+          }}
+        />
+      )}
     </Dialog>
   );
 }

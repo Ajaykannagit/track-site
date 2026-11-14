@@ -30,6 +30,7 @@ type PoItem = {
   quantity: number;
   rate: number;
   amount: number;
+  gst_percent?: number | null;
 };
 
 type PoRow = {
@@ -61,9 +62,12 @@ export function PoItemsSheet({ po, onClose }: Props) {
   const [printOpen, setPrintOpen] = useState(false);
   const total = (items.data ?? []).reduce((s, i) => s + Number(i.amount ?? 0), 0);
   const travelAmt = Number(po?.travel_charges ?? 0);
-  const gstAmt = po?.tax_percent ? Math.round((total * po.tax_percent) / 100) : 0;
-  const subtotalWithGst = total + gstAmt;
-  const finalTotal = subtotalWithGst + travelAmt;
+  const gstAmt = (items.data ?? []).reduce((s, i) => {
+    const rate = i.gst_percent !== undefined && i.gst_percent !== null ? Number(i.gst_percent) : Number(po?.tax_percent ?? 0);
+    return s + (Number(i.amount ?? 0) * rate) / 100;
+  }, 0);
+  const subtotalWithGst = Math.round((total + gstAmt) * 100) / 100;
+  const finalTotal = Math.round((subtotalWithGst + travelAmt) * 100) / 100;
 
   return (
     <>
@@ -104,6 +108,7 @@ export function PoItemsSheet({ po, onClose }: Props) {
                   <TableHead>Specification / Unit</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
                   <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">GST %</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
@@ -117,6 +122,9 @@ export function PoItemsSheet({ po, onClose }: Props) {
                     </TableCell>
                     <TableCell className="text-right text-sm">{item.quantity}</TableCell>
                     <TableCell className="text-right text-sm">{currency(item.rate)}</TableCell>
+                    <TableCell className="text-right text-xs font-mono">
+                      {item.gst_percent !== undefined && item.gst_percent !== null ? `${item.gst_percent}%` : `${po?.tax_percent ?? 0}%`}
+                    </TableCell>
                     <TableCell className="text-right text-sm font-semibold font-mono">
                       {currency(item.amount)}
                     </TableCell>
@@ -130,7 +138,7 @@ export function PoItemsSheet({ po, onClose }: Props) {
                 <span className="font-mono">{currency(total)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">GST Tax ({po?.tax_percent ?? 0}%):</span>
+                <span className="text-muted-foreground">GST Tax (Item-wise):</span>
                 <span className="font-mono">{currency(gstAmt)}</span>
               </div>
               <div className="flex justify-between border-t pt-1 font-semibold">

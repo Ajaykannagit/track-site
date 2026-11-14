@@ -11,7 +11,7 @@ import { RowMarkerBadge, RowMarkerLegend } from "@/components/RowMarkerBadge";
 import { RequirePermission } from "@/components/RequirePermission";
 import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { BookOpen, HandCoins, Info, Pencil, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, HandCoins, Info, Pencil, Plus, Printer, RotateCcw, Trash2, BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -34,6 +34,8 @@ import { currency, dateFmt, monthStart, today } from "@/lib/format";
 import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 import { MultiExpenseDialog } from "@/components/MultiExpenseDialog";
+import { AccountSummaryTab, type AccountHeadTransaction } from "@/components/AccountSummaryTab";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
@@ -97,6 +99,7 @@ type ClientPayment = {
   amount: number;
   payment_date: string;
   payment_method: string;
+  payment_source?: string | null;
   reference_number: string | null;
   payment_category: string;
   invoice_reference: string | null;
@@ -257,6 +260,7 @@ function AccountsPage() {
   const setLedgerProjectFilter = setSharedProjectFilter;
 
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
+  const [showAllPayments, setShowAllPayments] = useState(false);
   const [closingAccountFilter, setClosingAccountFilter] = useState<string>("all");
   const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<string>("all");
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
@@ -315,6 +319,7 @@ function AccountsPage() {
     payment_method: string | null;
     reference_number: string | null;
     remarks: string | null;
+  payment_source: string;
   }>("supplier_payments", {
     filters: [
       { col: "payment_date", op: "gte", value: from },
@@ -333,6 +338,7 @@ function AccountsPage() {
     payment_method: string | null;
     reference_number: string | null;
     remarks: string | null;
+  payment_source: string;
   }>("contractor_payments", {
     filters: [
       { col: "payment_date", op: "gte", value: from },
@@ -351,6 +357,7 @@ function AccountsPage() {
     payment_method: string | null;
     reference_number: string | null;
     remarks: string | null;
+  payment_source: string;
   }>("subcontractor_payments", {
     filters: [
       { col: "payment_date", op: "gte", value: from },
@@ -368,6 +375,7 @@ function AccountsPage() {
     payment_method: string | null;
     reference_number: string | null;
     notes: string | null;
+  payment_source: string;
   }>("wage_payments", {
     filters: [
       { col: "payment_date", op: "gte", value: from },
@@ -407,6 +415,31 @@ function AccountsPage() {
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const canModify = canWriteFinance || isMD;
+
+  
+// Map categories to standardized client heads
+const mapToAccountHead = (category: string): string => {
+  const c = (category || "").toLowerCase();
+  if (c.includes("market") || c.includes("advertis")) return "Advertising and Marketing";
+  if (c.includes("audit")) return "Audit Fees";
+  if (c.includes("auto") || c.includes("vehicle")) return "Automobile Expense";
+  if (c.includes("bad debt")) return "Bad Debt";
+  if (c.includes("bank charge") || c.includes("bank fee")) return "Bank Fees and Charges";
+  if (c.includes("commiss")) return "Commission";
+  if (c.includes("consult")) return "Consultant Expense";
+  if (c.includes("fuel") || c.includes("diesel") || c.includes("petrol") || c.includes("mileage")) return "Fuel/Mileage";
+  if (c.includes("it") || c.includes("internet") || c.includes("software")) return "IT and Internet";
+  if (c.includes("lodg") || c.includes("hotel") || c.includes("room")) return "Lodging";
+  if (c.includes("food") || c.includes("meal") || c.includes("entertain")) return "Meals and Entertainment";
+  if (c.includes("postage") || c.includes("courier")) return "Postage";
+  if (c.includes("consumab") || c.includes("tool") || c.includes("raw material") || c.includes("material")) return "Raw Materials and Consumables";
+  if (c.includes("rent") || c.includes("machin")) return "Rent";
+  if (c.includes("repair") || c.includes("maint")) return "Repairs and Maintenance";
+  if (c.includes("tax") || c.includes("gst") || c.includes("tds")) return "Tax Paid";
+  if (c.includes("transport") || c.includes("loading") || c.includes("unloading")) return "Transportation";
+  if (c.includes("travel")) return "Travel";
+  return category || "Other Expenses";
+};
 
   // Filtered expenses (excludes voided unless showVoided is true)
   const filteredExpenses = useMemo(() => {
@@ -641,6 +674,176 @@ function AccountsPage() {
     contractors.data,
     teams.data,
     employees.data,
+    projectName,
+    supplierName,
+    contractorName,
+    teamName,
+    employeeName,
+  ]);
+
+  
+  // Account Head Transactions for Trial Balance / Account Summary
+  const accountSummaryTransactions = useMemo<AccountHeadTransaction[]>(() => {
+    const list: AccountHeadTransaction[] = [];
+
+    // 1. MD Investments -> Equity: Investments
+    for (const inv of mdInvestments.data ?? []) {
+      if ((inv as any).is_void) continue;
+      list.push({
+        id: `mdi-${inv.id}`,
+        date: inv.investment_date,
+        amount: Number(inv.amount || 0),
+        payment_source: inv.payment_source === "bank" ? "bank" : "petty_cash",
+        head: "Investments",
+        category: "Equity",
+        project_id: null,
+        projectName: "Head Office / Equity",
+        party: "Managing Director",
+        reference_number: inv.reference_number || "—",
+        remarks: inv.remarks || "Capital Infusion",
+      });
+    }
+
+    // 2. Client Receipts -> Income: Sales
+    for (const cp of clientPayments.data ?? []) {
+      if ((cp as any).is_void) continue;
+      const src = (cp.payment_source || cp.account_type || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
+      list.push({
+        id: `cp-${cp.id}`,
+        date: cp.payment_date,
+        amount: Number(cp.amount || 0),
+        payment_source: src,
+        head: cp.payment_category === "other" ? "Other Charges" : "Sales",
+        category: "Income",
+        project_id: cp.project_id,
+        projectName: projectName(cp.project_id),
+        party: `Client (${projectName(cp.project_id)})`,
+        reference_number: cp.receipt_number || cp.reference_number || "—",
+        remarks: cp.notes || "Client Receipt",
+      });
+    }
+
+    // 3. Supplier Payments -> Expense: Raw Materials and Consumables
+    for (const sp of supplierPayments.data ?? []) {
+      if ((sp as any).is_void) continue;
+      const src = (sp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
+      list.push({
+        id: `sp-${sp.id}`,
+        date: sp.payment_date,
+        amount: Number(sp.amount || 0),
+        payment_source: src,
+        head: "Raw Materials and Consumables",
+        category: "Expense",
+        project_id: sp.project_id,
+        projectName: projectName(sp.project_id),
+        party: supplierName(sp.supplier_id),
+        reference_number: sp.reference_number || "—",
+        remarks: sp.remarks || "Material Supplier Bill",
+      });
+    }
+
+    // 4. Contractor & Subcontractor Payments -> Expense: Subcontractor
+    for (const cp of contractorPayments.data ?? []) {
+      if ((cp as any).is_void) continue;
+      const src = (cp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
+      list.push({
+        id: `conp-${cp.id}`,
+        date: cp.payment_date,
+        amount: Number(cp.amount || 0),
+        payment_source: src,
+        head: "Subcontractor",
+        category: "Expense",
+        project_id: cp.project_id,
+        projectName: projectName(cp.project_id),
+        party: contractorName(cp.contractor_id),
+        reference_number: cp.reference_number || "—",
+        remarks: cp.remarks || "Contractor Bill Settlement",
+      });
+    }
+    for (const scp of subcontractorPayments.data ?? []) {
+      if ((scp as any).is_void) continue;
+      const src = (scp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
+      list.push({
+        id: `subp-${scp.id}`,
+        date: scp.payment_date,
+        amount: Number(scp.amount || 0),
+        payment_source: src,
+        head: "Subcontractor",
+        category: "Expense",
+        project_id: scp.project_id,
+        projectName: projectName(scp.project_id),
+        party: scp.name,
+        reference_number: scp.reference_number || "—",
+        remarks: scp.remarks || "Ad-hoc Subcontractor Payment",
+      });
+    }
+
+    // 5. Wage Payments & Advances -> Expense: Salaries and Employee Wages
+    for (const wp of wagePayments.data ?? []) {
+      if ((wp as any).is_void) continue;
+      const src = (wp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
+      list.push({
+        id: `wp-${wp.id}`,
+        date: wp.payment_date,
+        amount: Number(wp.amount || 0),
+        payment_source: src,
+        head: "Salaries and Employee Wages",
+        category: "Expense",
+        project_id: null,
+        projectName: "Labour Payroll",
+        party: `Team: ${teamName(wp.team_id)}`,
+        reference_number: wp.reference_number || "—",
+        remarks: wp.notes || "Weekly Labour Wages",
+      });
+    }
+    for (const wa of wageAdvances.data ?? []) {
+      if (Number(wa.advance_paid || 0) > 0) {
+        const src = ((wa as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash";
+        list.push({
+          id: `wa-${wa.id}`,
+          date: wa.week_start_date,
+          amount: Number(wa.advance_paid),
+          payment_source: src,
+          head: "Salaries and Employee Wages",
+          category: "Expense",
+          project_id: null,
+          projectName: "Labour Payroll",
+          party: employeeName(wa.employee_id),
+          reference_number: wa.reference_number || "—",
+          remarks: "Wage Advance",
+        });
+      }
+    }
+
+    // 6. Expenses -> Mapped to Account Head
+    for (const exp of expenses.data ?? []) {
+      if ((exp as any).is_void) continue;
+      const src = ((exp as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash";
+      list.push({
+        id: `exp-${exp.id}`,
+        date: exp.expense_date,
+        amount: Number(exp.amount || 0),
+        payment_source: src,
+        head: mapToAccountHead(exp.category),
+        category: "Expense",
+        project_id: exp.project_id,
+        projectName: exp.project_id ? projectName(exp.project_id) : "General / Head Office",
+        party: exp.project_id ? "Site Expense" : "Office Expense",
+        reference_number: "—",
+        remarks: exp.description || exp.material_name || exp.category,
+      });
+    }
+
+    return list;
+  }, [
+    mdInvestments.data,
+    clientPayments.data,
+    supplierPayments.data,
+    contractorPayments.data,
+    subcontractorPayments.data,
+    wagePayments.data,
+    wageAdvances.data,
+    expenses.data,
     projectName,
     supplierName,
     contractorName,
@@ -1364,6 +1567,9 @@ function AccountsPage() {
 
       <Tabs defaultValue="ledger">
         <TabsList className="no-print">
+          <TabsTrigger value="summary">
+            <BarChart3 className="mr-1.5 size-3.5" /> Account Summary
+          </TabsTrigger>
           <TabsTrigger value="ledger">
             <BookOpen className="mr-1.5 size-3.5" /> Unified Ledger ({filteredLedger.length})
           </TabsTrigger>
@@ -1382,6 +1588,22 @@ function AccountsPage() {
             <TabsTrigger value="opening_balances">Opening Balances</TabsTrigger>
           )}
         </TabsList>
+
+        {/* ================= ACCOUNT SUMMARY / TRIAL BALANCE ================= */}
+        <TabsContent value="summary" className="mt-4 space-y-4">
+          <AccountSummaryTab
+            from={from}
+            to={to}
+            onFromChange={setFrom}
+            onToChange={setTo}
+            projectOptions={projectOptions}
+            transactions={accountSummaryTransactions}
+            openingBalances={{
+              bank: liveBalances?.bank?.opening ?? 0,
+              petty_cash: liveBalances?.petty_cash?.opening ?? 0,
+            }}
+          />
+        </TabsContent>
 
         {/* ================= UNIFIED LEDGER ================= */}
         <TabsContent value="ledger" className="mt-4 space-y-4">
@@ -1528,6 +1750,12 @@ function AccountsPage() {
 
             {/* Expense Filters */}
             <div className="no-print flex flex-wrap items-end gap-2">
+              <div className="flex items-center gap-2 px-2 py-1 rounded border bg-card text-xs">
+                <Switch id="show-all-payments" checked={showAllPayments} onCheckedChange={setShowAllPayments} />
+                <Label htmlFor="show-all-payments" className="text-xs cursor-pointer font-medium">
+                  Show all payments (suppliers, contractors, wages, bank charges)
+                </Label>
+              </div>
               <VoidToggle showVoided={showVoided} onToggle={setShowVoided} voidCount={voidedExpensesCount} />
               <div>
                 <Select value={expenseProjectFilter} onValueChange={setExpenseProjectFilter}>

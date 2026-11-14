@@ -629,6 +629,16 @@ function ContractorsPage() {
     { name: "payment_date", label: "Payment date", type: "date", required: true },
     { name: "amount", label: "Amount (₹)", type: "number", required: true },
     {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
+    {
       name: "payment_method",
       label: "Method",
       type: "select",
@@ -1179,7 +1189,7 @@ function ContractorsPage() {
                 </Button>
               }
               submitting={savePayment.isPending}
-              initial={{ payment_date: today(), payment_method: "bank" }}
+              initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank" }}
               fields={paymentFields}
               onSubmit={async (values) => {
                 await savePayment.mutateAsync({
@@ -1187,6 +1197,7 @@ function ContractorsPage() {
                     ...values,
                     bill_id: values["bill_id"] || null,
                     amount: Number(values["amount"] ?? 0),
+                    payment_source: values["payment_source"],
                   },
                 });
               }}
@@ -1207,6 +1218,7 @@ function ContractorsPage() {
                 payment_date: editingPayment.payment_date,
                 amount: editingPayment.amount,
                 payment_method: editingPayment.payment_method ?? "bank",
+                payment_source: (editingPayment as any).payment_source ?? "bank",
                 reference_number: editingPayment.reference_number ?? "",
                 remarks: editingPayment.remarks ?? "",
               }}
@@ -1371,7 +1383,7 @@ function ContractorsPage() {
                 </Button>
               }
               submitting={saveSubPay.isPending}
-              initial={{ payment_date: today(), status: "pending", week_start_date: today() }}
+              initial={{ payment_date: today(), status: "pending", week_start_date: today(), payment_source: "bank" }}
               fields={[
                 { name: "name", label: "Name / Description", required: true },
                 { name: "work_description", label: "Work details", type: "textarea" },
@@ -1384,6 +1396,16 @@ function ContractorsPage() {
                 },
                 { name: "project_id", label: "Project", type: "select", options: projectOptions },
                 { name: "amount", label: "Amount (₹)", type: "number", required: true },
+    {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
                 {
                   name: "payment_method",
                   label: "Method",
@@ -1408,6 +1430,7 @@ function ContractorsPage() {
                     ...values,
                     project_id: values["project_id"] || null,
                     amount: Number(values["amount"] ?? 0),
+                    payment_source: values["payment_source"],
                   },
                 });
               }}
@@ -1436,6 +1459,16 @@ function ContractorsPage() {
                     options: projectOptions,
                   },
                   { name: "amount", label: "Amount (₹)", type: "number", required: true },
+    {
+      name: "payment_source",
+      label: "Pay from (Bank or Petty Cash) *",
+      type: "select",
+      required: true,
+      options: [
+        { value: "bank", label: "Bank Account" },
+        { value: "petty_cash", label: "Petty Cash" },
+      ],
+    },
                   {
                     name: "payment_method",
                     label: "Method",
@@ -1472,7 +1505,8 @@ function ContractorsPage() {
                     values: {
                       ...values,
                       project_id: values["project_id"] || null,
-                      amount: Number(values["amount"] ?? 0),
+                    amount: Number(values["amount"] ?? 0),
+                    payment_source: values["payment_source"],
                     },
                   });
                   setEditingSubPay(null);

@@ -63,7 +63,11 @@ interface Props {
   onSuccess?: () => void;
 }
 
-const emptyItem = (): MaterialLineItem & { gst_percent?: number } => ({
+type PoLineItem = MaterialLineItem & {
+  gst_percent?: number;
+};
+
+const emptyItem = (): PoLineItem => ({
   material: "",
   specification: "",
   unit: "bag",
@@ -97,7 +101,7 @@ export function MultiMaterialPoDialog({
   const [travelCharges, setTravelCharges] = useState<number>(0);
   const [terms, setTerms] = useState("");
   const [editReason, setEditReason] = useState("");
-  const [items, setItems] = useState<MaterialLineItem[]>([emptyItem()]);
+  const [items, setItems] = useState<PoLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
 
   const savePo = useSaveRow("purchase_orders", "Purchase Order");
@@ -131,6 +135,7 @@ export function MultiMaterialPoDialog({
                   quantity: Number(d.quantity ?? 0),
                   rate: Number(d.rate ?? 0),
                   amount: Number(d.amount ?? 0),
+                  gst_percent: d.gst_percent !== undefined && d.gst_percent !== null ? Number(d.gst_percent) : (editingPo.tax_percent ?? 18),
                 }))
               );
             } else {
@@ -184,6 +189,7 @@ export function MultiMaterialPoDialog({
             quantity: Number(i.quantity ?? 0),
             rate: Number(i.rate ?? 0),
             amount: Number(i.amount ?? 0),
+            gst_percent: 18,
           }))
         );
         toast.info(`Imported ${indentItems.length} materials from Indent ${indentData?.request_number || ""}`);
@@ -193,10 +199,10 @@ export function MultiMaterialPoDialog({
     }
   };
 
-  const updateItem = (index: number, field: keyof MaterialLineItem, value: any) => {
+  const updateItem = (index: number, field: keyof PoLineItem, value: any) => {
     setItems((prev) => {
       const next = [...prev];
-      const item = { ...next[index], [field]: value } as MaterialLineItem;
+      const item = { ...next[index], [field]: value } as PoLineItem;
       const qty = Number(item.quantity ?? 0);
       const rate = Number(item.rate ?? 0);
       item.amount = Math.round(qty * rate * 100) / 100;
@@ -325,6 +331,7 @@ export function MultiMaterialPoDialog({
           quantity: Number(item.quantity) || 0,
           rate: Number(item.rate) || 0,
           amount: Number(item.amount) || 0,
+          gst_percent: item.gst_percent !== undefined && item.gst_percent !== null ? Number(item.gst_percent) : (taxPercent || 0),
         }));
 
         await supabase.from("purchase_order_items").insert(itemsToInsert);
@@ -465,13 +472,14 @@ export function MultiMaterialPoDialog({
               <Table>
                 <TableHeader>
                   <TableRow className="text-xs bg-muted/60">
-                    <TableHead className="w-[30%]">Material Name *</TableHead>
-                    <TableHead className="w-[22%]">Specification</TableHead>
-                    <TableHead className="w-[12%]">Unit</TableHead>
-                    <TableHead className="w-[12%] text-right">Quantity *</TableHead>
-                    <TableHead className="w-[12%] text-right">Rate (₹) *</TableHead>
+                    <TableHead className="w-[28%]">Material Name *</TableHead>
+                    <TableHead className="w-[18%]">Specification</TableHead>
+                    <TableHead className="w-[10%]">Unit</TableHead>
+                    <TableHead className="w-[10%] text-right">Quantity *</TableHead>
+                    <TableHead className="w-[11%] text-right">Rate (₹) *</TableHead>
+                    <TableHead className="w-[11%] text-center">GST %</TableHead>
                     <TableHead className="w-[12%] text-right">Amount (₹)</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -525,6 +533,23 @@ export function MultiMaterialPoDialog({
                           required
                           className="h-8 text-xs text-right"
                         />
+                      </TableCell>
+                      <TableCell className="p-1.5">
+                        <Select
+                          value={String(item.gst_percent !== undefined && item.gst_percent !== null ? item.gst_percent : taxPercent || 0)}
+                          onValueChange={(val) => updateItem(idx, "gst_percent", Number(val) || 0)}
+                        >
+                          <SelectTrigger className="h-8 text-xs font-mono">
+                            <SelectValue placeholder="0%" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">0%</SelectItem>
+                            <SelectItem value="5">5%</SelectItem>
+                            <SelectItem value="12">12%</SelectItem>
+                            <SelectItem value="18">18%</SelectItem>
+                            <SelectItem value="28">28%</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell className="p-1.5 text-right font-mono font-medium text-xs">
                         {currency(item.amount)}
