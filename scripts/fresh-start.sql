@@ -41,7 +41,6 @@ DELETE FROM public.cash_closing;
 -- 4. Orders & Requests
 DELETE FROM public.purchase_orders;
 DELETE FROM public.material_requests;
-DELETE FROM public.indents;
 DELETE FROM public.work_orders;
 DELETE FROM public.project_quotations;
 
