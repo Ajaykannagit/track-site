@@ -1280,6 +1280,7 @@ function ProjectDetail() {
                       payment_date: today(),
                       payment_method: reversingPayment.payment_method,
                       payment_category: "reversal",
+                      payment_source: (reversingPayment as any).payment_source || (reversingPayment.account_type === "petty_cash" ? "petty_cash" : "bank"),
                       reference_number: `Reversal of ${reversingPayment.receipt_number}`,
                       account_type: reversingPayment.account_type,
                       status: "received",

@@ -356,8 +356,9 @@ describe("Part 2 Core Financial & Business Rules Tests", () => {
       ];
       const result = validateExpenseBatch("petty_cash", items);
       expect(result.valid).toBe(true);
-      expect(result.resolvedItems?.[0].payment_source).toBe("petty_cash");
-      expect(result.resolvedItems?.[1].payment_source).toBe("petty_cash");
+      const itemsList = result.resolvedItems || [];
+      expect(itemsList[0]?.payment_source).toBe("petty_cash");
+      expect(itemsList[1]?.payment_source).toBe("petty_cash");
     });
 
     it("accepts an expense batch with mixed sources using row-level overrides", () => {
@@ -367,8 +368,9 @@ describe("Part 2 Core Financial & Business Rules Tests", () => {
       ];
       const result = validateExpenseBatch("petty_cash", items);
       expect(result.valid).toBe(true);
-      expect(result.resolvedItems?.[0].payment_source).toBe("petty_cash");
-      expect(result.resolvedItems?.[1].payment_source).toBe("bank");
+      const itemsList = result.resolvedItems || [];
+      expect(itemsList[0]?.payment_source).toBe("petty_cash");
+      expect(itemsList[1]?.payment_source).toBe("bank");
     });
 
     it("verifies PO item-wise GST: cement 18% and sand 0% with travel untaxed after GST", () => {
