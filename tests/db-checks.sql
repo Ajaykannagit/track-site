@@ -37,6 +37,13 @@ DECLARE
   v_financials json;
   v_notif_count int;
   v_test_count int;
+  v_proj_code text := 'TEST-PROJ-' || substr(gen_random_uuid()::text, 1, 8);
+  v_con_code text := 'TEST-CON-' || substr(gen_random_uuid()::text, 1, 8);
+  v_emp_code text := 'TEST-EMP-' || substr(gen_random_uuid()::text, 1, 8);
+  v_team_name text := '__STAGING_TEAM_' || substr(gen_random_uuid()::text, 1, 8);
+  v_rec_null text := 'REC-NULL-' || substr(gen_random_uuid()::text, 1, 8);
+  v_rec_paid text := 'REC-PAID-' || substr(gen_random_uuid()::text, 1, 8);
+  v_po_prefix text := 'PO-BULK-' || substr(gen_random_uuid()::text, 1, 6);
 BEGIN
   -- ---------------------------------------------------------------------------
   -- SETUP: Identify or create test auth contexts
@@ -44,24 +51,24 @@ BEGIN
   SELECT user_id INTO v_md_user_id FROM public.user_roles WHERE role = 'md' LIMIT 1;
   SELECT user_id INTO v_acc_user_id FROM public.user_roles WHERE role = 'accounts' LIMIT 1;
 
-  INSERT INTO public.projects (name, status)
-  VALUES ('__STAGING_SECURITY_TEST_PROJ__', 'active')
+  INSERT INTO public.projects (project_code, name, status)
+  VALUES (v_proj_code, '__STAGING_SECURITY_TEST_PROJ__', 'active')
   RETURNING id INTO v_test_proj_id;
 
   INSERT INTO public.suppliers (name)
   VALUES ('__STAGING_TEST_SUP__')
   RETURNING id INTO v_test_sup_id;
 
-  INSERT INTO public.contractors (name)
-  VALUES ('__STAGING_TEST_CON__')
+  INSERT INTO public.contractors (contractor_code, name)
+  VALUES (v_con_code, '__STAGING_TEST_CON__')
   RETURNING id INTO v_test_con_id;
 
   INSERT INTO public.teams (name)
-  VALUES ('__STAGING_TEST_TEAM__')
+  VALUES (v_team_name)
   RETURNING id INTO v_test_team_id;
 
-  INSERT INTO public.employees (full_name, designation, staff_type, daily_rate)
-  VALUES ('__STAGING_TEST_WORKER__', 'Mason', 'labour', 1000)
+  INSERT INTO public.employees (employee_code, full_name, designation, employee_type, wage_rate)
+  VALUES (v_emp_code, '__STAGING_TEST_WORKER__', 'Mason', 'labour', 1000)
   RETURNING id INTO v_test_emp_id;
 
   -- ---------------------------------------------------------------------------
@@ -92,8 +99,8 @@ BEGIN
   END;
 
   BEGIN
-    INSERT INTO public.subcontractor_payments (payment_date, amount, name, payment_source)
-    VALUES (CURRENT_DATE, 3000, 'Sub Test', NULL);
+    INSERT INTO public.subcontractor_payments (payment_date, week_start_date, amount, name, payment_source)
+    VALUES (CURRENT_DATE, CURRENT_DATE, 3000, 'Sub Test', NULL);
     INSERT INTO test_results VALUES ('1.4', 'subcontractor_payments NULL payment_source rejection', 'FAIL', 'Inserted NULL payment_source successfully');
   EXCEPTION WHEN not_null_violation THEN
     INSERT INTO test_results VALUES ('1.4', 'subcontractor_payments NULL payment_source rejection', 'PASS', 'Rejected with not_null_violation');
@@ -101,7 +108,7 @@ BEGIN
 
   BEGIN
     INSERT INTO public.client_payments (payment_date, amount, project_id, receipt_number, payment_source)
-    VALUES (CURRENT_DATE, 20000, v_test_proj_id, 'REC-TEST-NULL', NULL);
+    VALUES (CURRENT_DATE, 20000, v_test_proj_id, v_rec_null, NULL);
     INSERT INTO test_results VALUES ('1.5', 'client_payments NULL payment_source rejection', 'FAIL', 'Inserted NULL payment_source successfully');
   EXCEPTION WHEN not_null_violation THEN
     INSERT INTO test_results VALUES ('1.5', 'client_payments NULL payment_source rejection', 'PASS', 'Rejected with not_null_violation');
@@ -119,7 +126,7 @@ BEGIN
   -- 2. RUNNING BALANCES & RECONCILIATION
   -- ---------------------------------------------------------------------------
   INSERT INTO public.client_payments (payment_date, amount, project_id, receipt_number, payment_source)
-  VALUES (CURRENT_DATE, 100000, v_test_proj_id, 'REC-STAGING-001', 'bank');
+  VALUES (CURRENT_DATE, 100000, v_test_proj_id, v_rec_paid, 'bank');
 
   INSERT INTO public.expenses (expense_date, amount, category, payment_source)
   VALUES (CURRENT_DATE, 25000, 'Site Consumables', 'bank');
@@ -137,8 +144,8 @@ BEGIN
   INSERT INTO public.weekly_wage_adjustments (employee_id, week_start_date, advance_paid, payment_source)
   VALUES (v_test_emp_id, CURRENT_DATE, 2000, 'petty_cash');
 
-  INSERT INTO public.wage_payments (team_id, payment_date, amount, payment_source)
-  VALUES (v_test_team_id, CURRENT_DATE, 8000, 'petty_cash');
+  INSERT INTO public.wage_payments (team_id, week_start_date, payment_date, amount, payment_source)
+  VALUES (v_test_team_id, CURRENT_DATE, CURRENT_DATE, 8000, 'petty_cash');
 
   SELECT * INTO v_balances FROM public.get_account_balances() WHERE account_type = 'petty_cash';
   IF v_balances.total_outflows >= 10000 THEN
@@ -151,7 +158,7 @@ BEGIN
   -- 4. SOFT DELETE BLOCKING WITH DEPENDENTS
   -- ---------------------------------------------------------------------------
   BEGIN
-    PERFORM public.soft_delete_record('projects', v_test_proj_id::text, 'admin_check');
+    PERFORM public.soft_delete_record('projects', v_test_proj_id, 'admin_check');
     INSERT INTO test_results VALUES ('4.1', 'Block deletion when dependent records exist', 'FAIL', 'Allowed project deletion with dependents');
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO test_results VALUES ('4.1', 'Block deletion when dependent records exist', 'PASS', 'Blocked project deletion with dependent client receipts');
@@ -210,9 +217,9 @@ BEGIN
   -- Insert 3 temporary purchase orders
   INSERT INTO public.purchase_orders (po_number, project_id, status)
   VALUES 
-    ('PO-BULK-1', v_test_proj_id, 'draft'),
-    ('PO-BULK-2', v_test_proj_id, 'draft'),
-    ('PO-BULK-3', v_test_proj_id, 'draft');
+    (v_po_prefix || '-1', v_test_proj_id, 'draft'),
+    (v_po_prefix || '-2', v_test_proj_id, 'draft'),
+    (v_po_prefix || '-3', v_test_proj_id, 'draft');
 
   -- Record baseline notifications
   SELECT count(*) INTO v_test_count FROM public.notifications WHERE title LIKE '%Bulk Delete%';
@@ -221,7 +228,7 @@ BEGIN
   INSERT INTO public.notifications (title, message, type, target_role, created_by)
   VALUES (
     'Bulk Delete: 3 purchase_orders record(s) deleted',
-    'Records PO-BULK-1, PO-BULK-2, PO-BULK-3 deleted by accountant.',
+    'Records deleted during staging security test.',
     'warning',
     'md',
     v_acc_user_id
@@ -238,11 +245,13 @@ BEGIN
   -- TEARDOWN FIXTURES
   -- ---------------------------------------------------------------------------
   DELETE FROM public.notifications WHERE title LIKE '%Bulk Delete%';
-  DELETE FROM public.purchase_orders WHERE po_number LIKE 'PO-BULK-%';
+  DELETE FROM public.purchase_orders WHERE project_id = v_test_proj_id;
   DELETE FROM public.wage_payments WHERE team_id = v_test_team_id;
   DELETE FROM public.weekly_wage_adjustments WHERE employee_id = v_test_emp_id;
-  DELETE FROM public.expenses WHERE category IN ('Fuel', 'Site Consumables') AND amount IN (500, 25000);
-  DELETE FROM public.client_payments WHERE receipt_number IN ('REC-STAGING-001', 'REC-TEST-NULL');
+  DELETE FROM public.client_payments WHERE project_id = v_test_proj_id;
+  DELETE FROM public.supplier_payments WHERE project_id = v_test_proj_id;
+  DELETE FROM public.contractor_payments WHERE project_id = v_test_proj_id;
+  DELETE FROM public.expenses WHERE project_id = v_test_proj_id OR (amount = 25000 AND category = 'Site Consumables' AND created_at >= CURRENT_DATE);
   DELETE FROM public.employees WHERE id = v_test_emp_id;
   DELETE FROM public.teams WHERE id = v_test_team_id;
   DELETE FROM public.contractors WHERE id = v_test_con_id;
