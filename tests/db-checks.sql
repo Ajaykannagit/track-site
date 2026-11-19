@@ -21,6 +21,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS test_results (
   details text
 );
 
+GRANT ALL ON test_results TO authenticated, anon, public;
+
 TRUNCATE TABLE test_results;
 
 DO $$
