@@ -46,18 +46,21 @@ const ROLE_OPTIONS = (Object.keys(ROLE_LABEL) as AppRole[]).map((r) => ({
 }));
 
 function SettingsPage() {
-  const { isMD, roles: myRoles, user, refreshRoles } = useAuth();
+  const { isMD, permissions, roles: myRoles, user, refreshRoles } = useAuth();
+  const canManageRoles = isMD || permissions.canManageUsers;
 
   const profiles = useRows<Profile>("profiles", { order: { col: "full_name", asc: true } });
   const userRoles = useRows<RoleRow>("user_roles", { order: { col: "created_at", asc: true } });
   const settings = useRows<Setting>("app_settings", { order: { col: "key", asc: true } });
 
   const saveRole = useSaveRow("user_roles", "Role");
-  // user_roles has no soft-delete column; MD deletes role rows directly via plain DELETE.
-  // MD-only RLS on user_roles already enforces that only the MD can do this.
   const qc = useQueryClient();
   const deleteRole = useMutation({
     mutationFn: async (id: string) => {
+      const targetRole = userRoles.data?.find((r) => r.id === id);
+      if (!isMD && targetRole?.role === "md") {
+        throw new Error("Only the MD can modify or delete the MD role.");
+      }
       const { error } = await supabase.from("user_roles").delete().eq("id", id);
       if (error) throw error;
     },
@@ -71,6 +74,10 @@ function SettingsPage() {
 
   const [editing, setEditing] = useState<Setting | null>(null);
   const [deletingRole, setDeletingRole] = useState<RoleRow | null>(null);
+
+  const roleOptionsFiltered = isMD
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((r) => r.value !== "md");
 
   const roleFields: Field[] = [
     {
@@ -89,7 +96,7 @@ function SettingsPage() {
       label: "Role",
       type: "select",
       required: true,
-      options: ROLE_OPTIONS,
+      options: roleOptionsFiltered,
       full: true,
     },
   ];
@@ -111,10 +118,10 @@ function SettingsPage() {
         }
       />
 
-      {!isMD && (
+      {!canManageRoles && (
         <Card className="mb-4 border-warning/40">
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            Only an MD / Administrator can change roles or configuration. You have read-only access
+            Only an MD or Accountant can change roles or configuration. You have read-only access
             here.
           </CardContent>
         </Card>
@@ -131,7 +138,7 @@ function SettingsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Users</CardTitle>
-              {isMD && (
+              {canManageRoles && (
                 <FormDialog
                   title="Assign role"
                   description="Grant a role to an existing user."
@@ -143,8 +150,13 @@ function SettingsPage() {
                     </Button>
                   }
                   onSubmit={async (values) => {
+                    const selectedRole = String(values["role"]);
+                    if (!isMD && selectedRole === "md") {
+                      toast.error("Only the MD can assign the MD role.");
+                      return;
+                    }
                     await saveRole.mutateAsync({
-                      values: { user_id: String(values["user_id"]), role: String(values["role"]) },
+                      values: { user_id: String(values["user_id"]), role: selectedRole },
                     });
                     if (String(values["user_id"]) === user?.id) await refreshRoles();
                   }}
@@ -214,7 +226,7 @@ function SettingsPage() {
                     header: "Actions",
                     className: "text-right w-16",
                     cell: (r) =>
-                      isMD ? (
+                      canManageRoles && (isMD || r.role !== "md") ? (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -278,7 +290,7 @@ function SettingsPage() {
                     header: "",
                     className: "text-right",
                     cell: (r) =>
-                      isMD ? (
+                      canManageRoles ? (
                         <Button variant="outline" size="sm" onClick={() => setEditing(r)}>
                           Edit
                         </Button>

@@ -60,8 +60,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewCompanyFinancials: false, // MD-only high-level earnings/spend dashboard
     canViewCompanyCashOnHand: false, // MD-only company-wide cash balance
     canViewOfficeExpense: true,      // Accountant can view and enter office expenses
-    canManageUsers: false,           // Strictly MD-only: cannot assign roles or supervisors
-    canViewAuditLog: false,
+    canManageUsers: true,            // Accountant can manage user roles (except MD)
+    canViewAuditLog: true,           // Accountant can view audit log history
     canViewProfitAndLoss: false,     // ← Accounts CANNOT see profit, loss or margin
     canViewProjects: true,
     canViewProjectFinancials: true,

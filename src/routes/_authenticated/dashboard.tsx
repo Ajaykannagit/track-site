@@ -1101,7 +1101,7 @@ function Dashboard() {
                   Non-site administrative overhead expenditures (Stationery, Internet, Travel, Bank Charges).
                 </DialogDescription>
               </div>
-              {isMD && (
+              {canManageOfficeExpense && (
                 <Button size="sm" onClick={handleOpenAddExpense} className="gap-1.5 shrink-0">
                   <Plus className="size-4" /> Add Expense
                 </Button>
@@ -1153,7 +1153,7 @@ function Dashboard() {
                           </TableCell>
                           <TableCell className="text-xs font-mono">{e.receipt_path || "—"}</TableCell>
                           <TableCell className="text-right font-semibold font-mono">{currency(e.amount)}</TableCell>
-                          {isMD && (
+                          {canManageOfficeExpense && (
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <Button
@@ -1165,17 +1165,15 @@ function Dashboard() {
                                 >
                                   <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
                                 </Button>
-                                {isMD && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 text-destructive hover:text-destructive"
-                                    title="Delete Expense"
-                                    onClick={() => setDeletingExpense(e)}
-                                  >
-                                    <Trash2 className="size-3.5" />
-                                  </Button>
-                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 text-destructive hover:text-destructive"
+                                  title="Delete Expense"
+                                  onClick={() => setDeletingExpense(e)}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
                               </div>
                             </TableCell>
                           )}
