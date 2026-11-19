@@ -60,6 +60,7 @@ export function FormDialog({
   const setOpen = onOpenChange ?? setUncontrolled;
   const [values, setValues] = useState<FormValues>(initial ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -92,8 +93,8 @@ export function FormDialog({
       }
       if (f.type === "number" && f.required) {
         const num = Number(val);
-        if (isNaN(num) || num <= 0) {
-          newErrors[f.name] = `Please enter a valid amount greater than 0`;
+        if (isNaN(num)) {
+          newErrors[f.name] = `Please enter a valid number`;
         }
       }
     }
@@ -121,8 +122,15 @@ export function FormDialog({
             for (const [k, v] of Object.entries(values)) {
               cleanValues[k] = typeof v === "string" ? v.trim() : v;
             }
-            await onSubmit(cleanValues);
-            setOpen(false);
+            setIsSubmitting(true);
+            try {
+              await onSubmit(cleanValues);
+              setOpen(false);
+            } catch {
+              // Error is handled by the caller (toast shown by mutation onError)
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
           {fields.map((f) => {
@@ -194,8 +202,8 @@ export function FormDialog({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Save"}
+            <Button type="submit" disabled={submitting || isSubmitting}>
+              {submitting || isSubmitting ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </form>

@@ -815,7 +815,7 @@ function MaterialsPage() {
               recordTitle={`Indent ${deletingRequest.request_number}`}
               recordData={deletingRequest}
               title="Delete Indent"
-              description={`Delete indent "${deletingRequest.request_number}" (${currency(deletingRequest.total_amount)})? This action requires MD approval.`}
+              description={`Delete indent "${deletingRequest.request_number}" (${currency(deletingRequest.total_amount)})? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteRequest.mutateAsync(deletingRequest.id);
                 setDeletingRequest(null);
@@ -911,7 +911,7 @@ function MaterialsPage() {
               recordTitle={`PO ${deletingPo.po_number}`}
               recordData={deletingPo}
               title="Delete Purchase Order"
-              description={`Delete PO "${deletingPo.po_number}" (${currency(deletingPo.total_amount)})? This action requires MD approval.`}
+              description={`Delete PO "${deletingPo.po_number}" (${currency(deletingPo.total_amount)})? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deletePo.mutateAsync(deletingPo.id);
                 setDeletingPo(null);
@@ -1108,7 +1108,7 @@ function MaterialsPage() {
               recordTitle={`GRN ${deletingReceipt.receipt_number}`}
               recordData={deletingReceipt}
               title="Delete Material Receipt"
-              description={`Delete GRN "${deletingReceipt.receipt_number}" (${currency(deletingReceipt.total_amount)})? This action requires MD approval.`}
+              description={`Delete GRN "${deletingReceipt.receipt_number}" (${currency(deletingReceipt.total_amount)})? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteReceipt.mutateAsync(deletingReceipt.id);
                 setDeletingReceipt(null);
@@ -1267,7 +1267,7 @@ function MaterialsPage() {
               recordTitle={`Payment of ${currency(deletingPayment.amount)}`}
               recordData={deletingPayment}
               title="Delete Supplier Payment"
-              description={`Delete payment of ${currency(deletingPayment.amount)}? This action requires MD approval.`}
+              description={`Delete payment of ${currency(deletingPayment.amount)}? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deletePayment.mutateAsync(deletingPayment.id);
                 setDeletingPayment(null);

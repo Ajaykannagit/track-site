@@ -285,7 +285,7 @@ function ProjectsPage() {
           recordId={deletingProject.id}
           recordTitle={`Project: ${deletingProject.name}`}
           recordData={deletingProject}
-          description={`Delete project "${deletingProject.name}"? This action requires MD approval.`}
+          description={`Delete project "${deletingProject.name}"? This action will be logged and the MD will be notified.`}
           onConfirm={async () => {
             await deleteProject.mutateAsync(deletingProject.id);
             setDeletingProject(null);

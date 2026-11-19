@@ -116,7 +116,7 @@ export function PrintableClientReceipt({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden sm:max-w-3xl">
+      <DialogContent className="max-w-3xl p-0 max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader className="p-4 border-b no-print flex flex-row items-center justify-between">
           <DialogTitle className="text-base font-bold flex items-center gap-2">
             <Printer className="size-4 text-primary" /> Client Payment Receipt Voucher

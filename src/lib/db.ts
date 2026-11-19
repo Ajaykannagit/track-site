@@ -133,8 +133,11 @@ export function useSaveRow(table: string, label = "Record") {
       values: Record<string, unknown>;
     }) => {
       if (id) {
-        const { error } = await supabase.from(table).update(values).eq("id", id);
+        const { data: updated, error } = await supabase.from(table).update(values).eq("id", id).select("id");
         if (error) throw error;
+        if (!updated || updated.length === 0) {
+          throw new Error(`Update blocked: no ${label} record was modified. You may not have permission to edit this record.`);
+        }
         return id;
       }
       const { data, error } = await supabase.from(table).insert(values).select("id").single();
@@ -361,11 +364,7 @@ export function useAccountBalances() {
       const { data, error } = await supabase.rpc('get_account_balances');
       if (error) {
         console.error('Failed to fetch account balances:', error);
-        return {
-          bank: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
-          petty_cash: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
-          combined: { opening: 0, inflows: 0, outflows: 0, balance: 0 },
-        };
+        throw error; // Let React Query expose isError=true so callers can show a banner
       }
       const rows = (data || []) as Array<{
         account_type: string;

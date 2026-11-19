@@ -137,13 +137,16 @@ function AuditPageInner() {
 
   const logs = useRows<AuditLog>("audit_logs", {
     order: { col: "performed_at", asc: false },
-    limit: 500,
+    limit: 2000,
+    filters: [
+      { col: "performed_at", op: "gte", value: fromDate ? fromDate + "T00:00:00" : undefined },
+      { col: "performed_at", op: "lte", value: toDate ? toDate + "T23:59:59" : undefined },
+    ],
   });
 
   const filteredLogs = useMemo(() => {
     let list = logs.data ?? [];
-    if (fromDate) list = list.filter((l) => l.performed_at >= fromDate);
-    if (toDate) list = list.filter((l) => l.performed_at <= toDate + "T23:59:59");
+    // Date range is applied server-side via useRows filters above
     if (tableFilter !== "all") list = list.filter((l) => l.table_name === tableFilter);
     if (actionFilter !== "all") list = list.filter((l) => l.action === actionFilter);
     if (userFilter.trim()) {

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Building2,
@@ -92,6 +92,12 @@ function Brand() {
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, roles } = useAuth();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate({ to: "/auth" });
+  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -127,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => supabase.auth.signOut()}
+            onClick={handleSignOut}
             className="shrink-0"
             aria-label="Sign out"
           >

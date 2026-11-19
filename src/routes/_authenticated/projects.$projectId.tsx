@@ -1313,7 +1313,7 @@ function ProjectDetail() {
                 recordId={deletingPayment.id}
                 recordTitle={`Client Receipt: ${deletingPayment.receipt_number} (${currency(deletingPayment.amount)})`}
                 recordData={deletingPayment}
-                description={`Delete client payment "${deletingPayment.receipt_number}" (${currency(deletingPayment.amount)})? This action requires MD approval.`}
+                description={`Delete client payment "${deletingPayment.receipt_number}" (${currency(deletingPayment.amount)})? This action will be logged and the MD will be notified.`}
                 onConfirm={async () => {
                   await deletePayment.mutateAsync(deletingPayment.id);
                   setDeletingPayment(null);
@@ -1331,7 +1331,7 @@ function ProjectDetail() {
                 recordId={deletingMilestone.id}
                 recordTitle={`Milestone: ${deletingMilestone.title} (${currency(deletingMilestone.expected_amount)})`}
                 recordData={deletingMilestone}
-                description={`Delete milestone "${deletingMilestone.title}" (${currency(deletingMilestone.expected_amount)})? This action requires MD approval.`}
+                description={`Delete milestone "${deletingMilestone.title}" (${currency(deletingMilestone.expected_amount)})? This action will be logged and the MD will be notified.`}
                 onConfirm={async () => {
                   await deleteMilestone.mutateAsync(deletingMilestone.id);
                   setDeletingMilestone(null);
@@ -1507,7 +1507,7 @@ function ProjectDetail() {
           recordId={deletingQuotation.id}
           recordTitle={`Quotation: ${deletingQuotation.title} (${currency(deletingQuotation.amount)})`}
           recordData={deletingQuotation}
-          description={`Delete quotation "${deletingQuotation.title}" (${currency(deletingQuotation.amount)})? This action requires MD approval.`}
+          description={`Delete quotation "${deletingQuotation.title}" (${currency(deletingQuotation.amount)})? This action will be logged and the MD will be notified.`}
           onConfirm={async () => {
             await deleteQuotation.mutateAsync(deletingQuotation.id);
             setDeletingQuotation(null);

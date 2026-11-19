@@ -69,7 +69,7 @@ export function AccountSummaryTab({
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [drilldownHead, setDrilldownHead] = useState<string | null>(null);
 
-  const { data: liveBalances } = useAccountBalances();
+  const { data: liveBalances, isError: balancesError } = useAccountBalances();
 
   // Filter transactions
   const filtered = useMemo(() => {

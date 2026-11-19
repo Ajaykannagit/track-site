@@ -231,7 +231,7 @@ function AccountsPage() {
 
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [mdInvestmentOpen, setMdInvestmentOpen] = useState(false);
-  const { data: liveBalances } = useAccountBalances();
+  const { data: liveBalances, isError: balancesError } = useAccountBalances();
   const mdInvestments = useRows<any>("md_investments", {
     order: { col: "investment_date", asc: false },
   });
@@ -1593,7 +1593,12 @@ const mapToAccountHead = (category: string): string => {
 
         {/* ================= ACCOUNT SUMMARY / TRIAL BALANCE ================= */}
         <TabsContent value="summary" className="mt-4 space-y-4">
-          <AccountSummaryTab
+          {balancesError && (
+        <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive font-medium">
+          ⚠ Failed to load account balances. Figures shown may be incorrect. Please refresh or check your connection.
+        </div>
+      )}
+      <AccountSummaryTab
             from={from}
             to={to}
             onFromChange={setFrom}
@@ -1878,7 +1883,7 @@ const mapToAccountHead = (category: string): string => {
               recordTitle={`Expense: ${deletingExpense.category} (${currency(deletingExpense.amount)})`}
               recordData={deletingExpense}
               title="Delete Expense"
-              description={`Delete expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})? This action requires MD approval.`}
+              description={`Delete expense of ${currency(deletingExpense.amount)} (${deletingExpense.category})? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteExpense.mutateAsync(deletingExpense.id);
                 setDeletingExpense(null);
@@ -2285,7 +2290,7 @@ const mapToAccountHead = (category: string): string => {
               recordTitle={`Cash Closing: ${dateFmt(deletingClosing.closing_date)} (${deletingClosing.account_type || "Petty Cash"})`}
               recordData={deletingClosing}
               title="Delete Cash Closing"
-              description={`Delete cash closing for ${dateFmt(deletingClosing.closing_date)}? This action requires MD approval.`}
+              description={`Delete cash closing for ${dateFmt(deletingClosing.closing_date)}? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteClosing.mutateAsync(deletingClosing.id);
                 setDeletingClosing(null);
@@ -2441,7 +2446,7 @@ const mapToAccountHead = (category: string): string => {
               recordTitle={`Transfer: ${currency(deletingTransfer.amount)} (${deletingTransfer.from_account} → ${deletingTransfer.to_account})`}
               recordData={deletingTransfer}
               title="Delete Transfer"
-              description={`Delete transfer of ${currency(deletingTransfer.amount)} (${dateFmt(deletingTransfer.transfer_date)})? This action requires MD approval.`}
+              description={`Delete transfer of ${currency(deletingTransfer.amount)} (${dateFmt(deletingTransfer.transfer_date)})? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteTransfer.mutateAsync(deletingTransfer.id);
                 setDeletingTransfer(null);

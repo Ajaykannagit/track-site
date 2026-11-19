@@ -846,7 +846,7 @@ function ContractorsPage() {
               recordId={deletingWo.id}
               recordTitle={`Work Order: ${deletingWo.work_order_number}`}
               recordData={deletingWo}
-              description={`Delete work order "${deletingWo.work_order_number}"? This action requires MD approval.`}
+              description={`Delete work order "${deletingWo.work_order_number}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteWo.mutateAsync(deletingWo.id);
                 setDeletingWo(null);
@@ -943,7 +943,7 @@ function ContractorsPage() {
               recordId={deletingMb.id}
               recordTitle={`MB: ${deletingMb.mb_number}`}
               recordData={deletingMb}
-              description={`Delete MB "${deletingMb.mb_number}"? This action requires MD approval.`}
+              description={`Delete MB "${deletingMb.mb_number}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteMb.mutateAsync(deletingMb.id);
                 setDeletingMb(null);
@@ -1048,7 +1048,7 @@ function ContractorsPage() {
               recordId={deletingBill.id}
               recordTitle={`Bill: ${deletingBill.bill_number}`}
               recordData={deletingBill}
-              description={`Delete bill "${deletingBill.bill_number}"? This action requires MD approval.`}
+              description={`Delete bill "${deletingBill.bill_number}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteBill.mutateAsync(deletingBill.id);
                 setDeletingBill(null);
@@ -1245,7 +1245,7 @@ function ContractorsPage() {
               recordId={deletingPayment.id}
               recordTitle={`Contractor Payment: ${currency(deletingPayment.amount)}`}
               recordData={deletingPayment}
-              description={`Delete payment of ${currency(deletingPayment.amount)}? This action requires MD approval.`}
+              description={`Delete payment of ${currency(deletingPayment.amount)}? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deletePayment.mutateAsync(deletingPayment.id);
                 setDeletingPayment(null);
@@ -1523,7 +1523,7 @@ function ContractorsPage() {
               recordId={deletingSubPay.id}
               recordTitle={`Subcontractor Payment: ${deletingSubPay.name} (${currency(deletingSubPay.amount)})`}
               recordData={deletingSubPay}
-              description={`Delete payment "${deletingSubPay.name}" (${currency(deletingSubPay.amount)})? This action requires MD approval.`}
+              description={`Delete payment "${deletingSubPay.name}" (${currency(deletingSubPay.amount)})? This action will be logged and the MD will be notified.`}
                 onConfirm={async () => {
                   await deleteSubPay.mutateAsync(deletingSubPay.id);
                   setDeletingSubPay(null);

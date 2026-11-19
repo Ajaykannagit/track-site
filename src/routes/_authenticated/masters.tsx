@@ -561,7 +561,7 @@ function MastersPage() {
               recordId={deletingClient.id}
               recordTitle={`Client: ${deletingClient.name}`}
               recordData={deletingClient}
-              description={`Delete client "${deletingClient.name}"? This action requires MD approval.`}
+              description={`Delete client "${deletingClient.name}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteClient.mutateAsync(deletingClient.id);
                 setDeletingClient(null);
@@ -697,7 +697,7 @@ function MastersPage() {
               recordId={deletingEmployee.id}
               recordTitle={`Employee: ${deletingEmployee.full_name}`}
               recordData={deletingEmployee}
-              description={`Delete employee "${deletingEmployee.full_name}"? This action requires MD approval.`}
+              description={`Delete employee "${deletingEmployee.full_name}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteEmployee.mutateAsync(deletingEmployee.id);
                 setDeletingEmployee(null);
@@ -822,7 +822,7 @@ function MastersPage() {
               recordId={deletingContractor.id}
               recordTitle={`Contractor: ${deletingContractor.name}`}
               recordData={deletingContractor}
-              description={`Delete contractor "${deletingContractor.name}"? This action requires MD approval.`}
+              description={`Delete contractor "${deletingContractor.name}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteContractor.mutateAsync(deletingContractor.id);
                 setDeletingContractor(null);
@@ -924,7 +924,7 @@ function MastersPage() {
               recordId={deletingSupplier.id}
               recordTitle={`Supplier: ${deletingSupplier.name}`}
               recordData={deletingSupplier}
-              description={`Delete supplier "${deletingSupplier.name}"? This action requires MD approval.`}
+              description={`Delete supplier "${deletingSupplier.name}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteSupplier.mutateAsync(deletingSupplier.id);
                 setDeletingSupplier(null);
@@ -987,7 +987,7 @@ function MastersPage() {
               recordId={deletingMachine.id}
               recordTitle={`Machine: ${deletingMachine.name}`}
               recordData={deletingMachine}
-              description={`Delete machine "${deletingMachine.name}"? This action requires MD approval.`}
+              description={`Delete machine "${deletingMachine.name}"? This action will be logged and the MD will be notified.`}
               onConfirm={async () => {
                 await deleteMachine.mutateAsync(deletingMachine.id);
                 setDeletingMachine(null);
