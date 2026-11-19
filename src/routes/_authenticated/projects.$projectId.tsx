@@ -790,7 +790,7 @@ function ProjectDetail() {
                   value: (r) => r.amount,
                   className: "text-right font-mono font-semibold",
                 },
-                ...(isMD
+                ...((isMD || permissions.canManageQuotations)
                   ? [
                       {
                         header: "Actions",

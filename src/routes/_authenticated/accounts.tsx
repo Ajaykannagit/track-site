@@ -506,6 +506,7 @@ const mapToAccountHead = (category: string): string => {
     projectName: string;
     amount: number;
     payment_method: string;
+    payment_source?: string;
     reference_number: string;
     description: string;
   };
@@ -532,6 +533,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: "Head Office / Equity",
         amount: Number(inv.amount || 0),
         payment_method: inv.payment_source === "bank" ? "Bank" : "Petty Cash",
+        payment_source: inv.payment_source === "bank" ? "bank" : "petty_cash",
         reference_number: inv.reference_number || "—",
         description: inv.remarks || (isDrawing ? "Owner Drawing / Personal Withdrawal" : "MD Capital / Liquidity Infusion"),
       });
@@ -550,6 +552,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: projectName(cp.project_id),
         amount: Number(cp.amount || 0),
         payment_method: cp.payment_method || "Not recorded",
+        payment_source: (cp.payment_source || cp.account_type || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: cp.receipt_number || cp.reference_number || "—",
         description: cp.notes || cp.payment_category || "Client milestone payment",
       });
@@ -568,6 +571,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: projectName(sp.project_id),
         amount: Number(sp.amount || 0),
         payment_method: sp.payment_method || "Not recorded",
+        payment_source: ((sp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: sp.reference_number || "—",
         description: sp.remarks || "Material purchase payment",
       });
@@ -585,6 +589,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: projectName(cp.project_id),
         amount: Number(cp.amount || 0),
         payment_method: cp.payment_method || "Not recorded",
+        payment_source: ((cp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: cp.reference_number || "—",
         description: cp.remarks || "Contractor bill settlement",
       });
@@ -602,6 +607,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: projectName(scp.project_id),
         amount: Number(scp.amount || 0),
         payment_method: scp.payment_method || "Not recorded",
+        payment_source: ((scp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: scp.reference_number || "—",
         description: scp.remarks || "Ad-hoc subcontractor work",
       });
@@ -619,6 +625,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: exp.project_id ? projectName(exp.project_id) : "Corporate / Head Office",
         amount: Number(exp.amount || 0),
         payment_method: exp.payment_method || "Not recorded",
+        payment_source: ((exp as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash",
         reference_number: "—",
         description: `${exp.category}${exp.description ? `: ${exp.description}` : ""}`,
       });
@@ -636,6 +643,7 @@ const mapToAccountHead = (category: string): string => {
         projectName: "Labour Payroll",
         amount: Number(wp.amount || 0),
         payment_method: wp.payment_method || "Not recorded",
+        payment_source: ((wp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: wp.reference_number || "—",
         description: wp.notes || `Weekly team wages (week: ${dateFmt(wp.payment_date)})`,
       });
@@ -654,6 +662,7 @@ const mapToAccountHead = (category: string): string => {
           projectName: "Labour Payroll",
           amount: Number(wa.advance_paid),
           payment_method: wa.payment_method || "Not recorded",
+          payment_source: ((wa as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash",
           reference_number: wa.reference_number || "—",
           description: `Worker advance deduction (week: ${dateFmt(wa.week_start_date)})`,
         });
@@ -904,6 +913,21 @@ const mapToAccountHead = (category: string): string => {
       header: "Project / Department",
       cell: (r) => r.projectName,
       value: (r) => r.projectName,
+    },
+    {
+      header: "Source",
+      cell: (r) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            r.payment_source === "bank"
+              ? "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
+              : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          }`}
+        >
+          {r.payment_source === "bank" ? "🏦 Bank" : "💵 Petty Cash"}
+        </span>
+      ),
+      value: (r) => (r.payment_source === "bank" ? "Bank" : "Petty Cash"),
     },
     {
       header: "Method",
@@ -1581,9 +1605,9 @@ const mapToAccountHead = (category: string): string => {
           </TabsTrigger>
           <TabsTrigger value="cash">Cash closing</TabsTrigger>
           <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
-          {isMD && (
+          {(isMD || canWriteFinance) && (
             <TabsTrigger value="md_investments">
-              <Landmark className="mr-1.5 size-3.5" /> MD Investments ({(mdInvestments.data ?? []).length})
+              <Landmark className="mr-1.5 size-3.5" /> MD Investments & Drawings ({(mdInvestments.data ?? []).length})
             </TabsTrigger>
           )}
           {(isMD || canWriteFinance) && (
@@ -2470,7 +2494,7 @@ const mapToAccountHead = (category: string): string => {
           />
         </TabsContent>
         {/* ================= MD INVESTMENTS ================= */}
-        {isMD && (
+        {(isMD || canWriteFinance) && (
           <TabsContent value="md_investments" className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2509,7 +2533,7 @@ const mapToAccountHead = (category: string): string => {
               ]}
               loading={mdInvestments.isLoading}
               exportName="brickweld-md-investments"
-              exportTitle="MD Capital Investments"
+              exportTitle="MD Capital Investments & Drawings"
             />
           </TabsContent>
         )}

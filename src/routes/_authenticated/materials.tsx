@@ -578,6 +578,21 @@ function MaterialsPage() {
       value: (r) => r.po_id,
     },
     {
+      header: "Source",
+      cell: (r) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            (r as any).payment_source === "bank"
+              ? "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
+              : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          }`}
+        >
+          {(r as any).payment_source === "bank" ? "🏦 Bank" : "💵 Petty Cash"}
+        </span>
+      ),
+      value: (r) => ((r as any).payment_source === "bank" ? "Bank" : "Petty Cash"),
+    },
+    {
       header: "Method",
       cell: (r) => (
         <span className={r.payment_method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
