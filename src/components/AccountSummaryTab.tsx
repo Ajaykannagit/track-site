@@ -110,13 +110,13 @@ export function AccountSummaryTab({
   const recon = useMemo(() => {
     const calc = (src: "bank" | "petty_cash") => {
       const open = openingBalances[src] || 0;
-      // Inflows in filtered period
+      // Inflows in filtered period (Income + Equity Investments)
       const inflows = filtered
-        .filter((t) => t.payment_source === src && (t.category === "Income" || t.category === "Equity"))
+        .filter((t) => t.payment_source === src && (t.category === "Income" || (t.category === "Equity" && !t.head.toLowerCase().includes("drawing"))))
         .reduce((sum, t) => sum + t.amount, 0);
-      // Outflows in filtered period
+      // Outflows in filtered period (Expense + Equity Drawings)
       const outflows = filtered
-        .filter((t) => t.payment_source === src && t.category === "Expense")
+        .filter((t) => t.payment_source === src && (t.category === "Expense" || (t.category === "Equity" && t.head.toLowerCase().includes("drawing"))))
         .reduce((sum, t) => sum + t.amount, 0);
 
       const computedClosing = Math.round((open + inflows - outflows) * 100) / 100;
@@ -251,7 +251,7 @@ export function AccountSummaryTab({
             {/* 1. EQUITY */}
             <TableRow className="bg-primary/5 font-bold text-xs uppercase tracking-wider">
               <TableCell colSpan={4} className="py-2 text-primary">
-                1. Equity & Capital (Credit Inflows)
+                1. Equity &amp; Capital (Investments Cr / Drawings Dr)
               </TableCell>
             </TableRow>
             {Array.from(groupedData.get("Equity")?.entries() || []).length === 0 ? (
@@ -261,31 +261,48 @@ export function AccountSummaryTab({
                 </TableCell>
               </TableRow>
             ) : (
-              Array.from(groupedData.get("Equity")?.entries() || []).map(([head, data]) => (
-                <TableRow
-                  key={head}
-                  className="hover:bg-muted/40 cursor-pointer"
-                  onClick={() => setDrilldownHead(head)}
-                >
-                  <TableCell className="pl-6 text-xs font-medium flex items-center gap-1.5">
-                    <ChevronRight className="size-3 text-muted-foreground" />
-                    <span>{head}</span>
-                  </TableCell>
-                  <TableCell className="text-center text-xs font-mono text-muted-foreground">
-                    {data.count}
-                  </TableCell>
-                  <TableCell className="text-right text-xs font-mono">—</TableCell>
-                  <TableCell className="text-right text-xs font-mono font-semibold text-emerald-700">
-                    {currency(data.total)}
-                  </TableCell>
-                </TableRow>
-              ))
+              Array.from(groupedData.get("Equity")?.entries() || []).map(([head, data]) => {
+                const isDrawing = head.toLowerCase().includes("drawing");
+                return (
+                  <TableRow
+                    key={head}
+                    className="hover:bg-muted/40 cursor-pointer"
+                    onClick={() => setDrilldownHead(head)}
+                  >
+                    <TableCell className="pl-6 text-xs font-medium flex items-center gap-1.5">
+                      <ChevronRight className="size-3 text-muted-foreground" />
+                      <span>{head}</span>
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-mono text-muted-foreground">
+                      {data.count}
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-mono font-semibold text-amber-700">
+                      {isDrawing ? currency(data.total) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-mono font-semibold text-emerald-700">
+                      {!isDrawing ? currency(data.total) : "—"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
             <TableRow className="bg-muted/20 font-semibold text-xs border-b">
-              <TableCell className="pl-6">Total Equity (Cr):</TableCell>
+              <TableCell className="pl-6">Net Equity:</TableCell>
               <TableCell />
-              <TableCell className="text-right font-mono">—</TableCell>
-              <TableCell className="text-right font-mono text-emerald-800">{currency(equityTotal)}</TableCell>
+              <TableCell className="text-right font-mono text-amber-800">
+                {currency(
+                  Array.from(groupedData.get("Equity")?.entries() || [])
+                    .filter(([h]) => h.toLowerCase().includes("drawing"))
+                    .reduce((s, [, v]) => s + v.total, 0)
+                )}
+              </TableCell>
+              <TableCell className="text-right font-mono text-emerald-800">
+                {currency(
+                  Array.from(groupedData.get("Equity")?.entries() || [])
+                    .filter(([h]) => !h.toLowerCase().includes("drawing"))
+                    .reduce((s, [, v]) => s + v.total, 0)
+                )}
+              </TableCell>
             </TableRow>
 
             {/* 2. INCOME */}

@@ -499,7 +499,7 @@ const mapToAccountHead = (category: string): string => {
   type LedgerTransaction = {
     id: string;
     date: string;
-    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance" | "MD Investment";
+    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance" | "MD Investment" | "MD Drawing";
     direction: "inflow" | "outflow";
     party: string;
     project_id: string | null;
@@ -518,21 +518,22 @@ const mapToAccountHead = (category: string): string => {
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
 
-    // 0. MD Investments (Inflow - excludes voided)
+    // 0. MD Investments & Drawings (excludes voided)
     for (const inv of mdInvestments.data ?? []) {
       if ((inv as any).is_void) continue;
+      const isDrawing = (inv as any).transaction_type === "drawing";
       list.push({
         id: `mdi-${inv.id}`,
         date: inv.investment_date,
-        type: "MD Investment",
-        direction: "inflow",
-        party: "Managing Director (Capital Infusion)",
+        type: isDrawing ? "MD Drawing" : "MD Investment",
+        direction: isDrawing ? "outflow" : "inflow",
+        party: isDrawing ? "Managing Director (Capital Withdrawal)" : "Managing Director (Capital Infusion)",
         project_id: null,
         projectName: "Head Office / Equity",
         amount: Number(inv.amount || 0),
         payment_method: inv.payment_source === "bank" ? "Bank" : "Petty Cash",
         reference_number: inv.reference_number || "—",
-        description: inv.remarks || "MD Capital / Liquidity Infusion",
+        description: inv.remarks || (isDrawing ? "Owner Drawing / Personal Withdrawal" : "MD Capital / Liquidity Infusion"),
       });
     }
 
@@ -686,21 +687,22 @@ const mapToAccountHead = (category: string): string => {
   const accountSummaryTransactions = useMemo<AccountHeadTransaction[]>(() => {
     const list: AccountHeadTransaction[] = [];
 
-    // 1. MD Investments -> Equity: Investments
+    // 1. MD Investments & Drawings -> Equity: Investments / Drawings
     for (const inv of mdInvestments.data ?? []) {
       if ((inv as any).is_void) continue;
+      const isDrawing = (inv as any).transaction_type === "drawing";
       list.push({
         id: `mdi-${inv.id}`,
         date: inv.investment_date,
         amount: Number(inv.amount || 0),
         payment_source: inv.payment_source === "bank" ? "bank" : "petty_cash",
-        head: "Investments",
+        head: isDrawing ? "Drawings" : "Investments",
         category: "Equity",
         project_id: null,
         projectName: "Head Office / Equity",
         party: "Managing Director",
         reference_number: inv.reference_number || "—",
-        remarks: inv.remarks || "Capital Infusion",
+        remarks: inv.remarks || (isDrawing ? "Owner Drawing" : "Capital Infusion"),
       });
     }
 

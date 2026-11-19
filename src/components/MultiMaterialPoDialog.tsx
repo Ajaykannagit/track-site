@@ -74,7 +74,7 @@ const emptyItem = (): PoLineItem => ({
   quantity: 1,
   rate: 0,
   amount: 0,
-  gst_percent: 18,
+  gst_percent: 0,
 });
 
 export function MultiMaterialPoDialog({
@@ -115,7 +115,7 @@ export function MultiMaterialPoDialog({
         setRequestId(editingPo.request_id ?? "");
         setPoDate(editingPo.po_date);
         setStatus(editingPo.status);
-        setTaxPercent(editingPo.tax_percent ?? 18);
+        setTaxPercent(editingPo.tax_percent ?? 0);
         setTerms(editingPo.terms ?? "");
         setEditReason("");
 
@@ -189,7 +189,7 @@ export function MultiMaterialPoDialog({
             quantity: Number(i.quantity ?? 0),
             rate: Number(i.rate ?? 0),
             amount: Number(i.amount ?? 0),
-            gst_percent: 18,
+            gst_percent: 0,
           }))
         );
         toast.info(`Imported ${indentItems.length} materials from Indent ${indentData?.request_number || ""}`);

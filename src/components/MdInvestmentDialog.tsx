@@ -27,6 +27,7 @@ export function MdInvestmentDialog({
   onOpenChange,
   onSuccess,
 }: MdInvestmentDialogProps) {
+  const [transactionType, setTransactionType] = useState<"investment" | "drawing">("investment");
   const [amount, setAmount] = useState<string>("");
   const [investmentDate, setInvestmentDate] = useState<string>(today());
   const [paymentSource, setPaymentSource] = useState<PaymentSourceType | "">("bank");
@@ -35,20 +36,21 @@ export function MdInvestmentDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: balances } = useAccountBalances();
-  const saveInvestment = useSaveRow("md_investments", "MD Investment");
+  const saveInvestment = useSaveRow("md_investments", "Owner Capital");
 
   const numericAmount = parseFloat(amount) || 0;
+  const isDrawing = transactionType === "drawing";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!paymentSource) {
-      toast.error("Please select 'Received in': Bank or Petty Cash is mandatory.");
+      toast.error(isDrawing ? "Please select 'Paid from': Bank or Petty Cash is mandatory." : "Please select 'Received in': Bank or Petty Cash is mandatory.");
       return;
     }
 
     if (numericAmount <= 0) {
-      toast.error("Investment amount must be greater than zero.");
+      toast.error("Amount must be greater than zero.");
       return;
     }
 
@@ -60,19 +62,21 @@ export function MdInvestmentDialog({
           investment_date: investmentDate,
           amount: numericAmount,
           payment_source: paymentSource,
+          transaction_type: transactionType,
           reference_number: referenceNumber.trim() || null,
           remarks: remarks.trim() || null,
         },
       });
 
-      toast.success(`${currency(numericAmount)} MD Investment recorded in ${paymentSource === "bank" ? "Bank" : "Petty Cash"}.`);
+      const label = isDrawing ? "Owner Drawing (Capital Out)" : "MD Investment (Capital In)";
+      toast.success(`${currency(numericAmount)} ${label} recorded in ${paymentSource === "bank" ? "Bank" : "Petty Cash"}.`);
       setAmount("");
       setReferenceNumber("");
       setRemarks("");
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
-      toast.error(err?.message || "Failed to record MD investment.");
+      toast.error(err?.message || "Failed to record transaction.");
     } finally {
       setIsSubmitting(false);
     }
@@ -84,19 +88,43 @@ export function MdInvestmentDialog({
         <form onSubmit={handleSubmit}>
           <DialogHeader className="mb-3">
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
-              <Landmark className="size-4 text-primary" /> Record MD Investment / Capital Infusion
+              <Landmark className="size-4 text-primary" /> Owner Capital: Investment or Drawing
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
-            <div className="rounded-md border p-2.5 bg-blue-50/50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200">
-              Money coming in directly from the Managing Director into Bank or Petty Cash. It increases running cash balances and is excluded from project P&L and customer revenue.
+            {/* Transaction Type Selector */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-md border">
+              <button
+                type="button"
+                onClick={() => setTransactionType("investment")}
+                className={`py-1.5 text-xs font-semibold rounded transition-colors ${
+                  !isDrawing ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                + Owner Investment (Inflow)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransactionType("drawing")}
+                className={`py-1.5 text-xs font-semibold rounded transition-colors ${
+                  isDrawing ? "bg-background text-destructive shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                - Owner Drawing (Outflow)
+              </button>
+            </div>
+
+            <div className={`rounded-md border p-2.5 ${isDrawing ? "bg-amber-50/50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200" : "bg-blue-50/50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200"}`}>
+              {isDrawing
+                ? "Money withdrawn by the Managing Director from Bank or Petty Cash. It decreases running cash balances as an Equity withdrawal and is excluded from operating site expenses."
+                : "Money infused directly from the Managing Director into Bank or Petty Cash. It increases running cash balances as an Equity investment."}
             </div>
 
             {/* Amount */}
             <div>
               <Label htmlFor="inv-amount" className="text-xs font-semibold block mb-1">
-                Investment Amount (₹) <span className="text-destructive font-bold">*</span>
+                {isDrawing ? "Drawing Amount (₹)" : "Investment Amount (₹)"} <span className="text-destructive font-bold">*</span>
               </Label>
               <Input
                 id="inv-amount"
@@ -111,21 +139,21 @@ export function MdInvestmentDialog({
               />
             </div>
 
-            {/* Mandatory Received in */}
+            {/* Mandatory Source / Destination */}
             <PaymentSourceSelect
               value={paymentSource}
               onChange={(val) => setPaymentSource(val)}
               bankBalance={balances?.bank?.balance ?? 0}
               pettyCashBalance={balances?.petty_cash?.balance ?? 0}
               paymentAmount={numericAmount}
-              isInflow={true}
+              isInflow={!isDrawing}
             />
 
             {/* Date & Reference */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="inv-date" className="text-xs font-semibold block mb-1">
-                  Date Received <span className="text-destructive font-bold">*</span>
+                  {isDrawing ? "Date Withdrawn" : "Date Received"} <span className="text-destructive font-bold">*</span>
                 </Label>
                 <Input
                   id="inv-date"
@@ -159,7 +187,7 @@ export function MdInvestmentDialog({
                 id="inv-remarks"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="e.g. Site liquidity infusion / Working capital"
+                placeholder={isDrawing ? "e.g. Personal withdrawal / Owner drawing" : "e.g. Site liquidity infusion / Working capital"}
                 rows={2}
                 className="text-xs resize-none"
               />
@@ -180,10 +208,10 @@ export function MdInvestmentDialog({
               type="submit"
               size="sm"
               disabled={isSubmitting || !paymentSource || numericAmount <= 0}
-              className="gap-1.5"
+              className={`gap-1.5 ${isDrawing ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}`}
             >
-              <ArrowDownLeft className="size-3.5" />
-              {isSubmitting ? "Saving..." : `Record Inflow (${currency(numericAmount)})`}
+              <ArrowDownLeft className={`size-3.5 ${isDrawing ? "rotate-180" : ""}`} />
+              {isSubmitting ? "Saving..." : isDrawing ? `Record Drawing (${currency(numericAmount)})` : `Record Inflow (${currency(numericAmount)})`}
             </Button>
           </DialogFooter>
         </form>
