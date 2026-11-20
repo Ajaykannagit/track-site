@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Truck, ArrowDownToLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ interface Props {
   projectOptions: { value: string; label: string }[];
   supplierOptions: { value: string; label: string }[];
   poOptions: { value: string; label: string }[];
+  initialPoId?: string;
   editingReceipt?: {
     id: string;
     receipt_number: string;
@@ -65,7 +66,7 @@ interface Props {
     total_amount: number;
     remarks: string | null;
   } | null;
-  onSuccess?: () => void;
+  onSuccess?: (savedProjectId?: string) => void;
 }
 
 const emptyItem = (): ReceiptLineItem => ({
@@ -84,6 +85,7 @@ export function MultiMaterialReceiptDialog({
   projectOptions,
   supplierOptions,
   poOptions,
+  initialPoId,
   editingReceipt,
   onSuccess,
 }: Props) {
@@ -100,6 +102,7 @@ export function MultiMaterialReceiptDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<ReceiptLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   const saveReceipt = useSaveRow("material_receipts", "Material Receipt");
 
@@ -141,14 +144,17 @@ export function MultiMaterialReceiptDialog({
         setReceiptNumber(`GRN-${Date.now().toString().slice(-8)}`);
         setProjectId(projectOptions[0]?.value ?? "");
         setSupplierId(supplierOptions[0]?.value ?? "");
-        setPoId("");
+        setPoId(initialPoId || "");
         setReceiptDate(today());
         setRemarks("");
         setEditReason("");
         setItems([emptyItem()]);
+        if (initialPoId) {
+          handlePoSelected(initialPoId);
+        }
       }
     }
-  }, [open, editingReceipt, projectOptions, supplierOptions]);
+  }, [open, editingReceipt, projectOptions, supplierOptions, initialPoId]);
 
   // When a PO is selected, optionally pull its line items
   const handlePoSelected = async (selectedPoId: string) => {
@@ -217,6 +223,8 @@ export function MultiMaterialReceiptDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingRef.current || saving) return;
+
     if (!projectId) {
       toast.error("Please select a project.");
       return;
@@ -232,10 +240,12 @@ export function MultiMaterialReceiptDialog({
       return;
     }
 
+    isSavingRef.current = true;
     try {
       setSaving(true);
       const isEdit = !!editingReceipt;
       let receiptId = editingReceipt?.id;
+      let isNewHeaderCreated = false;
 
       if (isEdit && editingReceipt) {
         await logRecordFieldDiffs(
@@ -277,12 +287,14 @@ export function MultiMaterialReceiptDialog({
           },
         });
         receiptId = res;
+        isNewHeaderCreated = true;
       }
 
       // Save line items
       if (receiptId) {
         if (isEdit) {
-          await supabase.from("material_receipt_items").delete().eq("receipt_id", receiptId);
+          const { error: delErr } = await supabase.from("material_receipt_items").delete().eq("receipt_id", receiptId);
+          if (delErr) throw new Error(delErr.message || "Failed to update existing receipt items.");
         }
 
         const itemsToInsert = validItems.map((item) => ({
@@ -296,16 +308,37 @@ export function MultiMaterialReceiptDialog({
           amount: Number(item.amount) || 0,
         }));
 
-        await supabase.from("material_receipt_items").insert(itemsToInsert);
+        const { error: insertErr } = await supabase.from("material_receipt_items").insert(itemsToInsert);
+        if (insertErr) {
+          // If items failed and a new header was created, delete the orphan header
+          if (isNewHeaderCreated && receiptId) {
+            await supabase.from("material_receipts").delete().eq("id", receiptId);
+          }
+          throw new Error(insertErr.message || "Failed to save receipt items.");
+        }
       }
 
       toast.success(isEdit ? "Receipt updated successfully" : "Material Receipt recorded with multiple materials");
       setOpen(false);
-      onSuccess?.();
+      onSuccess?.(projectId);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save material receipt.");
+      const errMsg = err?.message || "Failed to save material receipt.";
+      if (
+        errMsg.includes("23505") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("violates unique constraint")
+      ) {
+        if (!editingReceipt) {
+          const fresh = `GRN-${Date.now().toString().slice(-8)}`;
+          setReceiptNumber(fresh);
+          toast.error(`Receipt number was already used. A new number (${fresh}) has been generated. Please review and try again.`);
+          return;
+        }
+      }
+      toast.error(errMsg);
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 

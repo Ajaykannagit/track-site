@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ShoppingCart, ArrowDownToLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +103,7 @@ export function MultiMaterialPoDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<PoLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   const savePo = useSaveRow("purchase_orders", "Purchase Order");
 
@@ -237,6 +238,8 @@ export function MultiMaterialPoDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingRef.current || saving) return;
+
     if (!requestId) {
       toast.error("Please create an indent first. A Purchase Order must be linked to a Material Indent.");
       return;
@@ -256,10 +259,12 @@ export function MultiMaterialPoDialog({
       return;
     }
 
+    isSavingRef.current = true;
     try {
       setSaving(true);
       const isEdit = !!editingPo;
       let poId = editingPo?.id;
+      let isNewHeaderCreated = false;
 
       if (isEdit && editingPo) {
         await logRecordFieldDiffs(
@@ -315,12 +320,14 @@ export function MultiMaterialPoDialog({
           },
         });
         poId = res;
+        isNewHeaderCreated = true;
       }
 
       // Save line items
       if (poId) {
         if (isEdit) {
-          await supabase.from("purchase_order_items").delete().eq("po_id", poId);
+          const { error: delErr } = await supabase.from("purchase_order_items").delete().eq("po_id", poId);
+          if (delErr) throw new Error(delErr.message || "Failed to update existing PO items.");
         }
 
         const itemsToInsert = validItems.map((item) => ({
@@ -334,16 +341,36 @@ export function MultiMaterialPoDialog({
           gst_percent: item.gst_percent !== undefined && item.gst_percent !== null ? Number(item.gst_percent) : (taxPercent || 0),
         }));
 
-        await supabase.from("purchase_order_items").insert(itemsToInsert);
+        const { error: insertErr } = await supabase.from("purchase_order_items").insert(itemsToInsert);
+        if (insertErr) {
+          if (isNewHeaderCreated && poId) {
+            await supabase.from("purchase_orders").delete().eq("id", poId);
+          }
+          throw new Error(insertErr.message || "Failed to save purchase order items.");
+        }
       }
 
       toast.success(isEdit ? "PO updated successfully" : "Purchase Order created with multiple materials");
       setOpen(false);
       onSuccess?.();
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save purchase order.");
+      const errMsg = err?.message || "Failed to save purchase order.";
+      if (
+        errMsg.includes("23505") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("violates unique constraint")
+      ) {
+        if (!editingPo) {
+          const fresh = `PO-${Date.now().toString().slice(-8)}`;
+          setPoNumber(fresh);
+          toast.error(`PO number was already used. A new number (${fresh}) has been generated. Please review and try again.`);
+          return;
+        }
+      }
+      toast.error(errMsg);
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 

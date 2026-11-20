@@ -1195,28 +1195,39 @@ function ContractorsPage() {
         {/* ================= PAYMENTS ================= */}
         <TabsContent value="payments" className="mt-4 space-y-3">
           {canModifyFinance && (
-            <FormDialog
-              title="Record payment"
-              description="Log a payment released against a contractor bill."
-              trigger={
-                <Button>
-                  <Plus className="mr-2 size-4" /> New payment
-                </Button>
-              }
-              submitting={savePayment.isPending}
-              initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank" }}
-              fields={paymentFields}
-              onSubmit={async (values) => {
-                await savePayment.mutateAsync({
-                  values: {
-                    ...values,
-                    bill_id: values["bill_id"] || null,
-                    amount: Number(values["amount"] ?? 0),
-                    payment_source: values["payment_source"],
-                  },
-                });
-              }}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <FormDialog
+                title="Record payment"
+                description="Log a payment released against a contractor bill."
+                trigger={
+                  <Button>
+                    <Plus className="mr-2 size-4" /> New payment
+                  </Button>
+                }
+                submitting={savePayment.isPending}
+                initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank" }}
+                fields={paymentFields}
+                onSubmit={async (values) => {
+                  await savePayment.mutateAsync({
+                    values: {
+                      ...values,
+                      bill_id: values["bill_id"] || null,
+                      amount: Number(values["amount"] ?? 0),
+                      payment_source: values["payment_source"],
+                    },
+                  });
+                }}
+              />
+              <GroupPaymentDialog
+                contractors={contractors.data ?? []}
+                projects={projects.data ?? []}
+                workOrders={wos.data ?? []}
+                bills={bills.data ?? []}
+                existingPayments={payments.data ?? []}
+                jobTypes={jobTypes.data ?? []}
+                defaultMode="multi_project"
+              />
+            </div>
           )}
 
           {editingPayment && (

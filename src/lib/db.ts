@@ -97,7 +97,32 @@ export function formatDbError(e: unknown, defaultAction = "modify"): string {
     msg.includes("violates unique constraint") ||
     msg.includes("already exists")
   ) {
-    return "A record with this code or identifier already exists.";
+    // Attempt to extract duplicate column and value from Postgres error detail
+    // e.g. "Key (receipt_number)=(GRN-12345678) already exists."
+    const detail = (err as any)?.details || (err as any)?.detail || msg;
+    const match = typeof detail === "string" ? detail.match(/Key \((.*?)\)=\((.*?)\) already exists/i) : null;
+    
+    if (match) {
+      const rawField = match[1];
+      const val = match[2];
+      const fieldMap: Record<string, string> = {
+        receipt_number: "GRN or Receipt number",
+        po_number: "PO number",
+        request_number: "Indent number",
+        bill_number: "Bill number",
+        employee_code: "Employee code",
+        contractor_code: "Contractor code",
+        project_code: "Project code",
+        machine_code: "Machine code",
+        work_order_number: "Work order number",
+        mb_number: "MB number",
+        name: "Name",
+      };
+      const friendlyField = fieldMap[rawField] || rawField.replace(/_/g, " ");
+      return `${friendlyField} '${val}' already exists. Please use a different number. This is not a system error. The code is already used by another record, possibly one that was deleted earlier.`;
+    }
+
+    return "A record with this code or identifier already exists. This is not a system error. The code is already used by another record, possibly one that was deleted earlier.";
   }
   if (code === "23514" || msg.includes("violates check constraint")) {
     return "The entry entered violates validation rules. Please check values and try again.";

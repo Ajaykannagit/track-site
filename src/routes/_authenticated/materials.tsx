@@ -7,7 +7,7 @@ import { SupplierGroupPaymentDialog } from "@/components/SupplierGroupPaymentDia
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { History, ListPlus, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { History, ListPlus, Pencil, Plus, RotateCcw, Trash2, Truck } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
@@ -125,6 +125,7 @@ function MaterialsPage() {
   const [deletingPo, setDeletingPo] = useState<Po | null>(null);
 
   const [newReceiptOpen, setNewReceiptOpen] = useState(false);
+  const [receiptInitialPoId, setReceiptInitialPoId] = useState<string | undefined>(undefined);
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [deletingReceipt, setDeletingReceipt] = useState<Receipt | null>(null);
 
@@ -418,9 +419,21 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-28",
+            className: "text-right w-36",
             cell: (r: Po) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  title="Receive materials against this PO (Record GRN)"
+                  onClick={() => {
+                    setReceiptInitialPoId(r.id);
+                    setNewReceiptOpen(true);
+                  }}
+                >
+                  <Truck className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1091,11 +1104,21 @@ function MaterialsPage() {
           {/* New Receipt Dialog with multiple materials */}
           <MultiMaterialReceiptDialog
             open={newReceiptOpen}
-            onOpenChange={setNewReceiptOpen}
+            onOpenChange={(v) => {
+              setNewReceiptOpen(v);
+              if (!v) setReceiptInitialPoId(undefined);
+            }}
             projectOptions={projectOptions}
             supplierOptions={supplierOptions}
             poOptions={poOptions}
-            onSuccess={() => receipts.refetch()}
+            initialPoId={receiptInitialPoId}
+            onSuccess={(savedProjectId?: string) => {
+              if (savedProjectId && grnProjectFilter !== "all" && grnProjectFilter !== savedProjectId) {
+                setGrnProjectFilter("all");
+                toast.info(`Switched filter to "All Projects" so your new receipt is visible.`);
+              }
+              receipts.refetch();
+            }}
           />
 
           {/* Edit Receipt Dialog */}
@@ -1107,7 +1130,10 @@ function MaterialsPage() {
               supplierOptions={supplierOptions}
               poOptions={poOptions}
               editingReceipt={editingReceipt}
-              onSuccess={() => {
+              onSuccess={(savedProjectId?: string) => {
+                if (savedProjectId && grnProjectFilter !== "all" && grnProjectFilter !== savedProjectId) {
+                  setGrnProjectFilter("all");
+                }
                 setEditingReceipt(null);
                 receipts.refetch();
               }}
@@ -1148,28 +1174,36 @@ function MaterialsPage() {
         <TabsContent value="payments" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {canModifyFinance && (
-              <FormDialog
-                title="Record supplier payment"
-                description="Log a payment made to a supplier against a Purchase Order or invoice."
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 size-4" /> New payment
-                  </Button>
-                }
-                submitting={savePayment.isPending}
-                initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank", amount: 0 }}
-                fields={paymentFields}
-                onSubmit={async (values) => {
-                  await savePayment.mutateAsync({
-                    values: {
-                      ...values,
-                      po_id: values["po_id"] || null,
-                      amount: Number(values["amount"] ?? 0),
-                      payment_source: values["payment_source"],
-                    },
-                  });
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <FormDialog
+                  title="Record supplier payment"
+                  description="Log a payment made to a supplier against a Purchase Order or invoice."
+                  trigger={
+                    <Button>
+                      <Plus className="mr-2 size-4" /> New payment
+                    </Button>
+                  }
+                  submitting={savePayment.isPending}
+                  initial={{ payment_date: today(), payment_method: "bank", payment_source: "bank", amount: 0 }}
+                  fields={paymentFields}
+                  onSubmit={async (values) => {
+                    await savePayment.mutateAsync({
+                      values: {
+                        ...values,
+                        po_id: values["po_id"] || null,
+                        amount: Number(values["amount"] ?? 0),
+                        payment_source: values["payment_source"],
+                      },
+                    });
+                  }}
+                />
+                <SupplierGroupPaymentDialog
+                  suppliers={suppliers.data ?? []}
+                  projects={projects.data ?? []}
+                  purchaseOrders={pos.data ?? []}
+                  existingPayments={payments.data ?? []}
+                />
+              </div>
             )}
 
             {/* Payment Filters */}

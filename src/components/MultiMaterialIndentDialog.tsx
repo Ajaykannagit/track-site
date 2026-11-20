@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,7 @@ export function MultiMaterialIndentDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<MaterialLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   const saveIndent = useSaveRow("material_requests", "Material Indent");
 
@@ -196,6 +197,8 @@ export function MultiMaterialIndentDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingRef.current || saving) return;
+
     if (!projectId) {
       toast.error("Please select a project.");
       return;
@@ -211,11 +214,13 @@ export function MultiMaterialIndentDialog({
       return;
     }
 
+    isSavingRef.current = true;
     try {
       setSaving(true);
       const isEdit = !!editingIndent;
 
       let indentId = editingIndent?.id;
+      let isNewHeaderCreated = false;
 
       if (isEdit && editingIndent) {
         await logRecordFieldDiffs(
@@ -261,13 +266,15 @@ export function MultiMaterialIndentDialog({
           },
         });
         indentId = res;
+        isNewHeaderCreated = true;
       }
 
       // Save line items
       if (indentId) {
         // Delete old items if edit
         if (isEdit) {
-          await supabase.from("material_request_items").delete().eq("request_id", indentId);
+          const { error: delErr } = await supabase.from("material_request_items").delete().eq("request_id", indentId);
+          if (delErr) throw new Error(delErr.message || "Failed to update existing indent items.");
         }
 
         const itemsToInsert = validItems.map((item) => ({
@@ -280,16 +287,36 @@ export function MultiMaterialIndentDialog({
           amount: Number(item.amount) || 0,
         }));
 
-        await supabase.from("material_request_items").insert(itemsToInsert);
+        const { error: insertErr } = await supabase.from("material_request_items").insert(itemsToInsert);
+        if (insertErr) {
+          if (isNewHeaderCreated && indentId) {
+            await supabase.from("material_requests").delete().eq("id", indentId);
+          }
+          throw new Error(insertErr.message || "Failed to save indent items.");
+        }
       }
 
       toast.success(isEdit ? "Indent updated successfully" : "Indent created with multiple materials");
       setOpen(false);
       onSuccess?.();
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save indent.");
+      const errMsg = err?.message || "Failed to save indent.";
+      if (
+        errMsg.includes("23505") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("violates unique constraint")
+      ) {
+        if (!editingIndent) {
+          const fresh = `MR-${Date.now().toString().slice(-8)}`;
+          setRequestNumber(fresh);
+          toast.error(`Indent number was already used. A new number (${fresh}) has been generated. Please review and try again.`);
+          return;
+        }
+      }
+      toast.error(errMsg);
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 
