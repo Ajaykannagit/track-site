@@ -28,45 +28,54 @@ export function useRows<T = Record<string, unknown>>(table: string, opts: ListOp
     queryKey: [table, select, filters, order, limit],
     enabled,
     queryFn: async () => {
-      // If a hard limit is requested, do a single fetch with that limit
-      if (limit) {
-        let q = supabase.from(table).select(select);
-        for (const f of filters) {
-          if (f.value === undefined || f.value === null || f.value === "") continue;
-          q = q[f.op](f.col, f.value);
+      try {
+        // If a hard limit is requested, do a single fetch with that limit
+        if (limit) {
+          let q = supabase.from(table).select(select);
+          for (const f of filters) {
+            if (f.value === undefined || f.value === null || f.value === "") continue;
+            q = q[f.op](f.col, f.value);
+          }
+          if (order) q = q.order(order.col, { ascending: order.asc ?? false });
+          q = q.limit(limit);
+          const { data, error } = await q;
+          if (error) throw error;
+          return (data ?? []) as T[];
         }
-        if (order) q = q.order(order.col, { ascending: order.asc ?? false });
-        q = q.limit(limit);
-        const { data, error } = await q;
-        if (error) throw error;
-        return (data ?? []) as T[];
-      }
 
-      // Otherwise page through all rows
-      const allRows: T[] = [];
-      let offset = 0;
-      while (true) {
-        let q = supabase.from(table).select(select);
-        for (const f of filters) {
-          if (f.value === undefined || f.value === null || f.value === "") continue;
-          q = q[f.op](f.col, f.value);
+        // Otherwise page through all rows
+        const allRows: T[] = [];
+        let offset = 0;
+        while (true) {
+          let q = supabase.from(table).select(select);
+          for (const f of filters) {
+            if (f.value === undefined || f.value === null || f.value === "") continue;
+            q = q[f.op](f.col, f.value);
+          }
+          if (order) q = q.order(order.col, { ascending: order.asc ?? false });
+          q = q.range(offset, offset + PAGE_SIZE - 1);
+          const { data, error } = await q;
+          if (error) throw error;
+          const page = (data ?? []) as T[];
+          allRows.push(...page);
+          if (page.length < PAGE_SIZE) break; // last page
+          offset += PAGE_SIZE;
+          if (allRows.length >= MAX_ROWS) {
+            console.warn(
+              `[useRows] Table "${table}" has ≥${MAX_ROWS} rows. Stopped paging. Some rows may be missing.`,
+            );
+            break;
+          }
         }
-        if (order) q = q.order(order.col, { ascending: order.asc ?? false });
-        q = q.range(offset, offset + PAGE_SIZE - 1);
-        const { data, error } = await q;
-        if (error) throw error;
-        const page = (data ?? []) as T[];
-        allRows.push(...page);
-        if (page.length < PAGE_SIZE) break; // last page
-        offset += PAGE_SIZE;
-        if (allRows.length >= MAX_ROWS) {
-          console.warn(
-            `[useRows] Table "${table}" has ≥${MAX_ROWS} rows. Stopped paging. Some rows may be missing.`,
-          );
-          break;
+        return allRows;
+      } catch (err: any) {
+        const msg = String(err?.message || "");
+        if (msg.includes("JWT") || msg.includes("token") || err?.code === "PGRST301" || err?.status === 401) {
+          await supabase.auth.signOut();
+          window.location.href = "/auth?expired=true";
         }
+        throw err;
       }
-      return allRows;
     },
   });
 }
@@ -147,6 +156,31 @@ const VIEW_ALIASES: Record<string, string[]> = {
   projects: ["projects_view"],
 };
 
+export function cleanDbValues(record: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(record)) {
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      // If empty string, convert to null for DB safety (avoids invalid uuid/date syntax)
+      if (trimmed === "" || trimmed === "none") {
+        // "none" is often used in Radix UI select placeholders like team_id or po_id
+        if (key.endsWith("_id") || key.endsWith("_date") || key === "date" || key === "client_id" || key === "team_id" || key === "start_date" || key === "expected_completion_date") {
+          cleaned[key] = null;
+          continue;
+        }
+        if (trimmed === "") {
+          cleaned[key] = null;
+          continue;
+        }
+      }
+      cleaned[key] = trimmed;
+    } else {
+      cleaned[key] = val;
+    }
+  }
+  return cleaned;
+}
+
 export function useSaveRow(table: string, label = "Record") {
   const qc = useQueryClient();
   return useMutation({
@@ -157,15 +191,16 @@ export function useSaveRow(table: string, label = "Record") {
       id?: string | undefined;
       values: Record<string, unknown>;
     }) => {
+      const cleaned = cleanDbValues(values);
       if (id) {
-        const { data: updated, error } = await supabase.from(table).update(values).eq("id", id).select("id");
+        const { data: updated, error } = await supabase.from(table).update(cleaned).eq("id", id).select("id");
         if (error) throw error;
         if (!updated || updated.length === 0) {
           throw new Error(`Update blocked: no ${label} record was modified. You may not have permission to edit this record.`);
         }
         return id;
       }
-      const { data, error } = await supabase.from(table).insert(values).select("id").single();
+      const { data, error } = await supabase.from(table).insert(cleaned).select("id").single();
       if (error) throw error;
       return (data as { id: string }).id;
     },
@@ -174,6 +209,11 @@ export function useSaveRow(table: string, label = "Record") {
       qc.invalidateQueries({ queryKey: [table] });
       // Invalidate the _view variant (legacy pattern used in some places)
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      // Invalidate financial and balance caches
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       // Invalidate any view aliases that are used in list queries
       for (const alias of VIEW_ALIASES[table] ?? []) {
         qc.invalidateQueries({ queryKey: [alias] });

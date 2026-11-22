@@ -90,6 +90,7 @@ export function SupplierGroupPaymentDialog({
     const items: PayableItem[] = [];
 
     purchaseOrders.forEach((po) => {
+      if (po.deleted_at) return;
       if (po.supplier_id !== supplierId) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(po.project_id)) return;
 

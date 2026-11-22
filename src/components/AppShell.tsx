@@ -90,7 +90,7 @@ function Brand() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, roles } = useAuth();
+  const { user, roles, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -123,9 +123,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user?.email}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {roles.length ? roles.map((r) => ROLE_LABEL[r]).join(", ") : "No role assigned"}
-            </p>
+            <div className="truncate text-xs text-muted-foreground">
+              {loading ? (
+                <span className="inline-block h-3 w-16 animate-pulse rounded bg-muted"></span>
+              ) : roles.length ? (
+                roles.map((r) => ROLE_LABEL[r]).join(", ")
+              ) : (
+                "No role assigned"
+              )}
+            </div>
           </div>
 
           <NotificationCenter />

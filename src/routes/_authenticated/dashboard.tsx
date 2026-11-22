@@ -262,7 +262,11 @@ function Dashboard() {
   const getProjectReceivedAmount = (projectId: string) => {
     return sum(
       (allClientPayments.data ?? []).filter(
-        (cp) => cp.project_id === projectId && cp.status === "received",
+        (cp) =>
+          cp.project_id === projectId &&
+          !cp.deleted_at &&
+          !(cp as any).is_void &&
+          (cp.status === "received" || !cp.status || cp.status === "completed")
       ),
       (cp) => {
         if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
@@ -298,7 +302,9 @@ function Dashboard() {
   const active = (projects.data ?? []).filter((p) => p.status === "active");
   const contractValue = sum(projects.data ?? [], (p) => getProjectContractValue(p));
   const totalReceived = sum(
-    (allClientPayments.data ?? []).filter((cp) => cp.status === "received"),
+    (allClientPayments.data ?? []).filter(
+      (cp) => !cp.deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
+    ),
     (cp) => {
       if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
       return Number(cp.amount || 0);

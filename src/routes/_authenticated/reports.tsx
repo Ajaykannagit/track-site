@@ -72,46 +72,35 @@ type Row = {
 
 function ReportsPage() {
   const { permissions } = useAuth();
-
-  // Guard: P&L is MD-only. If the user lacks the permission, show a restricted message
-  // and do not run any financial queries.
-  if (!permissions.canViewProfitAndLoss) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <Lock className="size-12 text-muted-foreground/40" />
-        <div className="text-center">
-          <h2 className="font-display text-xl font-bold">Restricted: MD Only</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Profit, loss and margin reports are visible only to the Managing Director.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const [from, setFrom] = useState(monthStart(-5));
   const [to, setTo] = useState(today());
   const [billStatus, setBillStatus] = useState<string>("all");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
-  const projects = useRows<Project>("projects_view", { order: { col: "name", asc: true } });
+  const projects = useRows<Project>("projects_view", { 
+    order: { col: "name", asc: true },
+    enabled: permissions.canViewProfitAndLoss,
+  });
   const expenses = useRows<Expense>("expenses", {
     filters: [
       { col: "expense_date", op: "gte", value: from },
       { col: "expense_date", op: "lte", value: to },
     ],
+    enabled: permissions.canViewProfitAndLoss,
   });
   const attendance = useRows<Attendance>("attendance_view", {
     filters: [
       { col: "attendance_date", op: "gte", value: from },
       { col: "attendance_date", op: "lte", value: to },
     ],
+    enabled: permissions.canViewProfitAndLoss,
   });
   const receipts = useRows<Receipt>("material_receipts_view", {
     filters: [
       { col: "receipt_date", op: "gte", value: from },
       { col: "receipt_date", op: "lte", value: to },
     ],
+    enabled: permissions.canViewProfitAndLoss,
   });
   const bills = useRows<Bill>("contractor_bills", {
     filters: [
@@ -119,6 +108,11 @@ function ReportsPage() {
       { col: "bill_date", op: "lte", value: to },
       ...(billStatus !== "all" ? [{ col: "status", op: "eq" as const, value: billStatus }] : []),
     ],
+    enabled: permissions.canViewProfitAndLoss,
+  });
+  const quotations = useRows<{ project_id: string; amount: number; status: string }>("project_quotations", {
+    order: { col: "created_at" },
+    enabled: permissions.canViewProfitAndLoss,
   });
 
   const settings = useRows<{ key: string; value: unknown; description: string | null }>(
@@ -127,6 +121,21 @@ function ReportsPage() {
       order: { col: "key", asc: true },
     },
   );
+
+  // Guard: If user lacks permission, show restricted message
+  if (!permissions.canViewProfitAndLoss) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <Lock className="size-12 text-muted-foreground/40" />
+        <div className="text-center">
+          <h2 className="font-display text-xl font-bold">Restricted: MD & Accounts Only</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Profit, loss and margin reports are visible only to the Managing Director and Accounts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const loading =
     projects.isLoading ||
@@ -145,7 +154,12 @@ function ReportsPage() {
       const contractor = sum(byProject(bills.data, p.id), (b) => b.net_amount);
       const other = sum(byProject(expenses.data, p.id), (e) => e.amount);
       const cost = labour + material + contractor + other;
-      const value = Number(p.quotation_amount ?? 0);
+      const baseValue = Number(p.quotation_amount ?? 0);
+      const additions = sum(
+        (quotations.data ?? []).filter((q) => q.project_id === p.id && q.status === "approved"),
+        (q) => Number(q.amount || 0)
+      );
+      const value = baseValue + additions;
       const profit = value - cost;
       return {
         id: p.id,
@@ -162,7 +176,7 @@ function ReportsPage() {
         margin: value ? (profit / value) * 100 : 0,
       };
     });
-  }, [projects.data, attendance.data, receipts.data, bills.data, expenses.data]);
+  }, [projects.data, attendance.data, receipts.data, bills.data, expenses.data, quotations.data]);
 
   const selectedProjectObj = useMemo(() => {
     if (selectedProjectId === "all") return null;

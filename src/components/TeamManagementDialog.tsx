@@ -171,6 +171,14 @@ export function TeamManagementDialog({
       return;
     }
     try {
+      // 1. Deactivate any prior active memberships for addEmpId
+      await (supabase as any)
+        .from("team_members")
+        .update({ is_active: false, left_on: addEffectiveFrom })
+        .eq("employee_id", addEmpId)
+        .eq("is_active", true);
+
+      // 2. Insert new membership
       const res = await (supabase as any).from("team_members").insert({
         team_id: selectedTeamId,
         employee_id: addEmpId,
@@ -179,13 +187,14 @@ export function TeamManagementDialog({
       });
       if (res.error) throw res.error;
 
-      // Also sync current employee team_id
+      // 3. Sync current employee team_id
       await (supabase as any).from("employees").update({ team_id: selectedTeamId }).eq("id", addEmpId);
 
       toast.success("Member added to team.");
       qc.invalidateQueries({ queryKey: ["team_members"] });
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["employees_view"] });
+      qc.invalidateQueries({ queryKey: ["teams"] });
       setAddEmpId("");
     } catch (err: any) {
       toast.error(err.message || "Failed to add member.");
@@ -218,7 +227,17 @@ export function TeamManagementDialog({
 
       if (updateOld.error) throw updateOld.error;
 
-      // Step B: Insert new member starting on replaceDate
+      // Also clear old employee's direct team_id
+      await (supabase as any).from("employees").update({ team_id: null }).eq("id", replaceOldEmpId);
+
+      // Step B: Deactivate any previous active memberships for replaceNewEmpId
+      await (supabase as any)
+        .from("team_members")
+        .update({ is_active: false, left_on: replaceDate })
+        .eq("employee_id", replaceNewEmpId)
+        .eq("is_active", true);
+
+      // Step C: Insert new member starting on replaceDate
       const insertNew = await (supabase as any).from("team_members").insert({
         team_id: selectedTeamId,
         employee_id: replaceNewEmpId,
@@ -229,7 +248,7 @@ export function TeamManagementDialog({
 
       if (insertNew.error) throw insertNew.error;
 
-      // Step C: Sync employees table active team_id
+      // Step D: Sync employees table active team_id
       await (supabase as any).from("employees").update({ team_id: selectedTeamId }).eq("id", replaceNewEmpId);
 
       toast.success(

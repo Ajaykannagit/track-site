@@ -230,9 +230,11 @@ function ProjectDetail() {
   );
   const totalContractValue = baseContractValue + extraQuotationsTotal;
 
-  // Client Receipts & Advances
+  // Client Receipts & Advances (counts all active client receipts, regardless of status string casing)
   const paymentsList = useMemo(() => clientPayments.data ?? [], [clientPayments.data]);
-  const validReceipts = paymentsList.filter((cp) => cp.status === "received");
+  const validReceipts = paymentsList.filter(
+    (cp) => !cp.deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
+  );
   const totalReceived = sum(validReceipts, (cp) => {
     if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
     return Number(cp.amount || 0);

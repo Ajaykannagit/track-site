@@ -570,15 +570,16 @@ const mapToAccountHead = (category: string): string => {
         project_id: sp.project_id,
         projectName: projectName(sp.project_id),
         amount: Number(sp.amount || 0),
-        payment_method: sp.payment_method || "Not recorded",
+        payment_method: sp.payment_method || (sp as any).payment_mode || "Not recorded",
         payment_source: ((sp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: sp.reference_number || "—",
         description: sp.remarks || "Material purchase payment",
       });
     }
 
-    // 3. Contractor Payments (Outflow)
+    // 3. Contractor Payments (Outflow - excludes voided)
     for (const cp of contractorPayments.data ?? []) {
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
       list.push({
         id: `conp-${cp.id}`,
         date: cp.payment_date,
@@ -588,15 +589,16 @@ const mapToAccountHead = (category: string): string => {
         project_id: cp.project_id,
         projectName: projectName(cp.project_id),
         amount: Number(cp.amount || 0),
-        payment_method: cp.payment_method || "Not recorded",
+        payment_method: cp.payment_method || (cp as any).payment_mode || "Not recorded",
         payment_source: ((cp as any).payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: cp.reference_number || "—",
         description: cp.remarks || "Contractor bill settlement",
       });
     }
 
-    // 4. Subcontractor Payments (Outflow)
+    // 4. Subcontractor Payments (Outflow - excludes voided)
     for (const scp of subcontractorPayments.data ?? []) {
+      if ((scp as any).is_void || (scp as any).deleted_at) continue;
       list.push({
         id: `subp-${scp.id}`,
         date: scp.payment_date,
@@ -613,8 +615,9 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 5. Site & Office Expenses (Outflow)
+    // 5. Site & Office Expenses (Outflow - excludes voided)
     for (const exp of expenses.data ?? []) {
+      if ((exp as any).is_void || (exp as any).deleted_at) continue;
       list.push({
         id: `exp-${exp.id}`,
         date: exp.expense_date,
@@ -631,8 +634,9 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 6. Wage Payments (Outflow)
+    // 6. Wage Payments (Outflow - excludes voided)
     for (const wp of wagePayments.data ?? []) {
+      if ((wp as any).is_void || (wp as any).deleted_at) continue;
       list.push({
         id: `wp-${wp.id}`,
         date: wp.payment_date,
@@ -649,8 +653,9 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 7. Labour Advance Payments (Outflow)
+    // 7. Labour Advance Payments (Outflow - excludes voided)
     for (const wa of wageAdvances.data ?? []) {
+      if ((wa as any).is_void || (wa as any).deleted_at) continue;
       if (Number(wa.advance_paid || 0) > 0) {
         list.push({
           id: `wa-${wa.id}`,
@@ -1575,8 +1580,22 @@ const mapToAccountHead = (category: string): string => {
         />
         <StatCard
           label="Money received"
-          value={currency(sum(filteredClosings, (r) => r.cash_received))}
+          value={currency(
+            sum(
+              (clientPayments.data ?? []).filter(
+                (p) => !p.deleted_at && !(p as any).is_void && (p.payment_category !== "reversal")
+              ),
+              (r) => r.amount
+            ) -
+            sum(
+              (clientPayments.data ?? []).filter(
+                (p) => !p.deleted_at && !(p as any).is_void && p.payment_category === "reversal"
+              ),
+              (r) => r.amount
+            )
+          )}
           tone="success"
+          hint="Active client receipts (net of reversals)"
         />
         <StatCard
           label="Petty Cash Running Balance"

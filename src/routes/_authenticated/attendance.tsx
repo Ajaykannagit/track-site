@@ -58,6 +58,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -210,27 +211,30 @@ function getMonthDisplayName(year: number, monthIndex: number): string {
   return `${monthNames[monthIndex] ?? ""} ${year}`;
 }
 
-// Default to week of benchmark data (13.09.2026)
-function getInitialWeekStart(): Date {
-  const initial = new Date(2026, 8, 13); // 13 Sep 2026 (Sunday)
-  return initial;
+// Calculate start of current week (Sunday)
+function getCurrentWeekStart(): Date {
+  const now = new Date();
+  const day = now.getDay(); // 0 is Sunday
+  const diff = now.getDate() - day;
+  return new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
 }
 
 function AttendanceWeeklySheetPage() {
-  const { isMD, permissions } = useAuth();
+  const { isMD, permissions, roles } = useAuth();
 
   // View Mode: 'weekly' or 'monthly'
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly");
-  // Current Month State (default to September 2026 for benchmark data)
+  // Current Month State (default to current calendar month)
+  const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number }>({
-    year: 2026,
-    month: 8, // September (0-indexed)
+    year: now.getFullYear(),
+    month: now.getMonth(),
   });
   // Selected Worker for Month day-by-day drilldown dialog
   const [drilldownWorker, setDrilldownWorker] = useState<Employee | null>(null);
 
   // Current Week Start State (Sunday)
-  const [weekStartDate, setWeekStartDate] = useState<Date>(getInitialWeekStart);
+  const [weekStartDate, setWeekStartDate] = useState<Date>(getCurrentWeekStart);
 
   // Selected Worker for Profile Drawer
   const [profileWorker, setProfileWorker] = useState<Employee | null>(null);
@@ -1029,12 +1033,13 @@ function AttendanceWeeklySheetPage() {
                 <ChevronLeft className="size-4" />
               </Button>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => setWeekStartDate(getInitialWeekStart())}
-                className="h-8 px-2.5 text-xs font-mono"
+                onClick={() => setWeekStartDate(getCurrentWeekStart())}
+                className="h-8 px-2.5 text-xs font-semibold"
+                title="Go to current week"
               >
-                13.09.2026
+                This Week
               </Button>
               <Button variant="ghost" size="icon" onClick={handleNextWeek} className="size-8" title="Next Week">
                 <ChevronRight className="size-4" />
@@ -1112,7 +1117,29 @@ function AttendanceWeeklySheetPage() {
               >
                 <ChevronRight className="size-4" />
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const d = new Date();
+                  setSelectedMonth({ year: d.getFullYear(), month: d.getMonth() });
+                }}
+                className="h-8 px-2 text-xs font-semibold"
+                title="Go to current month"
+              >
+                This Month
+              </Button>
             </div>
+          )}
+
+          {/* Team Management */}
+          {(isMD || roles.includes("accounts")) && (
+            <TeamManagementDialog
+              teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name }))}
+              employees={(employees.data ?? []).map((e) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, team_id: e.team_id, status: e.status }))}
+              projects={(sites.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
+              canManage={true}
+            />
           )}
 
           {/* Mark All Present (Weekly mode only, for Accounts & MD) */}
@@ -1344,6 +1371,11 @@ function AttendanceWeeklySheetPage() {
                                         void handleSaveAdjustment(r.employee.id, val, r.advance, undefined, undefined, key);
                                       }
                                     }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
                                     className={`no-print h-7 w-20 text-right text-xs font-mono transition-all duration-300 ${
                                       status === "success"
                                         ? "border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30"
@@ -1376,6 +1408,11 @@ function AttendanceWeeklySheetPage() {
                                       const val = parseFloat(e.target.value) || 0;
                                       if (val !== r.advance) {
                                         void handleSaveAdjustment(r.employee.id, r.busPetrol, val, undefined, undefined, key);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.currentTarget.blur();
                                       }
                                     }}
                                     className={`h-7 w-20 text-right text-xs font-mono transition-all duration-300 ${
@@ -1428,30 +1465,32 @@ function AttendanceWeeklySheetPage() {
               </TableBody>
 
               {/* Grand Totals Bottom Row */}
-              <TableRow className="border-t-2 bg-muted font-bold text-xs">
-                <TableCell colSpan={permissions.canViewWagesAndPayments ? 11 : 10} className="text-right uppercase tracking-wider py-3">
-                  Grand Totals:
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3 border-l">
-                  {grandTotalDays.toFixed(1)}
-                </TableCell>
-                {permissions.canViewWagesAndPayments && (
-                  <>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(grandTotalWage)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(grandTotalBusPetrol)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(grandTotalAdvance)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
-                      {currency(grandTotalBalance)}
-                    </TableCell>
-                  </>
-                )}
-              </TableRow>
+              <TableFooter>
+                <TableRow className="border-t-2 bg-muted font-bold text-xs">
+                  <TableCell colSpan={permissions.canViewWagesAndPayments ? 11 : 10} className="text-right uppercase tracking-wider py-3">
+                    Grand Totals:
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3 border-l">
+                    {grandTotalDays.toFixed(1)}
+                  </TableCell>
+                  {permissions.canViewWagesAndPayments && (
+                    <>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(grandTotalWage)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(grandTotalBusPetrol)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(grandTotalAdvance)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
+                        {currency(grandTotalBalance)}
+                      </TableCell>
+                    </>
+                  )}
+                </TableRow>
+              </TableFooter>
             </Table>
           </div>
         </Card>
@@ -1580,44 +1619,46 @@ function AttendanceWeeklySheetPage() {
               </TableBody>
 
               {/* Monthly Grand Totals Bottom Row */}
-              <TableRow className="border-t-2 bg-muted font-bold text-xs">
-                <TableCell colSpan={3} className="text-right uppercase tracking-wider py-3">
-                  Monthly Grand Totals:
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3">
-                  {monthlyGrandTotalPresent}
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3">
-                  {monthlyGrandTotalHalfDays}
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3">
-                  {monthlyGrandTotalLeaveDays}
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3 border-l font-bold">
-                  {monthlyGrandTotalDays.toFixed(1)}
-                </TableCell>
-                <TableCell className="text-center font-mono text-sm py-3 font-bold">
-                  {monthlyGrandTotalHours.toFixed(0)} hrs
-                </TableCell>
-                {permissions.canViewWagesAndPayments && (
-                  <>
-                    <TableCell className="text-right font-mono text-sm py-3">—</TableCell>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(monthlyGrandTotalWage)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(monthlyGrandTotalBusPetrol)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm py-3">
-                      {currency(monthlyGrandTotalAdvance)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
-                      {currency(monthlyGrandTotalBalance)}
-                    </TableCell>
-                  </>
-                )}
-                <TableCell className="no-print" />
-              </TableRow>
+              <TableFooter>
+                <TableRow className="border-t-2 bg-muted font-bold text-xs">
+                  <TableCell colSpan={3} className="text-right uppercase tracking-wider py-3">
+                    Monthly Grand Totals:
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3">
+                    {monthlyGrandTotalPresent}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3">
+                    {monthlyGrandTotalHalfDays}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3">
+                    {monthlyGrandTotalLeaveDays}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3 border-l font-bold">
+                    {monthlyGrandTotalDays.toFixed(1)}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-sm py-3 font-bold">
+                    {monthlyGrandTotalHours.toFixed(0)} hrs
+                  </TableCell>
+                  {permissions.canViewWagesAndPayments && (
+                    <>
+                      <TableCell className="text-right font-mono text-sm py-3">—</TableCell>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(monthlyGrandTotalWage)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(monthlyGrandTotalBusPetrol)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm py-3">
+                        {currency(monthlyGrandTotalAdvance)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-base font-bold text-primary py-3">
+                        {currency(monthlyGrandTotalBalance)}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell className="no-print" />
+                </TableRow>
+              </TableFooter>
             </Table>
           </div>
         </Card>

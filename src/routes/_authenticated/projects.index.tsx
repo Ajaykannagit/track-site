@@ -100,7 +100,10 @@ function ProjectsPage() {
       name: "client_id",
       label: "Client",
       type: "select",
-      options: (clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+      options: [
+        { value: "", label: "— No Client Assigned —" },
+        ...(clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+      ],
     },
     {
       name: "status",
@@ -267,6 +270,9 @@ function ProjectsPage() {
               id: editingProject.id,
               values: {
                 ...values,
+                client_id: values["client_id"] ? String(values["client_id"]).trim() : null,
+                start_date: values["start_date"] ? String(values["start_date"]).trim() : null,
+                expected_completion_date: values["expected_completion_date"] ? String(values["expected_completion_date"]).trim() : null,
                 quotation_amount: Number(values["quotation_amount"] ?? 0),
               },
             });

@@ -62,7 +62,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canViewOfficeExpense: true,      // Accountant can view and enter office expenses
     canManageUsers: true,            // Accountant can manage user roles (except MD)
     canViewAuditLog: true,           // Accountant can view audit log history
-    canViewProfitAndLoss: false,     // ← Accounts CANNOT see profit, loss or margin
+    canViewProfitAndLoss: true,      // Reports & P&L enabled for Accountant per client rule
     canViewProjects: true,
     canViewProjectFinancials: true,
     canManageQuotations: true,

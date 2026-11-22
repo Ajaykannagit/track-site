@@ -7,11 +7,12 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -120,6 +121,49 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [serverUnreachable, setServerUnreachable] = useState(false);
+
+  useEffect(() => {
+    // Quiet connection check on startup
+    const checkServer = async () => {
+      try {
+        const { error } = await supabase.from("app_settings").select("key").limit(1);
+        if (error) {
+          const msg = String(error.message || "");
+          if (
+            msg.includes("Failed to fetch") ||
+            msg.includes("NetworkError") ||
+            error.code === "PGRST000" ||
+            error.code === "53300"
+          ) {
+            setServerUnreachable(true);
+          }
+        }
+      } catch (e: any) {
+        setServerUnreachable(true);
+      }
+    };
+    void checkServer();
+  }, []);
+
+  if (serverUnreachable) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-background p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-destructive/20 bg-destructive/5 p-8 shadow-lg">
+          <h1 className="text-xl font-bold text-destructive">Server Not Reachable</h1>
+          <p className="text-sm text-muted-foreground">
+            The server is not reachable right now. Please check your internet connection or contact support.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

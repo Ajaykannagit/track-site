@@ -43,6 +43,7 @@ export function FormDialog({
   submitting,
   onSubmit,
   extra,
+  onFieldChange,
 }: {
   title: string;
   description?: string;
@@ -54,6 +55,7 @@ export function FormDialog({
   submitting?: boolean;
   onSubmit: (values: FormValues) => Promise<void> | void;
   extra?: (values: FormValues) => ReactNode;
+  onFieldChange?: (name: string, value: string, setValues: React.Dispatch<React.SetStateAction<FormValues>>) => void;
 }) {
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
@@ -71,7 +73,13 @@ export function FormDialog({
   }, [open]);
 
   const set = (name: string, v: string) => {
-    setValues((prev) => ({ ...prev, [name]: v }));
+    setValues((prev) => {
+      const updated = { ...prev, [name]: v };
+      return updated;
+    });
+    if (onFieldChange) {
+      onFieldChange(name, v, setValues);
+    }
     if (errors[name]) {
       setErrors((prev) => {
         const next = { ...prev };

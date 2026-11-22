@@ -103,8 +103,9 @@ export function GroupPaymentDialog({
     if (!contractorId) return [];
     const items: PayableItem[] = [];
 
-    // 1. Unbilled or ongoing Work Orders for this contractor
+    // 1. Unbilled or ongoing Work Orders for this contractor (exclude soft-deleted)
     workOrders.forEach((wo) => {
+      if (wo.deleted_at) return;
       if (wo.contractor_id !== contractorId) return;
       if (jobTypeFilter !== "all" && wo.job_type_id !== jobTypeFilter) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(wo.project_id)) return;
@@ -136,8 +137,9 @@ export function GroupPaymentDialog({
       }
     });
 
-    // 2. Verified/Approved Contractor Bills
+    // 2. Verified/Approved Contractor Bills (exclude soft-deleted)
     bills.forEach((bill) => {
+      if (bill.deleted_at) return;
       if (bill.contractor_id !== contractorId) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(bill.project_id)) return;
 
@@ -195,6 +197,26 @@ export function GroupPaymentDialog({
     if (!isAllocationValid) {
       toast.error(allocationError || "Allocation validation failed.");
       return;
+    }
+
+    // Guard against B4 double-pay: Check if user selected both a Work Order and any of its child Bills
+    const selectedWoIds = new Set<string>();
+    for (const k of selectedItemKeys) {
+      const item = payableItems.find((it) => it.key === k);
+      if (item?.workOrderId && !item.contractorBillId && (allocations[k] || 0) > 0) {
+        selectedWoIds.add(item.workOrderId);
+      }
+    }
+    for (const k of selectedItemKeys) {
+      const item = payableItems.find((it) => it.key === k);
+      if (item?.contractorBillId && item?.workOrderId && (allocations[k] || 0) > 0) {
+        if (selectedWoIds.has(item.workOrderId)) {
+          toast.error(
+            `Double-payment prevention: You cannot allocate payments to both Work Order and its linked Bill (${item.itemNumber}) simultaneously. Please allocate to either the Work Order or the Bill.`
+          );
+          return;
+        }
+      }
     }
 
     // Build payload allocations

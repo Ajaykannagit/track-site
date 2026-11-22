@@ -182,35 +182,39 @@ function ContractorsPage() {
   const saveSubPay = useSaveRow("subcontractor_payments", "Subcontractor payment");
   const deleteSubPay = useDeleteRow("subcontractor_payments", "Subcontractor payment");
 
-  // Filtered lists
+  // Filtered lists (strictly excluding deleted and voided records)
   const filteredWos = useMemo(() => {
-    let list = wos.data ?? [];
+    let list = (wos.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     if (jobTypeFilter !== "all") list = list.filter((r) => r.job_type_id === jobTypeFilter);
     return list;
-  }, [wos.data, projectFilter, contractorFilter]);
+  }, [wos.data, projectFilter, contractorFilter, jobTypeFilter]);
 
   const filteredMbs = useMemo(() => {
-    let list = mbs.data ?? [];
+    let list = (mbs.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [mbs.data, projectFilter, contractorFilter]);
 
   const filteredBills = useMemo(() => {
-    let list = bills.data ?? [];
+    let list = (bills.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [bills.data, projectFilter, contractorFilter]);
 
   const filteredPayments = useMemo(() => {
-    let list = payments.data ?? [];
+    let list = (payments.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [payments.data, projectFilter, contractorFilter]);
+
+  const filteredSubPays = useMemo(() => {
+    return (subPays.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+  }, [subPays.data]);
 
   // Columns
   const woColumns: Column<Wo>[] = [
@@ -450,12 +454,15 @@ function ContractorsPage() {
     },
     {
       header: "Method",
-      cell: (r) => (
-        <span className={r.payment_method ? "capitalize" : "text-muted-foreground italic text-xs"}>
-          {r.payment_method || "Not recorded"}
-        </span>
-      ),
-      value: (r) => r.payment_method || "Not recorded",
+      cell: (r) => {
+        const method = r.payment_method || (r as any).payment_mode;
+        return (
+          <span className={method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
+            {method || "Not recorded"}
+          </span>
+        );
+      },
+      value: (r) => r.payment_method || (r as any).payment_mode || "Not recorded",
     },
     {
       header: "Reference",
@@ -760,8 +767,8 @@ function ContractorsPage() {
           <TabsTrigger value="pending">
             Pending payments
             {(() => {
-              const pendingCount = (bills.data ?? []).filter((b) => {
-                const paid = (payments.data ?? [])
+              const pendingCount = filteredBills.filter((b) => {
+                const paid = filteredPayments
                   .filter((p) => p.bill_id === b.id)
                   .reduce((sum, p) => sum + (p.amount || 0), 0);
                 return b.net_amount - paid > 0;
@@ -1558,7 +1565,7 @@ function ContractorsPage() {
             )}
 
             <DataTable
-              rows={subPays.data ?? []}
+              rows={filteredSubPays}
               loading={subPays.isLoading}
               exportName="brickweld-other-payments"
               exportTitle="Other Payments Report"
@@ -1657,11 +1664,11 @@ function ContractorsPage() {
               ]}
             />
 
-            {(subPays.data ?? []).length > 0 && (
+            {filteredSubPays.length > 0 && (
               <div className="flex justify-end rounded-lg border bg-muted/40 px-4 py-2">
                 <span className="text-sm font-semibold">
                   Grand total:{" "}
-                  <span className="font-mono">{currency(sum(subPays.data ?? [], (r) => r.amount))}</span>
+                  <span className="font-mono">{currency(sum(filteredSubPays, (r) => r.amount))}</span>
                 </span>
               </div>
             )}

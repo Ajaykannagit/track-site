@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/AppShell";
 import { DataTable, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { TeamManagementDialog } from "@/components/TeamManagementDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -104,7 +105,7 @@ const Active = ({ on }: { on: boolean }) => (
 );
 
 function MastersPage() {
-  const { isMD, canWriteSite, permissions } = useAuth();
+  const { isMD, canWriteSite, permissions, roles } = useAuth();
 
   // Selected item states for Edit and Delete
   const [editingJobType, setEditingJobType] = useState<JobType | null>(null);
@@ -140,6 +141,8 @@ function MastersPage() {
   // Data queries
   const clients = useRows<Client>("clients", { order: { col: "name", asc: true } });
   const employees = useRows<Employee>("employees_view", { order: { col: "full_name", asc: true } });
+  const teams = useRows<{ id: string; name: string; leader_name?: string | null }>("teams", { order: { col: "name", asc: true } });
+  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const contractors = useRows<Contractor>("contractors", { order: { col: "name", asc: true } });
   const suppliers = useRows<Supplier>("suppliers", { order: { col: "name", asc: true } });
   const machines = useRows<Machine>("machines", { order: { col: "name", asc: true } });
@@ -498,6 +501,68 @@ function MastersPage() {
     { name: "description", label: "Description", type: "textarea" },
   ];
 
+  const jobTypeFields = [
+    { name: "name", label: "Job Type Name", required: true },
+    { name: "description", label: "Description", type: "textarea" },
+    {
+      name: "is_active",
+      label: "Active status",
+      type: "select" as const,
+      options: [
+        { value: "true", label: "Active" },
+        { value: "false", label: "Inactive" },
+      ],
+    },
+  ];
+
+  const jobTypeColumns = [
+    {
+      header: "Name",
+      accessor: "name" as const,
+      cell: (r: JobType) => <span className="font-medium text-foreground">{r.name}</span>,
+    },
+    {
+      header: "Description",
+      accessor: "description" as const,
+      cell: (r: JobType) => r.description || "—",
+    },
+    {
+      header: "Status",
+      cell: (r: JobType) => (
+        <Badge variant={r.is_active ? "outline" : "secondary"}>
+          {r.is_active ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      header: "Actions",
+      cell: (r: JobType) => (
+        <div className="flex items-center gap-1">
+          {canManageMasters && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => setEditingJobType(r)}
+            >
+              <Pencil className="size-4" />
+            </Button>
+          )}
+          {canManageMasters && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-destructive"
+              onClick={() => setDeletingJobType(r)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -582,28 +647,56 @@ function MastersPage() {
         {/* ================= EMPLOYEES ================= */}
         <TabsContent value="employees" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {canManageMasters && (
-              <FormDialog
-                title="Add employee"
-                description="Labour and office staff with their wage basis."
-                initial={{ staff_type: "labour", employee_type: "labour", wage_type: "daily", active: "true" }}
-                fields={employeeFields}
-                trigger={addButton("Add employee")}
-                submitting={saveEmployee.isPending}
-                onSubmit={async (values) => {
-                  await saveEmployee.mutateAsync({
-                    values: {
-                      ...values,
-                      wage_rate: Number(values["wage_rate"] ?? 0),
-                      ot_rate_per_hour: values["ot_rate_per_hour"]
-                        ? Number(values["ot_rate_per_hour"])
-                        : null,
-                      active: values["active"] !== "false",
-                    },
-                  });
-                }}
-              />
-            )}
+            <div className="flex items-center gap-2">
+              {canManageMasters && (
+                <FormDialog
+                  title="Add employee"
+                  description="Labour and office staff with their wage basis."
+                  initial={{ staff_type: "labour", employee_type: "labour", wage_type: "daily", active: "true" }}
+                  fields={employeeFields}
+                  trigger={addButton("Add employee")}
+                  submitting={saveEmployee.isPending}
+                  onFieldChange={(name, value, setValues) => {
+                    if (name === "staff_type") {
+                      if (value === "officer") {
+                        setValues((prev) => ({
+                          ...prev,
+                          employee_type: "office",
+                          wage_type: "monthly",
+                        }));
+                      } else if (value === "labour") {
+                        setValues((prev) => ({
+                          ...prev,
+                          employee_type: "labour",
+                          wage_type: "daily",
+                        }));
+                      }
+                    }
+                  }}
+                  onSubmit={async (values) => {
+                    await saveEmployee.mutateAsync({
+                      values: {
+                        ...values,
+                        wage_rate: Number(values["wage_rate"] ?? 0),
+                        ot_rate_per_hour: values["ot_rate_per_hour"]
+                          ? Number(values["ot_rate_per_hour"])
+                          : null,
+                        active: values["active"] !== "false",
+                      },
+                    });
+                  }}
+                />
+              )}
+
+              {(isMD || roles.includes("accounts")) && (
+                <TeamManagementDialog
+                  teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name }))}
+                  employees={(employees.data ?? []).map((e) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, team_id: e.team_id, status: e.status }))}
+                  projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
+                  canManage={true}
+                />
+              )}
+            </div>
 
             {/* Employee Filters */}
             <div className="no-print flex flex-wrap items-end gap-2">
@@ -658,6 +751,23 @@ function MastersPage() {
               title="Edit employee"
               fields={employeeFields}
               submitting={saveEmployee.isPending}
+              onFieldChange={(name, value, setValues) => {
+                if (name === "staff_type") {
+                  if (value === "officer") {
+                    setValues((prev) => ({
+                      ...prev,
+                      employee_type: "office",
+                      wage_type: "monthly",
+                    }));
+                  } else if (value === "labour") {
+                    setValues((prev) => ({
+                      ...prev,
+                      employee_type: "labour",
+                      wage_type: "daily",
+                    }));
+                  }
+                }
+              }}
               initial={{
                 employee_code: editingEmployee.employee_code,
                 full_name: editingEmployee.full_name,
@@ -1002,6 +1112,82 @@ function MastersPage() {
             exportName="brickweld-machines"
             exportTitle="Machine Master Report"
             exportDescription="Construction Project Control System — Machine Master Report"
+          />
+        </TabsContent>
+
+        {/* ================= JOB TYPES ================= */}
+        <TabsContent value="job_types" className="mt-4 space-y-3">
+          {canManageMasters && (
+            <FormDialog
+              title="Add Job Type"
+              fields={jobTypeFields}
+              trigger={addButton("Add Job Type")}
+              submitting={saveJobType.isPending}
+              initial={{
+                name: "",
+                description: "",
+                is_active: "true",
+              }}
+              onSubmit={async (values) => {
+                await saveJobType.mutateAsync({
+                  values: {
+                    ...values,
+                    is_active: values["is_active"] !== "false",
+                  },
+                });
+              }}
+            />
+          )}
+
+          {editingJobType && (
+            <FormDialog
+              open={!!editingJobType}
+              onOpenChange={(v) => !v && setEditingJobType(null)}
+              title="Edit Job Type"
+              fields={jobTypeFields}
+              submitting={saveJobType.isPending}
+              initial={{
+                name: editingJobType.name,
+                description: editingJobType.description ?? "",
+                is_active: editingJobType.is_active ? "true" : "false",
+              }}
+              onSubmit={async (values) => {
+                await saveJobType.mutateAsync({
+                  id: editingJobType.id,
+                  values: {
+                    ...values,
+                    is_active: values["is_active"] !== "false",
+                  },
+                });
+                setEditingJobType(null);
+              }}
+            />
+          )}
+
+          {deletingJobType && (
+            <ConfirmDeleteDialog
+              open={!!deletingJobType}
+              onOpenChange={(v) => !v && setDeletingJobType(null)}
+              title="Delete Job Type"
+              tableName="job_types"
+              recordId={deletingJobType.id}
+              recordTitle={`Job Type: ${deletingJobType.name}`}
+              recordData={deletingJobType}
+              description={`Delete job type "${deletingJobType.name}"? This action will be logged and the MD will be notified.`}
+              onConfirm={async () => {
+                await deleteJobType.mutateAsync(deletingJobType.id);
+                setDeletingJobType(null);
+              }}
+            />
+          )}
+
+          <DataTable
+            rows={jobTypes.data ?? []}
+            columns={jobTypeColumns}
+            loading={jobTypes.isLoading}
+            exportName="brickweld-job-types"
+            exportTitle="Job Types Report"
+            exportDescription="Construction Project Control System — Job Types Master Report"
           />
         </TabsContent>
       </Tabs>

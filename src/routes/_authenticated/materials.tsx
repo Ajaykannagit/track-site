@@ -376,13 +376,13 @@ function MaterialsPage() {
       header: "Paid",
       cell: (r) => {
         const paid = (payments.data ?? [])
-          .filter((p) => p.po_id === r.id)
+          .filter((p) => p.po_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         return currency(paid);
       },
       value: (r) => {
         return (payments.data ?? [])
-          .filter((p) => p.po_id === r.id)
+          .filter((p) => p.po_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
       },
       className: "text-right tabular-nums text-emerald-700",
@@ -391,7 +391,7 @@ function MaterialsPage() {
       header: "Balance due",
       cell: (r) => {
         const paid = (payments.data ?? [])
-          .filter((p) => p.po_id === r.id)
+          .filter((p) => p.po_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         const bal = r.total_amount - paid;
         if (bal <= 0) {
@@ -409,7 +409,7 @@ function MaterialsPage() {
       },
       value: (r) => {
         const paid = (payments.data ?? [])
-          .filter((p) => p.po_id === r.id)
+          .filter((p) => p.po_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         return r.total_amount - paid;
       },
@@ -607,12 +607,15 @@ function MaterialsPage() {
     },
     {
       header: "Method",
-      cell: (r) => (
-        <span className={r.payment_method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
-          {r.payment_method || "Not recorded"}
-        </span>
-      ),
-      value: (r) => r.payment_method || "Not recorded",
+      cell: (r) => {
+        const method = r.payment_method || (r as any).payment_mode;
+        return (
+          <span className={method ? "capitalize text-xs font-medium" : "text-muted-foreground italic text-xs"}>
+            {method || "Not recorded"}
+          </span>
+        );
+      },
+      value: (r) => r.payment_method || (r as any).payment_mode || "Not recorded",
     },
     {
       header: "Reference",
@@ -729,21 +732,23 @@ function MaterialsPage() {
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Open indents"
-          value={String((requests.data ?? []).filter((r) => r.status !== "closed").length)}
+          value={String(
+            (requests.data ?? []).filter((r) => r.status !== "closed" && !(r as any).is_void && !(r as any).deleted_at).length
+          )}
         />
         <StatCard
           label="PO value"
-          value={currency(sum(pos.data ?? [], (r) => r.total_amount))}
+          value={currency(sum((pos.data ?? []).filter((p) => !(p as any).is_void && !(p as any).deleted_at), (r) => r.total_amount))}
           tone="warning"
         />
         <StatCard
           label="Received value"
-          value={currency(sum(receipts.data ?? [], (r) => r.total_amount))}
+          value={currency(sum((receipts.data ?? []).filter((r) => !(r as any).deleted_at), (r) => r.total_amount))}
           tone="success"
         />
         <StatCard
           label="Paid to suppliers"
-          value={currency(sum(payments.data ?? [], (r) => r.amount))}
+          value={currency(sum((payments.data ?? []).filter((p) => !(p as any).is_void && !(p as any).deleted_at), (r) => r.amount))}
         />
       </div>
 

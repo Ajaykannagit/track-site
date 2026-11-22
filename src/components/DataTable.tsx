@@ -37,6 +37,8 @@ export function DataTable<T extends { id?: string }>({
   rows,
   columns,
   loading,
+  error,
+  onRetry,
   searchable = true,
   exportName,
   exportTitle,
@@ -49,6 +51,8 @@ export function DataTable<T extends { id?: string }>({
   rows: T[];
   columns: Column<T>[];
   loading?: boolean | undefined;
+  error?: unknown;
+  onRetry?: () => void;
   searchable?: boolean | undefined;
   exportName?: string | undefined;
   exportTitle?: string | undefined;
@@ -167,7 +171,23 @@ export function DataTable<T extends { id?: string }>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {error ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="py-12 text-center"
+                >
+                  <div className="flex flex-col items-center justify-center gap-2 text-destructive">
+                    <p className="text-sm font-semibold">Could not load data. Please check your internet and retry.</p>
+                    {onRetry && (
+                      <Button variant="outline" size="sm" onClick={onRetry} className="mt-1 h-8 gap-1.5 text-xs text-foreground">
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
                   {columns.map((c) => (

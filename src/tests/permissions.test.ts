@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { ROLE_PERMISSIONS, getEffectivePermissions } from "@/lib/permissions";
 
 describe("Permissions Matrix Enforcement", () => {
-  it("only MD has canViewProfitAndLoss", () => {
+  it("MD and Accounts have canViewProfitAndLoss per client rule", () => {
     expect(ROLE_PERMISSIONS.md.canViewProfitAndLoss).toBe(true);
-    expect(ROLE_PERMISSIONS.accounts.canViewProfitAndLoss).toBe(false);
+    expect(ROLE_PERMISSIONS.accounts.canViewProfitAndLoss).toBe(true);
     expect(ROLE_PERMISSIONS.supervisor.canViewProfitAndLoss).toBe(false);
     expect(ROLE_PERMISSIONS.viewer.canViewProfitAndLoss).toBe(false);
   });
@@ -21,9 +21,9 @@ describe("Permissions Matrix Enforcement", () => {
   });
 
   it("effective permissions properly combine multi-roles", () => {
-    const combined = getEffectivePermissions(["accounts", "supervisor"]);
+    const combined = getEffectivePermissions(["supervisor", "viewer"]);
     expect(combined.canEnterAttendance).toBe(true);
-    expect(combined.canViewMaterialContractorCosts).toBe(true);
+    expect(combined.canViewMaterialContractorCosts).toBe(false);
     expect(combined.canViewProfitAndLoss).toBe(false); // Neither has it
   });
 });
