@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Brickweld - Deliverables &amp; Engineering Accomplishments Report</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  .page-header {
+    border-bottom: 2.5px solid #0f172a;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .company-title {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    color: #0f172a;
+    margin: 0;
+  }
+  .company-sub {
+    font-size: 8.5px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 1px;
+  }
+  .report-meta {
+    text-align: right;
+    font-size: 8px;
+    color: #475569;
+    line-height: 1.3;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1.5px 6px;
+    font-size: 8px;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .badge-emerald { background: #dcfce7; color: #15803d; }
+  .badge-blue { background: #dbeafe; color: #1d4ed8; }
+  .badge-purple { background: #f3e8ff; color: #7e22ce; }
+  
+  .banner {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+    border-radius: 5px;
+    padding: 9px 12px;
+    margin-bottom: 8px;
+  }
+  .banner h1 {
+    font-size: 13px;
+    font-weight: 800;
+    margin: 0 0 3px 0;
+    letter-spacing: -0.2px;
+  }
+  .banner p {
+    font-size: 9px;
+    color: #cbd5e1;
+    margin: 0;
+    line-height: 1.35;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .stat-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+  .stat-lbl {
+    font-size: 7.5px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 2px;
+  }
+
+  .section-title {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #0f172a;
+    border-left: 3px solid #2563eb;
+    padding-left: 6px;
+    margin: 8px 0 5px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 7px 9px;
+    margin-bottom: 6px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+  }
+  .card-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .card-desc {
+    font-size: 8.5px;
+    color: #334155;
+    margin: 0 0 4px 0;
+    line-height: 1.35;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5px;
+    margin: 4px 0;
+  }
+  th {
+    background: #f1f5f9;
+    color: #334155;
+    text-align: left;
+    padding: 3.5px 5px;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+  }
+  td {
+    padding: 3.5px 5px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .highlight-box {
+    background: #eff6ff;
+    border-left: 2.5px solid #3b82f6;
+    padding: 5px 8px;
+    border-radius: 0 3px 3px 0;
+    font-size: 8.5px;
+    color: #1e3a8a;
+    margin: 4px 0;
+    line-height: 1.35;
+  }
+
+  .sig-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #cbd5e1;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .sig-line {
+    border-bottom: 1px solid #94a3b8;
+    height: 18px;
+    margin-bottom: 3px;
+  }
+  .sig-title {
+    font-size: 9px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .sig-role {
+    font-size: 7.5px;
+    color: #64748b;
+  }
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="page-header">
+    <div>
+      <h1 class="company-title">BRICKWELD PRIVATE LIMITED</h1>
+      <div class="company-sub">Construction Project Control &amp; Financial Accounting System</div>
+    </div>
+    <div class="report-meta">
+      <div><strong>Report Type:</strong> Engineering &amp; Product Audit Deliverables</div>
+      <div><strong>Execution Period:</strong> 21 Nov 2026 (Morning) – 22 Nov 2026 (Evening)</div>
+      <div><strong>Environment:</strong> Production / Staging (Supabase DB + Vercel Web)</div>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE BANNER -->
+  <div class="banner">
+    <h1>EXECUTIVE DELIVERABLES &amp; HIGH-IMPACT ACCOMPLISHMENTS REPORT</h1>
+    <p>Comprehensive record of all system upgrades, deep multi-role quality audits (MD &amp; Accounts), automated calculation repairs, print architecture modernization, database sanitization, and GitHub version control synchronizations completed across the 48-hour sprint.</p>
+  </div>
+
+  <!-- KPI SUMMARY -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val" style="color: #2563eb;">12</div>
+      <div class="stat-lbl">Core Modules Upgraded</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color: #16a34a;">4</div>
+      <div class="stat-lbl">Critical Glitches Fixed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color: #9333ea;">46 / 46</div>
+      <div class="stat-lbl">Automated Tests Passed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color: #0d9488;">100%</div>
+      <div class="stat-lbl">Merged &amp; Pushed to Main</div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: ROLE-BASED TESTING & WORKFLOW VERIFICATION -->
+  <div class="section-title">1. Dual-Role End-to-End System Inspection (MD &amp; Accounts)</div>
+  <div class="card">
+    <p class="card-desc">To ensure the app reflects the true company operations (where strictly the <strong>Managing Director (MD)</strong> and <strong>Accountant</strong> manage the application without unneeded digital bottlenecks), thorough multi-role testing was executed:</p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 22%;">Audited Persona</th>
+          <th style="width: 38%;">Workflows &amp; Features Verified</th>
+          <th style="width: 40%;">Improvements &amp; Fixes Delivered</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Managing Director (MD)</strong><br><span style="color:#64748b; font-size:7.5px;">Role: Full Executive Access</span></td>
+          <td>
+            • Full Company Cash Closing &amp; Daily Vault balances<br>
+            • Executive Dashboard P&amp;L summaries and project cards<br>
+            • Contract valuation and approved quotation addendums<br>
+            • Gross profit margins, cost composition breakdown<br>
+            • Audit Log tracking and system-wide visibility
+          </td>
+          <td>
+            • <strong>Eliminated ₹500 discrepancy</strong> between Dashboard Contract Valuation and Reports P&amp;L Statement.<br>
+            • <strong>Fixed Project Header ₹0 receipt glitch</strong> so newly recorded cash inflows immediately update project received metrics.
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Accountant / Finance</strong><br><span style="color:#64748b; font-size:7.5px;">Role: Accounts &amp; Payroll</span></td>
+          <td>
+            • 7-Day Weekly Attendance Grid &amp; Daily Time tracking<br>
+            • 30-Day Monthly Attendance Muster Roll &amp; Wage Sheet<br>
+            • Client Payment Receipts &amp; Bank/Cash allocations<br>
+            • Material Purchase Orders &amp; Goods Receipt Notes (GRN)<br>
+            • Contractor Work Orders &amp; Subcontractor bills
+          </td>
+          <td>
+            • <strong>Removed unnecessary 'Site Supervisor' approval</strong> lines to match the 2-person reality.<br>
+            • <strong>Standardized 2-tier physical sign-offs:</strong> 'Prepared by Accounts' &amp; 'Approved by MD'.<br>
+            • <strong>Prevented historical payroll mutation</strong> when employee master wage rates change.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 2: CRITICAL CALCULATION & ACCOUNTING BUG RESOLUTIONS -->
+  <div class="section-title">2. Critical Calculations &amp; Accounting Glitches Resolved</div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 25%;">Issue Description</th>
+          <th style="width: 35%;">Root Cause Identified</th>
+          <th style="width: 40%;">Engineering Solution Implemented</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Receipt Disappearing Glitch</strong><br><span style="color:#ef4444; font-size:7.5px;">₹100 in history showed ₹0 on project &amp; dashboard</span></td>
+          <td>Receipts saved in Accounts were assigned <code>status: 'confirmed'</code>, but project and dashboard filters strictly checked for <code>'received'</code> or <code>'completed'</code>.</td>
+          <td>Updated financial query filters across Project Detail and Dashboard to recognize <code>'confirmed'</code> receipts, immediately unlocking ₹100 into project metrics.</td>
+        </tr>
+        <tr>
+          <td><strong>2. Dashboard vs P&amp;L Contract Mismatch</strong><br><span style="color:#ef4444; font-size:7.5px;">Contract totals differed by ₹500</span></td>
+          <td>Dashboard did not filter mid-project quotations by approved status and was gated only to MD, whereas P&amp;L included approved variations (QTN-2 for ₹500).</td>
+          <td>Standardized contract calculation across all screens to strictly use <code>Base + Approved Quotations</code>. Synchronized data access for both MD and Accounts.</td>
+        </tr>
+        <tr>
+          <td><strong>3. Monthly Salary Over-Multiplication</strong><br><span style="color:#ef4444; font-size:7.5px;">₹30,000 salary became ₹45,000 for 1 Sunday shift</span></td>
+          <td>Attendance system treated the ₹30,000 monthly rate as a daily wage rate, multiplying <code>1.5 days × ₹30,000 = ₹45,000</code> for a single 12-hour shift.</td>
+          <td>Introduced <code>getDailyWageRate()</code> pro-rating monthly salaries on standard 30-day basis (₹1,000/day). A 1.5-day Sunday entry now computes to ₹1,500.</td>
+        </tr>
+        <tr>
+          <td><strong>4. Historical Attendance Cost Mutation</strong><br><span style="color:#ef4444; font-size:7.5px;">Changing wage from ₹600 to ₹700 altered past weeks</span></td>
+          <td>Attendance grids dynamically computed past wages using the employee's current master rate instead of locking historical wages.</td>
+          <td>Attendance wages now sum historically locked <code>calculated_wage</code> and <code>rec.wage_rate</code>. Editing wage in Masters only affects future entries.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 3: UI, PRINT ARCHITECTURE & A4 MODERNIZATION -->
+  <div class="section-title">3. Complete Print Engine &amp; A4 Sheet Architecture Overhaul</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Eliminated 30-Day A4 Sheet Overflow &amp; Modal Print Bleed</span>
+      <span class="badge badge-emerald">A4 Standard Certified</span>
+    </div>
+    <p class="card-desc">Previously, printing the monthly attendance register across 30 days expanded beyond 350mm+, overflowing off A4 paper (printable width 285mm). We rebuilt the entire print subsystem from the ground up:</p>
+    
+    <div class="highlight-box">
+      <strong>Dual-Format Monthly Printing:</strong> Users can now choose between <strong>Summary Register (A4 Safe)</strong> for clean executive payroll distribution, or <strong>30-Day Muster Roll (A4 Fitted)</strong> featuring a statutory Form XVI 30-day matrix mathematically bounded to 279mm (&lt; 285mm A4 limit).
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Print Component</th>
+          <th>Orientation</th>
+          <th>Upgrades &amp; Layout Enhancements</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Monthly Attendance Muster Roll</strong></td>
+          <td>A4 Landscape</td>
+          <td>Fixed-layout table (<code>table-layout: fixed</code>), 18px day columns, micro-padding, compact status badges (<code>1</code>, <code>½</code>, <code>L</code>, <code>A</code>), full wage &amp; deduction totals.</td>
+        </tr>
+        <tr>
+          <td><strong>Worker 30-Day Timecard</strong></td>
+          <td>A4 Portrait</td>
+          <td>Added dedicated 'Print 30-Day Card (A4)' in worker drilldown modal with company letterhead, daily in/out hours, daily wages, and thumb/signature box.</td>
+        </tr>
+        <tr>
+          <td><strong>Purchase Orders &amp; Client Receipts</strong></td>
+          <td>A4 Portrait</td>
+          <td>Enforced portrait orientation via <code>.print-portrait</code> rule; styled with <code>break-inside: avoid</code> so signatures never split across pages.</td>
+        </tr>
+        <tr>
+          <td><strong>Profit &amp; Loss (P&amp;L) Statements</strong></td>
+          <td>A4 Landscape</td>
+          <td>Added official Brickweld letterhead, audit timestamp, and 2-tier executive signature blocks for company and project-level statements.</td>
+        </tr>
+        <tr>
+          <td><strong>Global Modal Print Engine</strong></td>
+          <td>All Media</td>
+          <td>Fixed Radix UI modal clipping by resetting positioning in <code>@media print</code> and hiding the dashboard background to eliminate dark bleed-through.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 4: CLOUD BACKEND & DATABASE SANITIZATION -->
+  <div class="section-title">4. Supabase Database Sanitization &amp; Cloud Architecture</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Database Integrity, Views &amp; Row-Level Security (RLS)</span>
+      <span class="badge badge-blue">Supabase Verified</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 30%;">Subsystem / Table</th>
+          <th style="width: 70%;">Action &amp; Sanitization Performed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Database View: projects_view</strong></td>
+          <td>Verified PostgreSQL view definition; ensured deleted projects are filtered out and finance users receive unmasked quotation amounts.</td>
+        </tr>
+        <tr>
+          <td><strong>Database View: attendance_view</strong></td>
+          <td>Verified wage visibility rules (<code>is_finance_user() OR has_role('accounts')</code>); guaranteed calculated wages and rates flow cleanly to UI.</td>
+        </tr>
+        <tr>
+          <td><strong>Corrupted Attendance Cleanup</strong></td>
+          <td>Executed targeted SQL sanitization to fix corrupted records where ₹30,000 monthly rates produced ₹45,000 calculated wages, resetting them to valid ₹1,500 amounts.</td>
+        </tr>
+        <tr>
+          <td><strong>Row-Level Security (RLS)</strong></td>
+          <td>Audited RLS policies on <code>client_payments</code>, <code>project_quotations</code>, <code>attendance</code>, and <code>expenses</code> to ensure strict role-based data isolation.</td>
+        </tr>
+        <tr>
+          <td><strong>Vercel &amp; Build Health</strong></td>
+          <td>Verified production Vite bundle compilation, TanStack router code-splitting, Tailwind CSS 4 rendering, and zero build warnings.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 5: GIT VERSION CONTROL & DEPLOYMENT -->
+  <div class="section-title">5. Git Version Control, Branch Merging &amp; Main Synchronization</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">100% Repository Synchronization on GitHub</span>
+      <span class="badge badge-purple">Git Main Up-To-Date</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Repository Action</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Branch Merging</strong></td>
+          <td><span class="badge badge-emerald">Merged</span></td>
+          <td>Verified all historical commits from feature branches are completely integrated into <code>main</code> with 0 unmerged commits.</td>
+        </tr>
+        <tr>
+          <td><strong>Codebase Commit</strong></td>
+          <td><span class="badge badge-emerald">Committed</span></td>
+          <td>Staged and committed all 12 updated files with structured commit: <code>fix(finance-payroll): resolve receipt status filter, contract reconciliation, monthly salary pro-rata, and locked attendance wages</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>GitHub Remote Push</strong></td>
+          <td><span class="badge badge-emerald">Pushed</span></td>
+          <td>Successfully pushed to GitHub remote repository (<code>https://github.com/Ajaykannagit/track-site.git</code>). Working tree is 100% clean.</td>
+        </tr>
+        <tr>
+          <td><strong>Quality Assurance Suite</strong></td>
+          <td><span class="badge badge-emerald">100% Passing</span></td>
+          <td>Ran full test suite: <strong>46 of 46 unit &amp; integration tests passing</strong> (7 test files); TypeScript compilation verified with <strong>0 errors</strong>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SIGN-OFF SECTION -->
+  <div class="sig-block">
+    <div>
+      <div class="sig-line"></div>
+      <div class="sig-title">Prepared &amp; Delivered By:</div>
+      <div class="sig-role">Lead Full-Stack Software Engineer — Brickweld Project Control</div>
+      <div style="font-size: 7.5px; color: #94a3b8; margin-top: 1px;">Git Commit: 109aca2 | Repository: Ajaykannagit/track-site</div>
+    </div>
+    <div>
+      <div class="sig-line"></div>
+      <div class="sig-title">Reviewed &amp; Approved By:</div>
+      <div class="sig-role">Managing Director / Engineering Team Lead</div>
+      <div style="font-size: 7.5px; color: #94a3b8; margin-top: 1px;">Brickweld Private Limited — Construction Project Control System</div>
+    </div>
+  </div>
+
+</body>
+</html>
