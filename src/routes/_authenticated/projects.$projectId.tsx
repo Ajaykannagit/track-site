@@ -21,6 +21,7 @@ import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { VoidToggle, VoidBadge } from "@/components/VoidControls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,7 @@ function ProjectDetail() {
   // Client Payments Filter States
   const [payCategoryFilter, setPayCategoryFilter] = useState<string>("all");
   const [payMethodFilter, setPayMethodFilter] = useState<string>("all");
+  const [showVoidedExpenses, setShowVoidedExpenses] = useState(false);
 
   const project = useRows<{
     id: string;
@@ -175,6 +177,9 @@ function ProjectDetail() {
     category: string;
     amount: number;
     description: string | null;
+    is_void?: boolean;
+    deleted_at?: string | null;
+    void_reason?: string | null;
   }>("expenses", {
     filters: f,
     order: { col: "expense_date" },
@@ -254,7 +259,11 @@ function ProjectDetail() {
   const labourWage = sum(attendance.data ?? [], (a) => a.calculated_wage);
   const materialCost = sum(receipts.data ?? [], (r) => r.total_amount);
   const contractorCost = sum(bills.data ?? [], (b) => b.net_amount);
-  const otherCost = sum(expenses.data ?? [], (e) => e.amount);
+  const validExpenses = useMemo(
+    () => (expenses.data ?? []).filter((e) => !(e as any).is_void && !(e as any).deleted_at),
+    [expenses.data]
+  );
+  const otherCost = sum(validExpenses, (e) => e.amount);
   const totalCost = labourWage + materialCost + contractorCost + otherCost;
   const profit = totalContractValue - totalCost;
 
@@ -1489,16 +1498,38 @@ function ProjectDetail() {
         )}
 
         {permissions.canViewProjectFinancials && (
-          <TabsContent value="expenses">
+          <TabsContent value="expenses" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">Site Expenses & Disbursements</h3>
+                <p className="text-xs text-muted-foreground">
+                  Direct site-level expenses (petty cash, miscellaneous site purchases). Excludes voided entries from project costs.
+                </p>
+              </div>
+              <VoidToggle
+                showVoided={showVoidedExpenses}
+                onToggle={setShowVoidedExpenses}
+                voidCount={(expenses.data ?? []).filter((e) => (e as any).is_void).length}
+              />
+            </div>
             <DataTable
-              rows={expenses.data ?? []}
+              rows={(expenses.data ?? []).filter((e) =>
+                showVoidedExpenses
+                  ? !(e as any).deleted_at
+                  : !(e as any).is_void && !(e as any).deleted_at
+              )}
               loading={expenses.isLoading}
               exportName={`${p?.project_code ?? "project"}-expenses`}
               exportTitle={`${p?.name} — Site Expenses`}
               columns={[
                 {
                   header: "Date",
-                  cell: (r) => dateFmt(r.expense_date),
+                  cell: (r) => (
+                    <div className="flex items-center gap-1.5">
+                      <span>{dateFmt(r.expense_date)}</span>
+                      <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
+                    </div>
+                  ),
                   value: (r) => r.expense_date,
                 },
                 { header: "Category", cell: (r) => r.category, value: (r) => r.category },
@@ -1509,7 +1540,11 @@ function ProjectDetail() {
                 },
                 {
                   header: "Amount",
-                  cell: (r) => currency(r.amount),
+                  cell: (r) => (
+                    <span className={(r as any).is_void ? "line-through text-muted-foreground font-mono" : "font-mono"}>
+                      {currency(r.amount)}
+                    </span>
+                  ),
                   value: (r) => r.amount,
                   className: "text-right",
                 },

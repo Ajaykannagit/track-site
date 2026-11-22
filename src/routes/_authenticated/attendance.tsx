@@ -392,6 +392,37 @@ function AttendanceWeeklySheetPage() {
     enabled: permissions.canViewWagesAndPayments,
   });
 
+  // Team Wage Payments (from wage_payments table) for this week
+  const teamWagePayments = useRows<{
+    id: string;
+    team_id: string | null;
+    week_start_date: string;
+    amount: number;
+    payment_source?: string;
+    payment_method?: string;
+    is_void?: boolean;
+    deleted_at?: string | null;
+  }>("wage_payments", {
+    filters: [{ col: "week_start_date", op: "eq", value: weekStartISO }],
+    enabled: permissions.canViewWagesAndPayments && viewMode === "weekly",
+  });
+
+  // Team Wage Payments for monthly view
+  const monthlyTeamWagePayments = useRows<{
+    id: string;
+    team_id: string | null;
+    week_start_date: string;
+    amount: number;
+    is_void?: boolean;
+    deleted_at?: string | null;
+  }>("wage_payments", {
+    filters: [
+      { col: "week_start_date", op: "gte", value: monthStartISO },
+      { col: "week_start_date", op: "lte", value: monthEndISO },
+    ],
+    enabled: permissions.canViewWagesAndPayments && viewMode === "monthly",
+  });
+
   // Navigation handlers
   const handlePrevWeek = () => {
     setWeekStartDate((prev) => {
@@ -451,26 +482,45 @@ function AttendanceWeeklySheetPage() {
     const dailyRate = getDailyWageRate(employee, monthDates?.length || 30);
     const calcWage = Math.round(dayVal * dailyRate);
 
-    await saveAttendance.mutateAsync({
-      id: existing?.id,
-      values: {
-        employee_id: employee.id,
-        attendance_date: iso,
-        kind: "labour",
-        status: isLeaveInput ? "leave" : dayVal === 0 ? "absent" : "present",
-        in_time: inTimeInput,
-        out_time: outTimeInput,
-        site_name: isLeaveInput ? "Leave" : siteInput,
-        is_leave: isLeaveInput,
-        day_value: dayVal,
-        wage_rate: dailyRate,
-        calculated_wage: calcWage,
-        working_hours: dayVal * 8,
-        ot_hours: dayVal > 1.0 ? (dayVal - 1.0) * 8 : 0,
-      },
-    });
+    try {
+      let targetId = existing?.id;
+      if (!targetId) {
+        const { data: dbAtt } = await (typedSupabase as any)
+          .from("attendance")
+          .select("id")
+          .eq("employee_id", employee.id)
+          .eq("attendance_date", iso)
+          .maybeSingle();
+        if (dbAtt?.id) {
+          targetId = dbAtt.id;
+        }
+      }
 
-    setEditCell(null);
+      await saveAttendance.mutateAsync({
+        id: targetId,
+        values: {
+          employee_id: employee.id,
+          attendance_date: iso,
+          kind: "labour",
+          status: isLeaveInput ? "leave" : dayVal === 0 ? "absent" : "present",
+          in_time: inTimeInput,
+          out_time: outTimeInput,
+          site_name: isLeaveInput ? "Leave" : siteInput,
+          is_leave: isLeaveInput,
+          day_value: dayVal,
+          wage_rate: dailyRate,
+          calculated_wage: calcWage,
+          working_hours: dayVal * 8,
+          ot_hours: dayVal > 1.0 ? (dayVal - 1.0) * 8 : 0,
+          deleted_at: null,
+          is_void: false,
+        },
+      });
+
+      setEditCell(null);
+    } catch (err: any) {
+      toast.error(`Failed to save attendance: ${err?.message || "Unknown error"}`);
+    }
   };
 
   // Save Weekly Adjustment (Bus/Petrol or Advance with Payment Method)
@@ -487,27 +537,55 @@ function AttendanceWeeklySheetPage() {
       (adj) => adj.employee_id === empId && adj.week_start_date === weekStartISO,
     );
 
+    const effectiveBusPetrol = fieldKey?.endsWith("_adv")
+      ? (adjustmentsOverride[empId]?.busPetrol ?? busPetrol)
+      : busPetrol;
+    const effectiveAdvance = fieldKey?.endsWith("_bp")
+      ? (adjustmentsOverride[empId]?.advance ?? advance)
+      : advance;
+
     setAdjustmentsOverride((prev) => ({
       ...prev,
-      [empId]: { busPetrol, advance },
+      [empId]: { busPetrol: effectiveBusPetrol, advance: effectiveAdvance },
     }));
 
-    const method = paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (advance > 0 ? "cash" : null));
+    const method = paymentMethod !== undefined ? paymentMethod : (existing?.payment_method || (effectiveAdvance > 0 ? "cash" : null));
     const source = paymentSource || (existing as any)?.payment_source || (method === "bank" || method === "upi" || method === "cheque" ? "bank" : "petty_cash");
 
     try {
-      await saveAdjustment.mutateAsync({
-        id: existing?.id,
-        values: {
-          employee_id: empId,
-          week_start_date: weekStartISO,
-          bus_petrol: busPetrol,
-          advance_paid: advance,
-          payment_method: method,
-          payment_source: source,
-          reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
-        },
-      });
+      let targetId = existing?.id;
+      if (!targetId) {
+        const { data: dbAdj } = await (typedSupabase as any)
+          .from("weekly_wage_adjustments")
+          .select("id")
+          .eq("employee_id", empId)
+          .eq("week_start_date", weekStartISO)
+          .maybeSingle();
+        if (dbAdj?.id) {
+          targetId = dbAdj.id;
+        }
+      }
+
+      const { error: upsertError } = await (typedSupabase as any)
+        .from("weekly_wage_adjustments")
+        .upsert(
+          {
+            ...(targetId ? { id: targetId } : {}),
+            employee_id: empId,
+            week_start_date: weekStartISO,
+            bus_petrol: effectiveBusPetrol,
+            advance_paid: effectiveAdvance,
+            payment_method: method,
+            payment_source: source,
+            reference_number: referenceNumber !== undefined ? referenceNumber : existing?.reference_number,
+            deleted_at: null,
+          },
+          { onConflict: "employee_id,week_start_date" }
+        );
+
+      if (upsertError) throw upsertError;
+      qc.invalidateQueries({ queryKey: ["weekly_wage_adjustments"] });
+
       if (fieldKey) {
         setSaveStatus((prev) => ({ ...prev, [fieldKey]: "success" }));
         setTimeout(() => {
@@ -648,9 +726,19 @@ function AttendanceWeeklySheetPage() {
         // Fallback: save individually if onConflict composite unique index differs
         for (const row of recordsToUpsert) {
           if (row.id) {
-            await supabase.from("attendance").update(row).eq("id", row.id);
+            await supabase.from("attendance").update({ ...row, deleted_at: null, is_void: false }).eq("id", row.id);
           } else {
-            await supabase.from("attendance").insert(row);
+            const { data: dbAtt } = await supabase
+              .from("attendance")
+              .select("id")
+              .eq("employee_id", row.employee_id)
+              .eq("attendance_date", row.attendance_date)
+              .maybeSingle();
+            if (dbAtt?.id) {
+              await supabase.from("attendance").update({ ...row, id: dbAtt.id, deleted_at: null, is_void: false }).eq("id", dbAtt.id);
+            } else {
+              await supabase.from("attendance").insert(row);
+            }
           }
         }
       }
@@ -746,6 +834,7 @@ function AttendanceWeeklySheetPage() {
         sno: idx + 1,
         employee: emp,
         team,
+        effectiveTeamId: effectiveTeamId ?? null,
         dailyMap,
         totalDays,
         wageRate: latestDayRate,
@@ -771,20 +860,44 @@ function AttendanceWeeklySheetPage() {
 
   // Team-wise payment groupings (Weekly)
   const teamPaymentGroups = useMemo(() => {
-    const map = new Map<string, { teamName: string; members: typeof workerRows; teamTotal: number }>();
+    const map = new Map<
+      string,
+      {
+        teamId: string | null;
+        teamName: string;
+        members: typeof workerRows;
+        teamTotal: number;
+        alreadyPaid: number;
+        pendingBalance: number;
+      }
+    >();
 
     for (const r of workerRows) {
       const tName = r.team;
-      if (!map.has(tName)) {
-        map.set(tName, { teamName: tName, members: [], teamTotal: 0 });
+      const tId = r.effectiveTeamId ?? null;
+      const key = tId || tName;
+      if (!map.has(key)) {
+        map.set(key, { teamId: tId, teamName: tName, members: [], teamTotal: 0, alreadyPaid: 0, pendingBalance: 0 });
       }
-      const group = map.get(tName)!;
+      const group = map.get(key)!;
       group.members.push(r);
       group.teamTotal += (r as any).finalBalance !== undefined ? (r as any).finalBalance : r.wageBalance;
     }
 
+    for (const group of map.values()) {
+      const teamPayments = (teamWagePayments.data ?? []).filter((wp) => {
+        if ((wp as any).is_void || (wp as any).deleted_at) return false;
+        if (group.teamId) {
+          return wp.team_id === group.teamId;
+        }
+        return wp.team_id === null;
+      });
+      group.alreadyPaid = sum(teamPayments, (p) => Number(p.amount || 0));
+      group.pendingBalance = Math.max(0, group.teamTotal - group.alreadyPaid);
+    }
+
     return [...map.values()];
-  }, [workerRows]);
+  }, [workerRows, teamWagePayments.data]);
 
   // Computed Monthly Grid Rows
   const monthlyWorkerRows = useMemo(() => {
@@ -845,12 +958,14 @@ function AttendanceWeeklySheetPage() {
         : Math.round(totalDays * currentDailyRate);
       const wageBalance = Math.round(wage + (busPetrol || 0) - (advance || 0));
 
-      const team = (teams.data ?? []).find((t) => t.id === emp.team_id)?.name ?? "Unassigned Team";
+      const effectiveTeamId = emp.team_id ?? null;
+      const team = (teams.data ?? []).find((t) => t.id === effectiveTeamId)?.name ?? "Unassigned Team";
 
       return {
         sno: idx + 1,
         employee: emp,
         team,
+        effectiveTeamId,
         daysPresent,
         halfDays,
         leaveDays,
@@ -879,20 +994,44 @@ function AttendanceWeeklySheetPage() {
 
   // Team-wise payment groupings (Monthly)
   const monthlyTeamPaymentGroups = useMemo(() => {
-    const map = new Map<string, { teamName: string; members: typeof monthlyWorkerRows; teamTotal: number }>();
+    const map = new Map<
+      string,
+      {
+        teamId: string | null;
+        teamName: string;
+        members: typeof monthlyWorkerRows;
+        teamTotal: number;
+        alreadyPaid: number;
+        pendingBalance: number;
+      }
+    >();
 
     for (const r of monthlyWorkerRows) {
       const tName = r.team;
-      if (!map.has(tName)) {
-        map.set(tName, { teamName: tName, members: [], teamTotal: 0 });
+      const tId = r.effectiveTeamId ?? null;
+      const key = tId || tName;
+      if (!map.has(key)) {
+        map.set(key, { teamId: tId, teamName: tName, members: [], teamTotal: 0, alreadyPaid: 0, pendingBalance: 0 });
       }
-      const group = map.get(tName)!;
+      const group = map.get(key)!;
       group.members.push(r);
       group.teamTotal += (r as any).finalBalance !== undefined ? (r as any).finalBalance : r.wageBalance;
     }
 
+    for (const group of map.values()) {
+      const teamPayments = (monthlyTeamWagePayments.data ?? []).filter((wp) => {
+        if ((wp as any).is_void || (wp as any).deleted_at) return false;
+        if (group.teamId) {
+          return wp.team_id === group.teamId;
+        }
+        return wp.team_id === null;
+      });
+      group.alreadyPaid = sum(teamPayments, (p) => Number(p.amount || 0));
+      group.pendingBalance = Math.max(0, group.teamTotal - group.alreadyPaid);
+    }
+
     return [...map.values()];
-  }, [monthlyWorkerRows]);
+  }, [monthlyWorkerRows, monthlyTeamWagePayments.data]);
 
   // Weekly breakdown for monthly view: get all Sundays in the selected month that also have attendance
   const monthWeeklyBreakdown = useMemo(() => {
@@ -1771,35 +1910,52 @@ function AttendanceWeeklySheetPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               {(viewMode === "weekly" ? teamPaymentGroups : monthlyTeamPaymentGroups).map((grp) => (
-                <Card key={grp.teamName} className="border shadow-2xs">
+                <Card key={grp.teamId || grp.teamName} className="border shadow-2xs">
                   <CardHeader className="py-2.5 px-3.5 bg-muted/40 border-b flex flex-row items-center justify-between">
-                    <CardTitle className="text-xs font-bold uppercase tracking-wide">
-                      {grp.teamName}
-                    </CardTitle>
+                    <div>
+                      <CardTitle className="text-xs font-bold uppercase tracking-wide">
+                        {grp.teamName}
+                      </CardTitle>
+                      {grp.alreadyPaid > 0 && (
+                        <span className="text-[10px] text-muted-foreground block">
+                          Due: {currency(grp.teamTotal)} · Paid: {currency(grp.alreadyPaid)}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-xs font-bold text-primary whitespace-nowrap">
-                        {currency(grp.teamTotal)}
+                      <Badge
+                        variant="outline"
+                        className={`font-mono text-xs font-bold whitespace-nowrap ${
+                          grp.pendingBalance > 0
+                            ? "text-primary"
+                            : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+                        }`}
+                      >
+                        {grp.pendingBalance === 0 && grp.alreadyPaid > 0 ? "Settled" : currency(grp.pendingBalance)}
                       </Badge>
                       {permissions.canViewWagesAndPayments && (
                         <Button
                           size="sm"
-                          variant="default"
-                          className="h-6 text-[11px] px-2 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-none"
+                          variant={grp.pendingBalance === 0 ? "outline" : "default"}
+                          disabled={grp.pendingBalance === 0}
+                          className={`h-6 text-[11px] px-2 gap-1 font-medium shadow-none ${
+                            grp.pendingBalance > 0
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "text-muted-foreground"
+                          }`}
                           onClick={() => {
-                            const teamObj = (teams.data ?? []).find((t) => t.name === grp.teamName);
-                            const tId = teamObj?.id || (grp.members[0] as any)?.employee?.team_id || "";
                             setTeamWagePayTarget({
-                              teamId: tId,
+                              teamId: grp.teamId || "",
                               teamName: grp.teamName,
                               weekStart: weekStartISO,
                               membersCount: grp.members.length,
                               totalWageDue: grp.teamTotal,
-                              alreadyPaid: 0,
-                              pendingAmount: grp.teamTotal,
+                              alreadyPaid: grp.alreadyPaid,
+                              pendingAmount: grp.pendingBalance,
                             });
                           }}
                         >
-                          <Banknote className="size-3" /> Pay Team
+                          <Banknote className="size-3" /> {grp.pendingBalance === 0 && grp.alreadyPaid > 0 ? "Paid" : "Pay Team"}
                         </Button>
                       )}
                     </div>

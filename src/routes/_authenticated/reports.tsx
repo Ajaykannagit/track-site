@@ -50,7 +50,15 @@ type Project = {
   expected_completion_date: string | null;
 };
 type Dated = { id: string; project_id: string | null };
-type Expense = Dated & { expense_date: string; category: string; amount: number; payment_method?: string | null; description?: string | null };
+type Expense = Dated & {
+  expense_date: string;
+  category: string;
+  amount: number;
+  payment_method?: string | null;
+  description?: string | null;
+  is_void?: boolean;
+  deleted_at?: string | null;
+};
 type Attendance = Dated & { attendance_date: string; calculated_wage: number };
 type Receipt = Dated & { receipt_date: string; total_amount: number; receipt_number: string };
 type Bill = Dated & { bill_date: string; net_amount: number; status: string; bill_number: string };
@@ -146,7 +154,7 @@ function ReportsPage() {
 
   const rows: Row[] = useMemo(() => {
     const byProject = <T extends Dated>(list: T[] | undefined, id: string) =>
-      (list ?? []).filter((r) => r.project_id === id);
+      (list ?? []).filter((r) => r.project_id === id && !(r as any).is_void && !(r as any).deleted_at);
 
     return (projects.data ?? []).map((p) => {
       const labour = sum(byProject(attendance.data, p.id), (a) => a.calculated_wage);
@@ -205,7 +213,7 @@ function ReportsPage() {
 
   const unallocated =
     sum(
-      (expenses.data ?? []).filter((e) => !e.project_id),
+      (expenses.data ?? []).filter((e) => !e.project_id && !(e as any).is_void && !(e as any).deleted_at),
       (e) => e.amount,
     ) +
     sum(
@@ -215,8 +223,8 @@ function ReportsPage() {
 
   const byCategory = useMemo(() => {
     const list = selectedProjectId === "all"
-      ? (expenses.data ?? [])
-      : (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId);
+      ? (expenses.data ?? []).filter((e) => !(e as any).is_void && !(e as any).deleted_at)
+      : (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId && !(e as any).is_void && !(e as any).deleted_at);
 
     const map = new Map<string, number>();
     for (const e of list) {
@@ -229,8 +237,8 @@ function ReportsPage() {
 
   const byPaymentMethod = useMemo(() => {
     const list = selectedProjectId === "all"
-      ? (expenses.data ?? [])
-      : (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId);
+      ? (expenses.data ?? []).filter((e) => !(e as any).is_void && !(e as any).deleted_at)
+      : (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId && !(e as any).is_void && !(e as any).deleted_at);
 
     const map = new Map<string, number>();
     for (const e of list) {

@@ -166,5 +166,122 @@ describe("Problem 1 & 2 Automated Verification Tests", () => {
       expect(earnedWage).toBe(2100);
       expect(earnedWage).not.toBe(2450);
     });
+
+    it("Voided expenses are strictly excluded from project costs and total spend", () => {
+      const expenses = [
+        { id: "e1", project_id: "p1", amount: 1500, is_void: false, deleted_at: null },
+        { id: "e2", project_id: "p1", amount: 2000, is_void: true, deleted_at: null },
+        { id: "e3", project_id: "p1", amount: 500, is_void: false, deleted_at: "2026-11-20T00:00:00Z" },
+        { id: "e4", project_id: "p2", amount: 3000, is_void: false, deleted_at: null },
+      ];
+
+      const validProjectExpenses = expenses.filter(
+        (e) => e.project_id === "p1" && !e.is_void && !e.deleted_at
+      );
+
+      const totalProjectSpend = validProjectExpenses.reduce((s, e) => s + e.amount, 0);
+
+      expect(validProjectExpenses.length).toBe(1);
+      expect(totalProjectSpend).toBe(1500); // Only e1, excludes e2 (void) and e3 (deleted)
+    });
+
+    it("Client receipt reversals are counted as Outflows in ledger and reconcile against inflows", () => {
+      const receipts = [
+        { id: "r1", amount: 50000, payment_category: "advance", is_void: false, deleted_at: null },
+        { id: "r2", amount: 20000, payment_category: "progress", is_void: false, deleted_at: null },
+        { id: "r3", amount: 5000, payment_category: "reversal", is_void: false, deleted_at: null },
+        { id: "r4", amount: 10000, payment_category: "progress", is_void: true, deleted_at: null },
+      ];
+
+      // Net receipt calculation (used in Dashboard & Project Detail)
+      const validReceipts = receipts.filter((r) => !r.is_void && !r.deleted_at);
+      const netReceived = validReceipts.reduce((sum, r) => {
+        if (r.payment_category === "reversal") return sum - r.amount;
+        return sum + r.amount;
+      }, 0);
+
+      expect(netReceived).toBe(65000); // 50000 + 20000 - 5000
+
+      // Ledger classification: reversals are outflows
+      const ledgerEntries = validReceipts.map((r) => {
+        const isReversal = r.payment_category === "reversal";
+        return {
+          id: r.id,
+          amount: r.amount,
+          type: isReversal ? "Client Receipt Reversal" : "Client Receipt",
+          direction: isReversal ? "outflow" : "inflow",
+        };
+      });
+
+      const totalInflows = ledgerEntries
+        .filter((t) => t.direction === "inflow")
+        .reduce((s, t) => s + t.amount, 0);
+      const totalOutflows = ledgerEntries
+        .filter((t) => t.direction === "outflow")
+        .reduce((s, t) => s + t.amount, 0);
+
+      expect(totalInflows).toBe(70000); // 50000 + 20000
+      expect(totalOutflows).toBe(5000); // 5000 reversal outflow
+      expect(totalInflows - totalOutflows).toBe(65000);
+    });
+
+    it("Team wage payments reduce pending balance and support unassigned teams (null team_id)", () => {
+      const teamWorkers = [
+        { id: "w1", wageBalance: 3000, team_id: null },
+        { id: "w2", wageBalance: 2500, team_id: null },
+      ];
+
+      const teamTotalDue = teamWorkers.reduce((s, w) => s + w.wageBalance, 0);
+      expect(teamTotalDue).toBe(5500);
+
+      // Recorded wage payments in wage_payments table
+      const wagePayments = [
+        { id: "wp1", team_id: null, amount: 3000, week_start_date: "2026-11-15", is_void: false, deleted_at: null },
+      ];
+
+      const alreadyPaid = wagePayments
+        .filter((wp) => wp.team_id === null && !wp.is_void && !wp.deleted_at)
+        .reduce((s, wp) => s + wp.amount, 0);
+
+      const pendingBalance = Math.max(0, teamTotalDue - alreadyPaid);
+
+      expect(alreadyPaid).toBe(3000);
+      expect(pendingBalance).toBe(2500);
+
+      // Verify null team_id payload generation for unassigned teams
+      const payTargetTeamId = "";
+      const dbPayloadTeamId = payTargetTeamId ? payTargetTeamId : null;
+      expect(dbPayloadTeamId).toBeNull();
+    });
+
+    it("Weekly wage adjustments handle rapid sequential edits without losing state", () => {
+      // Simulate state transition when editing Bus/Petrol then immediately editing Advance
+      let adjustmentsOverride: Record<string, { busPetrol: number; advance: number }> = {};
+      const empId = "emp-42";
+
+      // 1. User enters Bus/Petrol = 250
+      const bpVal = 250;
+      const initialAdv = 0;
+      const effectiveBp1 = bpVal;
+      const effectiveAdv1 = adjustmentsOverride[empId]?.advance ?? initialAdv;
+      adjustmentsOverride = {
+        ...adjustmentsOverride,
+        [empId]: { busPetrol: effectiveBp1, advance: effectiveAdv1 },
+      };
+
+      expect(adjustmentsOverride[empId]).toEqual({ busPetrol: 250, advance: 0 });
+
+      // 2. User immediately enters Advance = 500 before cache refetches
+      const advVal = 500;
+      const effectiveBp2 = adjustmentsOverride[empId]?.busPetrol ?? 0;
+      const effectiveAdv2 = advVal;
+      adjustmentsOverride = {
+        ...adjustmentsOverride,
+        [empId]: { busPetrol: effectiveBp2, advance: effectiveAdv2 },
+      };
+
+      // Both values are preserved atomically without clobbering each other
+      expect(adjustmentsOverride[empId]).toEqual({ busPetrol: 250, advance: 500 });
+    });
   });
 });

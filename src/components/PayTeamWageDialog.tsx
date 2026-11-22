@@ -91,7 +91,7 @@ export function PayTeamWageDialog({
       // Save wage payment record
       await saveWagePayment.mutateAsync({
         values: {
-          team_id: target.teamId,
+          team_id: target.teamId ? target.teamId : null,
           week_start_date: target.weekStart,
           payment_date: paymentDate,
           amount: numericAmount,

@@ -499,7 +499,7 @@ const mapToAccountHead = (category: string): string => {
   type LedgerTransaction = {
     id: string;
     date: string;
-    type: "Client Receipt" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance" | "MD Investment" | "MD Drawing";
+    type: "Client Receipt" | "Client Receipt Reversal" | "Supplier Payment" | "Contractor Payment" | "Subcontractor" | "Expense" | "Wage Payment" | "Labour Advance" | "MD Investment" | "MD Drawing";
     direction: "inflow" | "outflow";
     party: string;
     project_id: string | null;
@@ -539,14 +539,15 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 1. Client Receipts (Inflow - excludes voided)
+    // 1. Client Receipts (Inflow - excludes voided; reversals are classified as Outflows)
     for (const cp of clientPayments.data ?? []) {
-      if ((cp as any).is_void) continue;
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
+      const isReversal = cp.payment_category === "reversal";
       list.push({
         id: `cp-${cp.id}`,
         date: cp.payment_date,
-        type: "Client Receipt",
-        direction: "inflow",
+        type: isReversal ? "Client Receipt Reversal" : "Client Receipt",
+        direction: isReversal ? "outflow" : "inflow",
         party: `Client (${projectName(cp.project_id)})`,
         project_id: cp.project_id,
         projectName: projectName(cp.project_id),
@@ -554,7 +555,7 @@ const mapToAccountHead = (category: string): string => {
         payment_method: cp.payment_method || "Not recorded",
         payment_source: (cp.payment_source || cp.account_type || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank",
         reference_number: cp.receipt_number || cp.reference_number || "—",
-        description: cp.notes || cp.payment_category || "Client milestone payment",
+        description: cp.notes || (isReversal ? "Reversal of client receipt" : (cp.payment_category || "Client milestone payment")),
       });
     }
 
@@ -720,23 +721,40 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 2. Client Receipts -> Income: Sales
+    // 2. Client Receipts -> Income: Sales (Reversals -> Expense: Client Refunds / Reversals)
     for (const cp of clientPayments.data ?? []) {
-      if ((cp as any).is_void) continue;
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
+      const isReversal = cp.payment_category === "reversal";
       const src = (cp.payment_source || cp.account_type || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
-      list.push({
-        id: `cp-${cp.id}`,
-        date: cp.payment_date,
-        amount: Number(cp.amount || 0),
-        payment_source: src,
-        head: cp.payment_category === "other" ? "Other Charges" : "Sales",
-        category: "Income",
-        project_id: cp.project_id,
-        projectName: projectName(cp.project_id),
-        party: `Client (${projectName(cp.project_id)})`,
-        reference_number: cp.receipt_number || cp.reference_number || "—",
-        remarks: cp.notes || "Client Receipt",
-      });
+      if (isReversal) {
+        list.push({
+          id: `cp-${cp.id}`,
+          date: cp.payment_date,
+          amount: Number(cp.amount || 0),
+          payment_source: src,
+          head: "Client Refunds / Reversals",
+          category: "Expense",
+          project_id: cp.project_id,
+          projectName: projectName(cp.project_id),
+          party: `Client (${projectName(cp.project_id)})`,
+          reference_number: cp.receipt_number || cp.reference_number || "—",
+          remarks: cp.notes || "Receipt Reversal",
+        });
+      } else {
+        list.push({
+          id: `cp-${cp.id}`,
+          date: cp.payment_date,
+          amount: Number(cp.amount || 0),
+          payment_source: src,
+          head: cp.payment_category === "other" ? "Other Charges" : "Sales",
+          category: "Income",
+          project_id: cp.project_id,
+          projectName: projectName(cp.project_id),
+          party: `Client (${projectName(cp.project_id)})`,
+          reference_number: cp.receipt_number || cp.reference_number || "—",
+          remarks: cp.notes || "Client Receipt",
+        });
+      }
     }
 
     // 3. Supplier Payments -> Expense: Raw Materials and Consumables
@@ -833,7 +851,7 @@ const mapToAccountHead = (category: string): string => {
 
     // 6. Expenses -> Mapped to Account Head
     for (const exp of expenses.data ?? []) {
-      if ((exp as any).is_void) continue;
+      if ((exp as any).is_void || (exp as any).deleted_at) continue;
       const src = ((exp as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash";
       list.push({
         id: `exp-${exp.id}`,

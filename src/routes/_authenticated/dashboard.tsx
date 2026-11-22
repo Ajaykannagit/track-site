@@ -111,6 +111,8 @@ type ExpenseRow = {
   payment_method?: string | null;
   payment_source?: string | null;
   receipt_path?: string | null;
+  is_void?: boolean;
+  deleted_at?: string | null;
 };
 
 type MaterialReceiptRow = {
@@ -163,7 +165,7 @@ function Dashboard() {
     enabled: isMD,
   });
   const allExpenses = useRows<ExpenseRow>("expenses", {
-    select: "id,amount,expense_date,category,material_name,description,project_id,payment_method,receipt_path",
+    select: "id,amount,expense_date,category,material_name,description,project_id,payment_method,payment_source,receipt_path,is_void,deleted_at",
     order: { col: "expense_date", asc: false },
     enabled: permissions.canViewCompanyFinancials || permissions.canViewOfficeExpense,
   });
@@ -301,7 +303,9 @@ function Dashboard() {
       (b) => b.net_amount,
     );
     const other = sum(
-      (allExpenses.data ?? []).filter((e) => e.project_id === projectId),
+      (allExpenses.data ?? []).filter(
+        (e) => e.project_id === projectId && !(e as any).is_void && !(e as any).deleted_at,
+      ),
       (e) => e.amount,
     );
     const cost = labour + material + contractor + other;
@@ -327,8 +331,14 @@ function Dashboard() {
   );
   const pendingReceivables = Math.max(0, contractValue - totalReceived);
   const spend =
-    sum(expenses.data ?? [], (e) => e.amount) +
-    sum(attendance.data ?? [], (a) => a.calculated_wage);
+    sum(
+      (expenses.data ?? []).filter((e) => !(e as any).is_void && !(e as any).deleted_at),
+      (e) => e.amount,
+    ) +
+    sum(
+      (attendance.data ?? []).filter((a) => !(a as any).is_void && !(a as any).deleted_at),
+      (a) => a.calculated_wage,
+    );
   const pendingBills = (bills.data ?? []).filter(
     (b) => !["paid", "payment_approved", "closed", "rejected"].includes(b.status),
   );
@@ -337,7 +347,9 @@ function Dashboard() {
   );
 
   // Office Expenses: have no project (project_id is null)
-  const officeExpensesList = (allExpenses.data ?? []).filter((e) => !e.project_id && !(e as any).is_void);
+  const officeExpensesList = (allExpenses.data ?? []).filter(
+    (e) => !e.project_id && !(e as any).is_void && !(e as any).deleted_at,
+  );
   const totalOfficeExpenses = sum(officeExpensesList, (e) => e.amount);
 
   const defaultOfficeCategories = [
