@@ -23,13 +23,13 @@ import { useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
-      { title: "Reports & P&L Ã¢â‚¬â€ Brickweld Pvt Ltd" },
+      { title: "Reports & P&L — Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Project-wise profit and loss: contract value against labour, material, contractor and other site costs.",
       },
-      { property: "og:title", content: "Reports & P&L Ã¢â‚¬â€ Brickweld Pvt Ltd" },
+      { property: "og:title", content: "Reports & P&L — Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Company and project level profitability across a chosen date range.",
@@ -345,7 +345,7 @@ function ReportsPage() {
       <PageHeader
         title={
           selectedProjectObj
-            ? `P&L Report Ã¢â‚¬â€ ${selectedProjectObj.name} (${selectedProjectObj.project_code})`
+            ? `P&L Report — ${selectedProjectObj.name} (${selectedProjectObj.project_code})`
             : "Reports & P&L"
         }
         description={
@@ -490,7 +490,7 @@ function ReportsPage() {
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Building2 className="size-4 text-primary" />
-                  Detailed Cost Breakdown Ã¢â‚¬â€ {selectedProjectObj.name} ({selectedProjectObj.project_code})
+                  Detailed Cost Breakdown — {selectedProjectObj.name} ({selectedProjectObj.project_code})
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   Site: {selectedProjectObj.site_address ?? "Not specified"} | Status: {selectedProjectObj.status.toUpperCase()}
@@ -507,7 +507,7 @@ function ReportsPage() {
                 <thead className="bg-muted/60 text-xs">
                   <tr>
                     <th className="p-2.5 text-left border">Financial Head / Cost Category</th>
-                    <th className="p-2.5 text-right border">Amount (Ã¢â€šÂ¹)</th>
+                    <th className="p-2.5 text-right border">Amount (₹)</th>
                     <th className="p-2.5 text-right border">% of Contract Value</th>
                   </tr>
                 </thead>
@@ -521,28 +521,28 @@ function ReportsPage() {
                     <td className="p-2.5 pl-6 border">Labour & Wages Cost</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.labour)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.labour / selectedProjectRow.value) * 100).toFixed(1)}%` : "Ã¢â‚¬â€"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.labour / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Material Goods Received Cost</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.material)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.material / selectedProjectRow.value) * 100).toFixed(1)}%` : "Ã¢â‚¬â€"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.material / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Contractor Works Net Billed</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.contractor)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.contractor / selectedProjectRow.value) * 100).toFixed(1)}%` : "Ã¢â‚¬â€"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.contractor / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Other Site & Fuel Expenses</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.other)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.other / selectedProjectRow.value) * 100).toFixed(1)}%` : "Ã¢â‚¬â€"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.other / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                   <tr className="bg-warning/10 font-semibold">
@@ -551,7 +551,7 @@ function ReportsPage() {
                       {currency(selectedProjectRow.cost)}
                     </td>
                     <td className="p-2.5 text-right border font-mono">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.cost / selectedProjectRow.value) * 100).toFixed(1)}%` : "Ã¢â‚¬â€"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.cost / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
                     </td>
                   </tr>
                   <tr className={selectedProjectRow.profit >= 0 ? "bg-emerald-500/10 font-bold" : "bg-destructive/10 font-bold"}>
@@ -583,7 +583,7 @@ function ReportsPage() {
             loading={loading}
             exportName="brickweld-project-pnl"
             exportTitle={selectedProjectObj ? `P&L Report: ${selectedProjectObj.name}` : "Project Profit & Loss (P&L) Report"}
-            exportDescription="Construction Project Control System Ã¢â‚¬â€ Project-wise Profit & Loss Report"
+            exportDescription="Construction Project Control System — Project-wise Profit & Loss Report"
             appliedFilters={{
               "Scope": selectedProjectObj ? selectedProjectObj.name : "All Projects",
               "Date Range": `${from} to ${to}`,
@@ -611,7 +611,7 @@ function ReportsPage() {
               searchable={false}
               exportName="brickweld-expenses-by-category"
               exportTitle="Expenses by Category Report"
-              exportDescription="Construction Project Control System Ã¢â‚¬â€ Expenses by Category"
+              exportDescription="Construction Project Control System — Expenses by Category"
               appliedFilters={{ "Date Range": `${from} to ${to}` }}
               empty="No expenses recorded in this range."
               columns={[
@@ -640,7 +640,7 @@ function ReportsPage() {
               searchable={false}
               exportName="brickweld-expenses-by-payment-method"
               exportTitle="Expenses by Payment Method Report"
-              exportDescription="Construction Project Control System Ã¢â‚¬â€ Expenses by Payment Method"
+              exportDescription="Construction Project Control System — Expenses by Payment Method"
               appliedFilters={{ "Date Range": `${from} to ${to}` }}
               empty="No expenses recorded in this range."
               columns={[
@@ -675,7 +675,7 @@ function ReportsPage() {
                 },
                 {
                   header: "Description",
-                  cell: (r) => r.description ?? "Ã¢â‚¬â€",
+                  cell: (r) => r.description ?? "—",
                   value: (r) => r.description,
                 },
               ]}
@@ -686,7 +686,7 @@ function ReportsPage() {
 
       <p className="mt-4 text-xs text-muted-foreground">
         Report generated {dateFmt(today())}. Figures come strictly from recorded attendance wages,
-        material receipts, contractor bills and expenses Ã¢â‚¬â€ no estimated or projected values are
+        material receipts, contractor bills and expenses — no estimated or projected values are
         added.
       </p>
     </div>

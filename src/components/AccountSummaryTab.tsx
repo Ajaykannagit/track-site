@@ -54,6 +54,7 @@ interface AccountSummaryTabProps {
   projectOptions: { value: string; label: string }[];
   transactions: AccountHeadTransaction[];
   openingBalances?: { bank: number; petty_cash: number };
+  transfers?: { from_account: string; to_account: string; amount: number; transfer_date: string; is_void?: boolean; deleted_at?: string | null }[];
 }
 
 export function AccountSummaryTab({
@@ -64,6 +65,7 @@ export function AccountSummaryTab({
   projectOptions,
   transactions,
   openingBalances = { bank: 0, petty_cash: 0 },
+  transfers = [],
 }: AccountSummaryTabProps) {
   const [selectedProject, setSelectedProject] = useState<string>("all");
   const [selectedSource, setSelectedSource] = useState<string>("all");
@@ -119,18 +121,27 @@ export function AccountSummaryTab({
         .filter((t) => t.payment_source === src && (t.category === "Expense" || (t.category === "Equity" && t.head.toLowerCase().includes("drawing"))))
         .reduce((sum, t) => sum + t.amount, 0);
 
-      const computedClosing = Math.round((open + inflows - outflows) * 100) / 100;
+      // Contra transfers between Bank and Petty Cash in filtered period
+      const transferIn = (transfers ?? [])
+        .filter((t) => !t.is_void && !t.deleted_at && t.transfer_date >= from && t.transfer_date <= to && t.to_account === src)
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+      const transferOut = (transfers ?? [])
+        .filter((t) => !t.is_void && !t.deleted_at && t.transfer_date >= from && t.transfer_date <= to && t.from_account === src)
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+      const computedClosing = Math.round((open + inflows + transferIn - outflows - transferOut) * 100) / 100;
       const liveBal = liveBalances?.[src]?.balance ?? computedClosing;
       const match = Math.abs(computedClosing - liveBal) < 0.01;
 
-      return { open, inflows, outflows, computedClosing, liveBal, match, diff: computedClosing - liveBal };
+      return { open, inflows, outflows, transferIn, transferOut, computedClosing, liveBal, match, diff: computedClosing - liveBal };
     };
 
     return {
       bank: calc("bank"),
       petty_cash: calc("petty_cash"),
     };
-  }, [filtered, openingBalances, liveBalances]);
+  }, [filtered, openingBalances, liveBalances, transfers, from, to]);
 
   // Drilldown transactions for selected head
   const drilldownTxns = useMemo(() => {
@@ -444,10 +455,22 @@ export function AccountSummaryTab({
                 <span>+ Inflows (Receipts/Investments):</span>
                 <span>+{currency(recon.bank.inflows)}</span>
               </div>
+              {recon.bank.transferIn > 0 && (
+                <div className="flex justify-between text-sky-700">
+                  <span>+ Transfers Received (Contra):</span>
+                  <span>+{currency(recon.bank.transferIn)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-rose-700">
                 <span>- Outflows (Disbursements):</span>
                 <span>-{currency(recon.bank.outflows)}</span>
               </div>
+              {recon.bank.transferOut > 0 && (
+                <div className="flex justify-between text-amber-700">
+                  <span>- Transfers Sent (Contra):</span>
+                  <span>-{currency(recon.bank.transferOut)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t pt-1 font-bold">
                 <span>= Computed Closing:</span>
                 <span>{currency(recon.bank.computedClosing)}</span>
@@ -484,10 +507,22 @@ export function AccountSummaryTab({
                 <span>+ Inflows (Receipts/Investments):</span>
                 <span>+{currency(recon.petty_cash.inflows)}</span>
               </div>
+              {recon.petty_cash.transferIn > 0 && (
+                <div className="flex justify-between text-sky-700">
+                  <span>+ Transfers Received (Contra):</span>
+                  <span>+{currency(recon.petty_cash.transferIn)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-rose-700">
                 <span>- Outflows (Disbursements):</span>
                 <span>-{currency(recon.petty_cash.outflows)}</span>
               </div>
+              {recon.petty_cash.transferOut > 0 && (
+                <div className="flex justify-between text-amber-700">
+                  <span>- Transfers Sent (Contra):</span>
+                  <span>-{currency(recon.petty_cash.transferOut)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t pt-1 font-bold">
                 <span>= Computed Closing:</span>
                 <span>{currency(recon.petty_cash.computedClosing)}</span>

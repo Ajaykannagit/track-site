@@ -1650,6 +1650,7 @@ const mapToAccountHead = (category: string): string => {
             onToChange={setTo}
             projectOptions={projectOptions}
             transactions={accountSummaryTransactions}
+            transfers={transfers.data ?? []}
             openingBalances={{
               bank: liveBalances?.bank?.opening ?? 0,
               petty_cash: liveBalances?.petty_cash?.opening ?? 0,
@@ -2527,7 +2528,7 @@ const mapToAccountHead = (category: string): string => {
                 </p>
               </div>
               <Button size="sm" onClick={() => setMdInvestmentOpen(true)} className="no-print">
-                <Plus className="mr-1.5 size-3.5" /> + MD Investment
+                <Plus className="mr-1.5 size-3.5" /> MD Investment
               </Button>
             </div>
             <DataTable

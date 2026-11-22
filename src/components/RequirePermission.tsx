@@ -17,7 +17,15 @@ interface RequirePermissionProps {
  * instead of the children. This guards both the UI and direct URL access.
  */
 export function RequirePermission({ permission, label, children }: RequirePermissionProps) {
-  const { permissions } = useAuth();
+  const { permissions, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!permissions[permission]) {
     return (
