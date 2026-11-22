@@ -923,7 +923,7 @@ const mapToAccountHead = (category: string): string => {
       header: "Source",
       cell: (r) => (
         <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
             r.payment_source === "bank"
               ? "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
               : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
@@ -1583,13 +1583,13 @@ const mapToAccountHead = (category: string): string => {
           value={currency(
             sum(
               (clientPayments.data ?? []).filter(
-                (p) => !p.deleted_at && !(p as any).is_void && (p.payment_category !== "reversal")
+                (p) => !(p as any).deleted_at && !(p as any).is_void && (p.payment_category !== "reversal")
               ),
               (r) => r.amount
             ) -
             sum(
               (clientPayments.data ?? []).filter(
-                (p) => !p.deleted_at && !(p as any).is_void && p.payment_category === "reversal"
+                (p) => !(p as any).deleted_at && !(p as any).is_void && p.payment_category === "reversal"
               ),
               (r) => r.amount
             )
@@ -1611,28 +1611,30 @@ const mapToAccountHead = (category: string): string => {
       </div>
 
       <Tabs defaultValue="ledger">
-        <TabsList className="no-print">
-          <TabsTrigger value="summary">
-            <BarChart3 className="mr-1.5 size-3.5" /> Account Summary
-          </TabsTrigger>
-          <TabsTrigger value="ledger">
-            <BookOpen className="mr-1.5 size-3.5" /> Unified Ledger ({filteredLedger.length})
-          </TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="client_receipts">
-            <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({(clientPayments.data ?? []).length})
-          </TabsTrigger>
-          <TabsTrigger value="cash">Cash closing</TabsTrigger>
-          <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
-          {(isMD || canWriteFinance) && (
-            <TabsTrigger value="md_investments">
-              <Landmark className="mr-1.5 size-3.5" /> MD Investments & Drawings ({(mdInvestments.data ?? []).length})
+        <div className="no-print overflow-x-auto pb-1">
+          <TabsList className="w-max min-w-full">
+            <TabsTrigger value="summary">
+              <BarChart3 className="mr-1.5 size-3.5" /> Account Summary
             </TabsTrigger>
-          )}
-          {(isMD || canWriteFinance) && (
-            <TabsTrigger value="opening_balances">Opening Balances</TabsTrigger>
-          )}
-        </TabsList>
+            <TabsTrigger value="ledger">
+              <BookOpen className="mr-1.5 size-3.5" /> Unified Ledger ({filteredLedger.length})
+            </TabsTrigger>
+            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="client_receipts">
+              <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({(clientPayments.data ?? []).length})
+            </TabsTrigger>
+            <TabsTrigger value="cash">Cash closing</TabsTrigger>
+            <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
+            {(isMD || canWriteFinance) && (
+              <TabsTrigger value="md_investments">
+                <Landmark className="mr-1.5 size-3.5" /> MD Investments & Drawings ({(mdInvestments.data ?? []).length})
+              </TabsTrigger>
+            )}
+            {(isMD || canWriteFinance) && (
+              <TabsTrigger value="opening_balances">Opening Balances</TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         {/* ================= ACCOUNT SUMMARY / TRIAL BALANCE ================= */}
         <TabsContent value="summary" className="mt-4 space-y-4">

@@ -501,13 +501,13 @@ function MastersPage() {
     { name: "description", label: "Description", type: "textarea" },
   ];
 
-  const jobTypeFields = [
+  const jobTypeFields: Field[] = [
     { name: "name", label: "Job Type Name", required: true },
     { name: "description", label: "Description", type: "textarea" },
     {
       name: "is_active",
       label: "Active status",
-      type: "select" as const,
+      type: "select",
       options: [
         { value: "true", label: "Active" },
         { value: "false", label: "Inactive" },
@@ -690,8 +690,8 @@ function MastersPage() {
 
               {(isMD || roles.includes("accounts")) && (
                 <TeamManagementDialog
-                  teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name }))}
-                  employees={(employees.data ?? []).map((e) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, team_id: e.team_id, status: e.status }))}
+                  teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name || null }))}
+                  employees={(employees.data ?? []).map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code || undefined, team_id: e.team_id || null, status: e.status || undefined }))}
                   projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
                   canManage={true}
                 />

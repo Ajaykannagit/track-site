@@ -111,7 +111,7 @@ export function formatDbError(e: unknown, defaultAction = "modify"): string {
     const detail = (err as any)?.details || (err as any)?.detail || msg;
     const match = typeof detail === "string" ? detail.match(/Key \((.*?)\)=\((.*?)\) already exists/i) : null;
     
-    if (match) {
+    if (match && match[1] && match[2]) {
       const rawField = match[1];
       const val = match[2];
       const fieldMap: Record<string, string> = {

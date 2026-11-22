@@ -38,8 +38,8 @@ export type TeamMember = {
 };
 
 interface TeamManagementDialogProps {
-  teams: Array<{ id: string; name: string; leader_employee_id?: string | null; leader_name?: string | null }>;
-  employees: Array<{ id: string; full_name: string; employee_code?: string; team_id?: string | null; status?: string }>;
+  teams: Array<{ id: string; name: string; leader_employee_id?: string | null | undefined; leader_name?: string | null | undefined }>;
+  employees: Array<{ id: string; full_name: string; employee_code?: string | null | undefined; team_id?: string | null | undefined; status?: string | null | undefined }>;
   projects?: Array<{ id: string; name: string }>;
   canManage: boolean;
 }

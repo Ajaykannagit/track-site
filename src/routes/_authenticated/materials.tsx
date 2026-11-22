@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { ConfirmVoidDialog } from "@/components/ConfirmVoidDialog";
 import { VoidToggle, VoidBadge } from "@/components/VoidControls";
 import { Ban } from "lucide-react";
@@ -224,8 +225,9 @@ function MaterialsPage() {
   const requestColumns: Column<Request>[] = [
     {
       header: "Indent #",
+      className: "whitespace-nowrap",
       cell: (r) => (
-        <div className="flex items-center gap-1.5 font-mono">
+        <div className="flex items-center gap-1.5 font-mono whitespace-nowrap">
           <span>{r.request_number}</span>
           <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
         </div>
@@ -245,7 +247,7 @@ function MaterialsPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-1.5 text-[11px] text-primary hover:bg-primary/10"
+            className="h-6 px-1.5 text-[11px] text-primary hover:bg-primary/10 whitespace-nowrap"
             title="Inspect line items"
             onClick={() => setViewingRequest(r)}
           >
@@ -255,8 +257,8 @@ function MaterialsPage() {
       ),
       value: (r) => r.material_name,
     },
-    { header: "Raised", cell: (r) => dateFmt(r.request_date), value: (r) => r.request_date },
-    { header: "Required", cell: (r) => dateFmt(r.required_date), value: (r) => r.required_date },
+    { header: "Raised", className: "whitespace-nowrap", cell: (r) => <span className="whitespace-nowrap">{dateFmt(r.request_date)}</span>, value: (r) => r.request_date },
+    { header: "Required", className: "whitespace-nowrap", cell: (r) => <span className="whitespace-nowrap">{dateFmt(r.required_date)}</span>, value: (r) => r.required_date },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
     {
       header: "Estimated Value",
@@ -331,8 +333,9 @@ function MaterialsPage() {
   const poColumns: Column<Po>[] = [
     {
       header: "PO #",
+      className: "whitespace-nowrap",
       cell: (r) => (
-        <div className="flex items-center gap-1.5 font-mono">
+        <div className="flex items-center gap-1.5 font-mono whitespace-nowrap">
           <span>{r.po_number}</span>
           <VoidBadge isVoid={(r as any).is_void} reason={(r as any).void_reason} />
         </div>
@@ -349,7 +352,7 @@ function MaterialsPage() {
       cell: (r) => supplierName(r.supplier_id),
       value: (r) => supplierName(r.supplier_id),
     },
-    { header: "Date", cell: (r) => dateFmt(r.po_date), value: (r) => r.po_date },
+    { header: "Date", className: "whitespace-nowrap", cell: (r) => <span className="whitespace-nowrap">{dateFmt(r.po_date)}</span>, value: (r) => r.po_date },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
     {
       header: "Items",

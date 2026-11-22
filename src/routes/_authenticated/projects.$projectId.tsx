@@ -233,7 +233,7 @@ function ProjectDetail() {
   // Client Receipts & Advances (counts all active client receipts, regardless of status string casing)
   const paymentsList = useMemo(() => clientPayments.data ?? [], [clientPayments.data]);
   const validReceipts = paymentsList.filter(
-    (cp) => !cp.deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
+    (cp) => !(cp as any).deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
   );
   const totalReceived = sum(validReceipts, (cp) => {
     if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
@@ -545,7 +545,7 @@ function ProjectDetail() {
       )}
 
       {/* Operational Highlights Cards */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {permissions.canEnterAttendance && (
           <Card className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -656,42 +656,44 @@ function ProjectDetail() {
 
       {/* Tabbed details */}
       <Tabs defaultValue="info" className="mt-4">
-        <TabsList className="no-print flex-wrap">
-          <TabsTrigger value="info">
-            <FileText className="mr-1.5 size-3.5" /> Details
-          </TabsTrigger>
-          {permissions.canViewProjectFinancials && (
-            <TabsTrigger value="quotations">
-              <FileSpreadsheet className="mr-1.5 size-3.5" /> Quotations ({(quotations.data ?? []).length})
+        <div className="no-print overflow-x-auto pb-1">
+          <TabsList className="w-max min-w-full">
+            <TabsTrigger value="info">
+              <FileText className="mr-1.5 size-3.5" /> Details
             </TabsTrigger>
-          )}
-          {permissions.canViewProjectFinancials && (
-            <TabsTrigger value="payments">
-              <HandCoins className="mr-1.5 size-3.5" /> Payments &amp; Receivables ({paymentsList.length})
-            </TabsTrigger>
-          )}
-          {permissions.canEnterAttendance && (
-            <TabsTrigger value="attendance">
-              <Users className="mr-1.5 size-3.5" /> Labour & Attendance
-            </TabsTrigger>
-          )}
-          {permissions.canViewMaterialsAndContractors && (
-            <TabsTrigger value="materials">
-              <Package className="mr-1.5 size-3.5" /> Materials
-            </TabsTrigger>
-          )}
-          {permissions.canViewMaterialContractorCosts && (
-            <TabsTrigger value="contractors">
-              <HardHat className="mr-1.5 size-3.5" /> Contractor Bills
-            </TabsTrigger>
-          )}
-          {permissions.canViewProjectFinancials && (
-            <TabsTrigger value="budget">Budget</TabsTrigger>
-          )}
-          {permissions.canViewProjectFinancials && (
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          )}
-        </TabsList>
+            {permissions.canViewProjectFinancials && (
+              <TabsTrigger value="quotations">
+                <FileSpreadsheet className="mr-1.5 size-3.5" /> Quotations ({(quotations.data ?? []).length})
+              </TabsTrigger>
+            )}
+            {permissions.canViewProjectFinancials && (
+              <TabsTrigger value="payments">
+                <HandCoins className="mr-1.5 size-3.5" /> Payments &amp; Receivables ({paymentsList.length})
+              </TabsTrigger>
+            )}
+            {permissions.canEnterAttendance && (
+              <TabsTrigger value="attendance">
+                <Users className="mr-1.5 size-3.5" /> Labour & Attendance
+              </TabsTrigger>
+            )}
+            {permissions.canViewMaterialsAndContractors && (
+              <TabsTrigger value="materials">
+                <Package className="mr-1.5 size-3.5" /> Materials
+              </TabsTrigger>
+            )}
+            {permissions.canViewMaterialContractorCosts && (
+              <TabsTrigger value="contractors">
+                <HardHat className="mr-1.5 size-3.5" /> Contractor Bills
+              </TabsTrigger>
+            )}
+            {permissions.canViewProjectFinancials && (
+              <TabsTrigger value="budget">Budget</TabsTrigger>
+            )}
+            {permissions.canViewProjectFinancials && (
+              <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         <TabsContent value="info">
           <Card>

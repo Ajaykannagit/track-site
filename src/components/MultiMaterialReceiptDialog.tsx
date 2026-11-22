@@ -55,7 +55,7 @@ interface Props {
   projectOptions: { value: string; label: string }[];
   supplierOptions: { value: string; label: string }[];
   poOptions: { value: string; label: string }[];
-  initialPoId?: string;
+  initialPoId?: string | undefined;
   editingReceipt?: {
     id: string;
     receipt_number: string;

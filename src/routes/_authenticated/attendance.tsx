@@ -1135,8 +1135,8 @@ function AttendanceWeeklySheetPage() {
           {/* Team Management */}
           {(isMD || roles.includes("accounts")) && (
             <TeamManagementDialog
-              teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name }))}
-              employees={(employees.data ?? []).map((e) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, team_id: e.team_id, status: e.status }))}
+              teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name || null }))}
+              employees={(employees.data ?? []).map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code || undefined, team_id: e.team_id || null, status: e.status || undefined }))}
               projects={(sites.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
               canManage={true}
             />
@@ -1230,8 +1230,8 @@ function AttendanceWeeklySheetPage() {
             <Table className="text-xs">
               <TableHeader className="bg-muted/60">
                 <TableRow>
-                  <TableHead className="w-10 text-center font-bold print:w-8 print:p-1">SNO</TableHead>
-                  <TableHead className="min-w-32 font-bold print:min-w-0 print:w-32 print:p-1">NAME</TableHead>
+                  <TableHead className="w-10 text-center font-bold print:w-8 print:p-1 sticky left-0 bg-muted/90 z-20">SNO</TableHead>
+                  <TableHead className="min-w-36 font-bold print:min-w-0 print:w-32 print:p-1 sticky left-10 bg-muted/90 z-20 border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">NAME</TableHead>
                   <TableHead className="min-w-24 font-bold print:min-w-0 print:w-20 print:p-1">DESIGNATION</TableHead>
                   {permissions.canViewWagesAndPayments && (
                     <TableHead className="min-w-20 text-right font-bold print:min-w-0 print:w-16 print:p-1">WAGE / DAY</TableHead>
@@ -1271,10 +1271,10 @@ function AttendanceWeeklySheetPage() {
                 ) : (
                   workerRows.map((r) => (
                     <TableRow key={r.employee.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="text-center font-mono text-muted-foreground">{r.sno}</TableCell>
+                      <TableCell className="text-center font-mono text-muted-foreground sticky left-0 bg-card z-10">{r.sno}</TableCell>
                       
                       {/* Worker Name with Profile click */}
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium sticky left-10 bg-card z-10 border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                         <button
                           type="button"
                           onClick={() => setProfileWorker(r.employee)}
@@ -1439,9 +1439,9 @@ function AttendanceWeeklySheetPage() {
                                       referenceNumber: r.referenceNumber || "",
                                     })
                                   }
-                                  className="text-[10px] px-1 py-0.5 rounded border border-muted-foreground/30 bg-background text-muted-foreground hover:bg-muted font-sans uppercase shrink-0"
+                                  className="text-[10px] px-1.5 py-0.5 rounded border border-muted-foreground/30 bg-background text-muted-foreground hover:bg-muted font-sans font-semibold uppercase shrink-0 whitespace-nowrap"
                                 >
-                                  {r.paymentMethod ? r.paymentMethod.slice(0, 3) : "—"}
+                                  {r.paymentMethod ? r.paymentMethod.toUpperCase() : "—"}
                                 </button>
                               )}
                             </div>
@@ -1689,7 +1689,7 @@ function AttendanceWeeklySheetPage() {
                       {grp.teamName}
                     </CardTitle>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-xs font-bold text-primary">
+                      <Badge variant="outline" className="font-mono text-xs font-bold text-primary whitespace-nowrap">
                         {currency(grp.teamTotal)}
                       </Badge>
                       {permissions.canViewWagesAndPayments && (

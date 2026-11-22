@@ -264,7 +264,7 @@ function Dashboard() {
       (allClientPayments.data ?? []).filter(
         (cp) =>
           cp.project_id === projectId &&
-          !cp.deleted_at &&
+          !(cp as any).deleted_at &&
           !(cp as any).is_void &&
           (cp.status === "received" || !cp.status || cp.status === "completed")
       ),
@@ -303,7 +303,7 @@ function Dashboard() {
   const contractValue = sum(projects.data ?? [], (p) => getProjectContractValue(p));
   const totalReceived = sum(
     (allClientPayments.data ?? []).filter(
-      (cp) => !cp.deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
+      (cp) => !(cp as any).deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
     ),
     (cp) => {
       if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
@@ -636,7 +636,7 @@ function Dashboard() {
 
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="max-w-xs">
           <div
             onClick={() => setActiveProjectsDialogOpen(true)}
             className="cursor-pointer transition-transform hover:scale-[1.01]"
@@ -767,7 +767,7 @@ function Dashboard() {
                   className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-accent/10"
                 >
                   <div>
-                    <p className="text-sm font-medium">{r.request_number}</p>
+                    <p className="text-sm font-medium font-mono whitespace-nowrap">{r.request_number}</p>
                     <p className="text-xs text-muted-foreground">Material request</p>
                   </div>
                   <Badge variant="secondary">{r.status}</Badge>
@@ -781,7 +781,7 @@ function Dashboard() {
                     className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-accent/10"
                   >
                     <div>
-                      <p className="text-sm font-medium">{b.bill_number}</p>
+                      <p className="text-sm font-medium font-mono whitespace-nowrap">{b.bill_number}</p>
                       <p className="text-xs text-muted-foreground">
                         {currency(b.net_amount)}
                       </p>

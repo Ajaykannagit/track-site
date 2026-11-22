@@ -184,7 +184,7 @@ function ContractorsPage() {
 
   // Filtered lists (strictly excluding deleted and voided records)
   const filteredWos = useMemo(() => {
-    let list = (wos.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+    let list = (wos.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     if (jobTypeFilter !== "all") list = list.filter((r) => r.job_type_id === jobTypeFilter);
@@ -192,28 +192,28 @@ function ContractorsPage() {
   }, [wos.data, projectFilter, contractorFilter, jobTypeFilter]);
 
   const filteredMbs = useMemo(() => {
-    let list = (mbs.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+    let list = (mbs.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [mbs.data, projectFilter, contractorFilter]);
 
   const filteredBills = useMemo(() => {
-    let list = (bills.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+    let list = (bills.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [bills.data, projectFilter, contractorFilter]);
 
   const filteredPayments = useMemo(() => {
-    let list = (payments.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+    let list = (payments.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
     if (projectFilter !== "all") list = list.filter((r) => r.project_id === projectFilter);
     if (contractorFilter !== "all") list = list.filter((r) => r.contractor_id === contractorFilter);
     return list;
   }, [payments.data, projectFilter, contractorFilter]);
 
   const filteredSubPays = useMemo(() => {
-    return (subPays.data ?? []).filter((r) => !r.deleted_at && !(r as any).is_void);
+    return (subPays.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
   }, [subPays.data]);
 
   // Columns
