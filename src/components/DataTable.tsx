@@ -161,7 +161,7 @@ export function DataTable<T extends { id?: string }>({
 
       <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/30">
             <TableRow>
               {columns.map((c) => (
                 <TableHead key={c.header} className={c.className}>
@@ -242,7 +242,16 @@ export function StatCard({
   hint?: string;
   tone?: "default" | "success" | "warning" | "destructive";
 }) {
-  const toneClass =
+  const toneBorderClass =
+    tone === "success"
+      ? "border-l-4 border-l-success"
+      : tone === "warning"
+        ? "border-l-4 border-l-warning"
+        : tone === "destructive"
+          ? "border-l-4 border-l-destructive"
+          : "border-l-4 border-l-primary/70";
+
+  const toneTextClass =
     tone === "success"
       ? "text-success"
       : tone === "warning"
@@ -250,10 +259,11 @@ export function StatCard({
         : tone === "destructive"
           ? "text-destructive"
           : "text-foreground";
+
   return (
-    <div className="stat-card">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-1 font-display text-2xl font-bold ${toneClass}`}>{value}</p>
+    <div className={`stat-card relative overflow-hidden ${toneBorderClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 font-display text-2xl font-bold tracking-tight tabular-nums ${toneTextClass}`}>{value}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );

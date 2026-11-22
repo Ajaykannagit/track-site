@@ -634,12 +634,24 @@ function ProjectDetail() {
                         innerRadius={45}
                         outerRadius={75}
                         paddingAngle={3}
+                        stroke="var(--card, #ffffff)"
+                        strokeWidth={2}
                       >
                         {costBreakdown.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number) => currency(v)} />
+                      <Tooltip
+                        formatter={(v: number) => [currency(v), "Cost"]}
+                        contentStyle={{
+                          backgroundColor: "var(--card, #ffffff)",
+                          borderColor: "var(--border, #e2e8f0)",
+                          borderRadius: "8px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                          fontSize: "12px",
+                          padding: "8px 12px",
+                        }}
+                      />
                       <Legend
                         verticalAlign="bottom"
                         iconSize={8}

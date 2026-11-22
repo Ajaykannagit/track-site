@@ -267,41 +267,41 @@ function ReportsPage() {
       ),
       value: (r) => r.name,
     },
-    { header: "Code", cell: (r) => r.code, value: (r) => r.code },
+    { header: "Code", cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.code}</span>, value: (r) => r.code },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
     {
       header: "Contract value",
-      cell: (r) => currency(r.value),
+      cell: (r) => <span className="tabular-nums font-medium">{currency(r.value)}</span>,
       value: (r) => r.value,
       className: "text-right",
     },
     {
       header: "Labour",
-      cell: (r) => currency(r.labour),
+      cell: (r) => <span className="tabular-nums text-muted-foreground">{currency(r.labour)}</span>,
       value: (r) => r.labour,
       className: "text-right",
     },
     {
       header: "Materials",
-      cell: (r) => currency(r.material),
+      cell: (r) => <span className="tabular-nums text-muted-foreground">{currency(r.material)}</span>,
       value: (r) => r.material,
       className: "text-right",
     },
     {
       header: "Contractors",
-      cell: (r) => currency(r.contractor),
+      cell: (r) => <span className="tabular-nums text-muted-foreground">{currency(r.contractor)}</span>,
       value: (r) => r.contractor,
       className: "text-right",
     },
     {
       header: "Other",
-      cell: (r) => currency(r.other),
+      cell: (r) => <span className="tabular-nums text-muted-foreground">{currency(r.other)}</span>,
       value: (r) => r.other,
       className: "text-right",
     },
     {
       header: "Total cost",
-      cell: (r) => currency(r.cost),
+      cell: (r) => <span className="tabular-nums font-semibold">{currency(r.cost)}</span>,
       value: (r) => r.cost,
       className: "text-right",
     },
@@ -309,7 +309,7 @@ function ReportsPage() {
       header: "Profit",
       cell: (r) => (
         <span
-          className={r.profit >= 0 ? "font-medium text-success" : "font-medium text-destructive"}
+          className={`tabular-nums font-semibold ${r.profit >= 0 ? "text-success" : "text-destructive"}`}
         >
           {currency(r.profit)}
         </span>
@@ -319,7 +319,19 @@ function ReportsPage() {
     },
     {
       header: "Margin",
-      cell: (r) => `${r.margin.toFixed(1)}%`,
+      cell: (r) => {
+        const badgeClass =
+          r.margin >= 15
+            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+            : r.margin >= 0
+              ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200 dark:border-rose-800";
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold tabular-nums border ${badgeClass}`}>
+            {r.margin.toFixed(1)}%
+          </span>
+        );
+      },
       value: (r) => r.margin.toFixed(1),
       className: "text-right",
     },
@@ -395,11 +407,11 @@ function ReportsPage() {
 
           <div>
             <Label htmlFor="from">From</Label>
-            <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="to">To</Label>
-            <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1" />
           </div>
           <div className="w-52">
             <Label htmlFor="bill-status">Contractor bill status</Label>
@@ -420,7 +432,7 @@ function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="w-full text-xs text-muted-foreground mt-1">
             Costs are counted by document date inside this range. Contract value is the full project quotation.
           </p>
         </CardContent>

@@ -654,36 +654,72 @@ function Dashboard() {
       {/* Charts Section: MD Only */}
       {permissions.canViewCompanyFinancials && (
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-base">Monthly site cost trend</CardTitle>
+          <Card className="lg:col-span-2 shadow-sm border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Monthly site cost trend</CardTitle>
             </CardHeader>
             <CardContent className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <BarChart data={trend} margin={{ top: 10, right: 10, left: -5, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} vertical={false} />
                   <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} width={70} />
-                  <Tooltip formatter={(v: number) => currency(v)} />
-                  <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                  <YAxis
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    width={70}
+                    tickFormatter={(v) => (v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`)}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => [currency(v), "Cost"]}
+                    contentStyle={{
+                      backgroundColor: "var(--card, #ffffff)",
+                      borderColor: "var(--border, #e2e8f0)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                      fontSize: "12px",
+                      padding: "8px 12px",
+                    }}
+                    cursor={{ fill: "var(--muted, #f1f5f9)", opacity: 0.4 }}
+                  />
+                  <Bar dataKey="value" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Expenses by category</CardTitle>
+          <Card className="shadow-sm border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Expenses by category</CardTitle>
             </CardHeader>
             <CardContent className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={pie} dataKey="value" nameKey="name" innerRadius={45} outerRadius={85}>
+                  <Pie
+                    data={pie}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={82}
+                    paddingAngle={3}
+                    stroke="var(--card, #ffffff)"
+                    strokeWidth={2}
+                  >
                     {pie.map((_, i) => (
                       <Cell key={i} fill={pieColors[i % pieColors.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => currency(v)} />
+                  <Tooltip
+                    formatter={(v: number) => [currency(v), "Amount"]}
+                    contentStyle={{
+                      backgroundColor: "var(--card, #ffffff)",
+                      borderColor: "var(--border, #e2e8f0)",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                      fontSize: "12px",
+                      padding: "8px 12px",
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
