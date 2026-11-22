@@ -240,20 +240,26 @@ function Dashboard() {
     select: "project_id,net_amount",
     enabled: isMD,
   });
-  const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
-    select: "project_id,amount",
-    enabled: isMD,
+  const allQuotations = useRows<{ project_id: string; amount: number; status: string }>("project_quotations", {
+    select: "project_id,amount,status,is_void,deleted_at",
+    enabled: isMD || permissions.canViewProfitAndLoss || permissions.canViewProjectFinancials,
   });
   const allClientPayments = useRows<ClientPaymentRow>("client_payments", {
-    select: "id,project_id,amount,payment_date,payment_category,payment_method,receipt_number,reference_number,status",
-    enabled: isMD,
+    select: "id,project_id,amount,payment_date,payment_category,payment_method,receipt_number,reference_number,status,is_void,deleted_at",
+    enabled: isMD || permissions.canViewProjectFinancials || permissions.canViewCompanyFinancials,
   });
 
   const [receivedDialogOpen, setReceivedDialogOpen] = useState(false);
 
   const getProjectContractValue = (p: Project) => {
     const extra = sum(
-      (allQuotations.data ?? []).filter((q) => q.project_id === p.id),
+      (allQuotations.data ?? []).filter(
+        (q) =>
+          q.project_id === p.id &&
+          q.status === "approved" &&
+          !(q as any).is_void &&
+          !(q as any).deleted_at
+      ),
       (q) => Number(q.amount || 0),
     );
     return Number(p.quotation_amount || 0) + extra;
@@ -266,7 +272,10 @@ function Dashboard() {
           cp.project_id === projectId &&
           !(cp as any).deleted_at &&
           !(cp as any).is_void &&
-          (cp.status === "received" || !cp.status || cp.status === "completed")
+          (cp.status === "received" ||
+            cp.status === "confirmed" ||
+            cp.status === "completed" ||
+            !cp.status)
       ),
       (cp) => {
         if (cp.payment_category === "reversal") return -Number(cp.amount || 0);
@@ -303,7 +312,13 @@ function Dashboard() {
   const contractValue = sum(projects.data ?? [], (p) => getProjectContractValue(p));
   const totalReceived = sum(
     (allClientPayments.data ?? []).filter(
-      (cp) => !(cp as any).deleted_at && !(cp as any).is_void && (cp.status === "received" || !cp.status || cp.status === "completed")
+      (cp) =>
+        !(cp as any).deleted_at &&
+        !(cp as any).is_void &&
+        (cp.status === "received" ||
+          cp.status === "confirmed" ||
+          cp.status === "completed" ||
+          !cp.status)
     ),
     (cp) => {
       if (cp.payment_category === "reversal") return -Number(cp.amount || 0);

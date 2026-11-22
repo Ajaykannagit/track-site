@@ -129,7 +129,7 @@ export function PrintableClientReceipt({
         </DialogHeader>
 
         {/* Printable Voucher Paper */}
-        <div id="printable-client-receipt" className="p-8 bg-white text-slate-900 font-sans print:p-6 text-sm">
+        <div id="printable-client-receipt" className="print-portrait p-8 bg-white text-slate-900 font-sans print:p-6 text-sm">
           {/* Header */}
           <div className="border-b-2 border-slate-900 pb-4 mb-6">
             <div className="flex justify-between items-start">
@@ -236,7 +236,7 @@ export function PrintableClientReceipt({
           </div>
 
           {/* Verification Statement & Signatures */}
-          <div className="pt-6 border-t border-slate-200 mt-8">
+          <div className="print-signature-block pt-6 border-t border-slate-200 mt-8">
             <p className="text-[11px] text-slate-500 italic mb-10 text-center">
               This is an official system-generated payment receipt acknowledgment from Brickweld Pvt Ltd. Subject to cheque realization.
             </p>

@@ -146,6 +146,22 @@ export function calculateSuggestedDayValue(
 }
 
 /**
+ * Resolves the effective daily wage rate for an employee.
+ * For daily wage workers (wage_type === "daily" or unset), returns wage_rate.
+ * For monthly staff (wage_type === "monthly"), returns the monthly salary divided by 30 days (standard commercial / statutory pro-rata basis).
+ */
+export function getDailyWageRate(
+  emp: { wage_rate?: number | null; wage_type?: string | null },
+  daysInMonth: number = 30,
+): number {
+  const rate = Number(emp.wage_rate || 0);
+  if (emp.wage_type === "monthly") {
+    return Math.round(rate / (daysInMonth || 30));
+  }
+  return rate;
+}
+
+/**
  * Calculates summary metrics for a worker given total days, daily wage rate, bus/petrol, and advance.
  */
 export function calculateWorkerWeeklyWage(

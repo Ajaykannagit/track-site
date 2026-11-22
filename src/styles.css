@@ -215,8 +215,17 @@ button:active:not(:disabled) {
 
 @media print {
   @page {
-    size: landscape;
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  @page portrait-doc {
+    size: A4 portrait;
     margin: 8mm;
+  }
+
+  .print-portrait {
+    page: portrait-doc;
   }
 
   /* Hide UI navigation, buttons and chrome */
@@ -226,6 +235,32 @@ button:active:not(:disabled) {
   button,
   .no-print * {
     display: none !important;
+  }
+
+  /* When printing from a modal dialog, hide the background application */
+  body:has([role="dialog"]) #root,
+  body:has([data-radix-portal] [role="dialog"]) #root {
+    display: none !important;
+  }
+
+  /* Radix Dialog unclip & unconstrain for seamless multi-page A4 printing */
+  [data-radix-dialog-overlay] {
+    display: none !important;
+  }
+
+  [data-radix-dialog-content] {
+    position: static !important;
+    transform: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    background: #fff !important;
+    color: #000 !important;
   }
 
   /* Reset layout constraints and overflow for printing */
@@ -269,9 +304,23 @@ button:active:not(:disabled) {
   th,
   td {
     padding: 2px 4px !important;
-    font-size: 8.5pt !important;
-    line-height: 1.1 !important;
+    font-size: 8pt !important;
+    line-height: 1.15 !important;
     border: 1px solid #d1d5db !important;
+  }
+
+  /* Compact 30/31-day muster roll print optimization to guarantee A4 fit */
+  .print-compact-muster {
+    table-layout: fixed !important;
+    width: 100% !important;
+    font-size: 7pt !important;
+  }
+
+  .print-compact-muster th,
+  .print-compact-muster td {
+    padding: 1px 1px !important;
+    font-size: 7pt !important;
+    line-height: 1 !important;
   }
 
   /* Clean up print text representation for inputs */
@@ -281,12 +330,13 @@ button:active:not(:disabled) {
     background: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
-    font-size: 8.5pt !important;
+    font-size: 8pt !important;
     text-align: right !important;
   }
 
-  /* Page break rules between main grid and team tables */
-  .print-break-inside-avoid {
+  /* Page break rules between main grid, cards, and signature blocks */
+  .print-break-inside-avoid,
+  .print-signature-block {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

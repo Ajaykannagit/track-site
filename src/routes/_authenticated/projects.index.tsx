@@ -64,9 +64,9 @@ function ProjectsPage() {
 
   const projects = useRows<Project>("projects_view", { order: { col: "created_at", asc: false } });
   const clients = useRows<{ id: string; name: string }>("clients", { select: "id,name" });
-  const allQuotations = useRows<{ project_id: string; amount: number }>("project_quotations", {
-    select: "project_id,amount",
-    enabled: permissions.canViewProjectFinancials,
+  const allQuotations = useRows<{ project_id: string; amount: number; status: string }>("project_quotations", {
+    select: "project_id,amount,status,is_void,deleted_at",
+    enabled: permissions.canViewProjectFinancials || isMD,
   });
 
   const save = useSaveRow("projects", "Project");
@@ -76,7 +76,13 @@ function ProjectsPage() {
 
   const getProjectContractValue = (p: Project) => {
     const extra = sum(
-      (allQuotations.data ?? []).filter((q) => q.project_id === p.id),
+      (allQuotations.data ?? []).filter(
+        (q) =>
+          q.project_id === p.id &&
+          q.status === "approved" &&
+          !(q as any).is_void &&
+          !(q as any).deleted_at
+      ),
       (q) => Number(q.amount || 0),
     );
     return Number(p.quotation_amount || 0) + extra;

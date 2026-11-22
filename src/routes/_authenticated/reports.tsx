@@ -156,7 +156,7 @@ function ReportsPage() {
       const cost = labour + material + contractor + other;
       const baseValue = Number(p.quotation_amount ?? 0);
       const additions = sum(
-        (quotations.data ?? []).filter((q) => q.project_id === p.id && q.status === "approved"),
+        (quotations.data ?? []).filter((q) => q.project_id === p.id && q.status === "approved" && !(q as any).deleted_at && !(q as any).is_void),
         (q) => Number(q.amount || 0)
       );
       const value = baseValue + additions;
@@ -694,6 +694,20 @@ function ReportsPage() {
             />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Official Signatures for Printed P&L Statements */}
+      <div className="hidden print:block print-signature-block pt-8 border-t border-zinc-300 text-xs text-center mt-8">
+        <div className="grid grid-cols-2 gap-16 max-w-2xl mx-auto">
+          <div>
+            <div className="border-b border-zinc-400 pb-8"></div>
+            <p className="mt-2 font-semibold text-zinc-800">Prepared by (Accounts / Finance)</p>
+          </div>
+          <div>
+            <div className="border-b border-zinc-400 pb-8"></div>
+            <p className="mt-2 font-semibold text-zinc-800">Approved by (Managing Director)</p>
+          </div>
+        </div>
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">

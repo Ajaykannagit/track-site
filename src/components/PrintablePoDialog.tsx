@@ -64,7 +64,7 @@ export function PrintablePoDialog({ po, open, onOpenChange }: PrintablePoDialogP
         </div>
 
         {/* Printable Voucher Paper */}
-        <div className="bg-white text-zinc-900 p-8 sm:p-10 font-sans shadow-lg rounded-b-lg border border-zinc-200 print:border-0 print:shadow-none print:p-0 print:m-0 print:text-black">
+        <div id="printable-po" className="print-portrait bg-white text-zinc-900 p-8 sm:p-10 font-sans shadow-lg rounded-b-lg border border-zinc-200 print:border-0 print:shadow-none print:p-0 print:m-0 print:text-black">
           {/* Company & Document Header */}
           <div className="border-b-2 border-zinc-900 pb-4 mb-6">
             <div className="flex justify-between items-start">
@@ -167,14 +167,10 @@ export function PrintablePoDialog({ po, open, onOpenChange }: PrintablePoDialogP
           )}
 
           {/* Signatures */}
-          <div className="grid grid-cols-3 gap-6 pt-12 border-t border-zinc-200 text-xs text-center">
+          <div className="print-signature-block grid grid-cols-2 gap-16 pt-12 border-t border-zinc-200 text-xs text-center max-w-xl mx-auto">
             <div>
               <div className="border-b border-zinc-400 pb-8"></div>
               <p className="mt-2 font-semibold text-zinc-800">Prepared By (Accounts)</p>
-            </div>
-            <div>
-              <div className="border-b border-zinc-400 pb-8"></div>
-              <p className="mt-2 font-semibold text-zinc-800">Verified By (Site Supervisor)</p>
             </div>
             <div>
               <div className="border-b border-zinc-400 pb-8"></div>

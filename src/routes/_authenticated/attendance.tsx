@@ -69,7 +69,7 @@ import { TeamManagementDialog } from "@/components/TeamManagementDialog";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
-import { calculateSuggestedDayValue, calculateWorkerWeeklyWage } from "@/lib/wageRules";
+import { calculateSuggestedDayValue, calculateWorkerWeeklyWage, getDailyWageRate } from "@/lib/wageRules";
 import { PrintableWageSheet, type PrintableWorkerRow } from "@/components/PrintableWageSheet";
 import { PayTeamWageDialog, type TeamWagePayTarget } from "@/components/PayTeamWageDialog";
 import { toast } from "sonner";
@@ -98,6 +98,8 @@ type Employee = {
   full_name: string;
   designation: string | null;
   wage_rate: number;
+  wage_type?: string | null;
+  staff_type?: string | null;
   team_id: string | null;
   phone: string | null;
   address: string | null;
@@ -131,6 +133,7 @@ type AttendanceRecord = {
   day_value?: number | null;
   working_hours?: number | null;
   is_leave?: boolean | null;
+  wage_rate?: number | null;
   calculated_wage: number;
   remarks?: string | null;
 };
@@ -445,7 +448,8 @@ function AttendanceWeeklySheetPage() {
     const { employee, date, existing } = editCell;
     const iso = formatDateISO(date);
     const dayVal = parseFloat(dayValueInput) || 0;
-    const calcWage = Math.round(dayVal * (employee.wage_rate || 0));
+    const dailyRate = getDailyWageRate(employee, monthDates?.length || 30);
+    const calcWage = Math.round(dayVal * dailyRate);
 
     await saveAttendance.mutateAsync({
       id: existing?.id,
@@ -459,7 +463,7 @@ function AttendanceWeeklySheetPage() {
         site_name: isLeaveInput ? "Leave" : siteInput,
         is_leave: isLeaveInput,
         day_value: dayVal,
-        wage_rate: employee.wage_rate || 0,
+        wage_rate: dailyRate,
         calculated_wage: calcWage,
         working_hours: dayVal * 8,
         ot_hours: dayVal > 1.0 ? (dayVal - 1.0) * 8 : 0,
@@ -600,7 +604,8 @@ function AttendanceWeeklySheetPage() {
       const recordsToUpsert: any[] = [];
 
       for (const emp of activeWorkers) {
-        const dailyWage = Math.round(1.0 * (emp.wage_rate || 0));
+        const dailyRate = getDailyWageRate(emp, 30);
+        const dailyWage = Math.round(1.0 * dailyRate);
         for (const iso of targetDatesList) {
           const existing = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
           if (!markAllOverwrite && existing && existing.day_value && existing.day_value > 0) {
@@ -618,7 +623,7 @@ function AttendanceWeeklySheetPage() {
             site_name: existing?.site_name || defaultSiteName,
             is_leave: false,
             day_value: 1.0,
-            wage_rate: emp.wage_rate || 0,
+            wage_rate: dailyRate,
             calculated_wage: dailyWage,
             working_hours: 8,
             ot_hours: 0,
@@ -673,13 +678,29 @@ function AttendanceWeeklySheetPage() {
       // 7 days attendance mapping
       const dailyMap: Record<string, AttendanceRecord | undefined> = {};
       let totalDays = 0;
+      let recordedWageSum = 0;
+      let hasAnyRecordedWage = false;
+      const currentDailyRate = getDailyWageRate(emp, 30);
+      let latestDayRate = currentDailyRate;
 
       for (const d of weekDates) {
         const iso = formatDateISO(d);
         const rec = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
         dailyMap[iso] = rec;
         if (rec && !rec.is_leave) {
-          totalDays += Number(rec.day_value ?? 0);
+          const val = Number(rec.day_value ?? 0);
+          totalDays += val;
+          if (rec.calculated_wage !== undefined && rec.calculated_wage !== null) {
+            recordedWageSum += Number(rec.calculated_wage);
+            hasAnyRecordedWage = true;
+          } else if (val > 0) {
+            const lockedRate = Number(rec.wage_rate || currentDailyRate);
+            recordedWageSum += Math.round(val * lockedRate);
+            hasAnyRecordedWage = true;
+          }
+          if (rec.wage_rate) {
+            latestDayRate = Number(rec.wage_rate);
+          }
         }
       }
 
@@ -692,12 +713,11 @@ function AttendanceWeeklySheetPage() {
       const busPetrol = localOverride?.busPetrol ?? Number(existingAdj?.bus_petrol ?? 0);
       const advance = localOverride?.advance ?? Number(existingAdj?.advance_paid ?? 0);
 
-      const { wage, wageBalance } = calculateWorkerWeeklyWage(
-        totalDays,
-        emp.wage_rate || 0,
-        busPetrol,
-        advance,
-      );
+      // Preserve historical wages from saved records; fallback to dailyRate * totalDays for unentered cells
+      const wage = hasAnyRecordedWage
+        ? Math.round(recordedWageSum)
+        : Math.round(totalDays * currentDailyRate);
+      const wageBalance = Math.round(wage + (busPetrol || 0) - (advance || 0));
 
       const paymentMethod = existingAdj?.payment_method ?? null;
       const referenceNumber = existingAdj?.reference_number ?? null;
@@ -728,7 +748,7 @@ function AttendanceWeeklySheetPage() {
         team,
         dailyMap,
         totalDays,
-        wageRate: emp.wage_rate || 0,
+        wageRate: latestDayRate,
         wage,
         busPetrol,
         advance,
@@ -771,6 +791,7 @@ function AttendanceWeeklySheetPage() {
     const empList = employees.data ?? [];
     const attList = monthlyAttendance.data ?? [];
     const adjList = monthlyAdjustments.data ?? [];
+    const numDays = monthDates.length || 30;
 
     return empList.map((emp, idx) => {
       const workerRecords = attList.filter((a) => a.employee_id === emp.id);
@@ -780,6 +801,10 @@ function AttendanceWeeklySheetPage() {
       let leaveDays = 0;
       let totalDays = 0;
       let totalHours = 0;
+      let recordedWageSum = 0;
+      let hasAnyRecordedWage = false;
+      const currentDailyRate = getDailyWageRate(emp, numDays);
+      let latestDayRate = currentDailyRate;
 
       for (const rec of workerRecords) {
         if (rec.is_leave) {
@@ -795,6 +820,18 @@ function AttendanceWeeklySheetPage() {
           }
           const hours = Number(rec.working_hours ?? val * 8);
           totalHours += hours;
+
+          if (rec.calculated_wage !== undefined && rec.calculated_wage !== null) {
+            recordedWageSum += Number(rec.calculated_wage);
+            hasAnyRecordedWage = true;
+          } else if (val > 0) {
+            const lockedRate = Number(rec.wage_rate || currentDailyRate);
+            recordedWageSum += Math.round(val * lockedRate);
+            hasAnyRecordedWage = true;
+          }
+          if (rec.wage_rate) {
+            latestDayRate = Number(rec.wage_rate);
+          }
         }
       }
 
@@ -803,12 +840,10 @@ function AttendanceWeeklySheetPage() {
       const busPetrol = sum(workerAdjustments, (a) => a.bus_petrol);
       const advance = sum(workerAdjustments, (a) => a.advance_paid);
 
-      const { wage, wageBalance } = calculateWorkerWeeklyWage(
-        totalDays,
-        emp.wage_rate || 0,
-        busPetrol,
-        advance,
-      );
+      const wage = hasAnyRecordedWage
+        ? Math.round(recordedWageSum)
+        : Math.round(totalDays * currentDailyRate);
+      const wageBalance = Math.round(wage + (busPetrol || 0) - (advance || 0));
 
       const team = (teams.data ?? []).find((t) => t.id === emp.team_id)?.name ?? "Unassigned Team";
 
@@ -821,7 +856,7 @@ function AttendanceWeeklySheetPage() {
         leaveDays,
         totalDays,
         totalHours,
-        wageRate: emp.wage_rate || 0,
+        wageRate: latestDayRate,
         wage,
         busPetrol,
         advance,
@@ -829,7 +864,7 @@ function AttendanceWeeklySheetPage() {
         records: workerRecords,
       };
     });
-  }, [employees.data, monthlyAttendance.data, monthlyAdjustments.data, teams.data]);
+  }, [employees.data, monthlyAttendance.data, monthlyAdjustments.data, teams.data, monthDates]);
 
   // Grand Totals (Monthly)
   const monthlyGrandTotalPresent = sum(monthlyWorkerRows, (r) => r.daysPresent);
@@ -981,6 +1016,36 @@ function AttendanceWeeklySheetPage() {
   return (
     <RequirePermission permission="canEnterAttendance" label="Attendance">
     <div className="space-y-6">
+      {/* Official Print Header (Only visible on window.print) */}
+      <div className="hidden print:block border-b-2 border-zinc-900 pb-3 mb-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight uppercase text-zinc-900">
+              Brickweld Private Limited
+            </h1>
+            <p className="text-xs text-zinc-600">
+              Civil • Interior • Fabrication • Project Control
+            </p>
+            <p className="text-sm font-semibold text-zinc-800 mt-1">
+              {viewMode === "weekly"
+                ? "Weekly Worker Attendance & Wage Register"
+                : "Monthly Worker Attendance & Wage Master Register"}
+            </p>
+          </div>
+          <div className="text-right text-xs">
+            <span className="inline-block px-2 py-0.5 font-bold tracking-wider uppercase bg-zinc-100 rounded border border-zinc-300">
+              {viewMode === "weekly" ? "7-Day Weekly Sheet" : "Monthly Summary Sheet"}
+            </span>
+            <p className="font-semibold text-zinc-800 mt-1">
+              {viewMode === "weekly"
+                ? `Week: ${formatDateDisplay(weekStartDate)} to ${formatDateDisplay(weekDates[6] ?? weekStartDate)}`
+                : `Month: ${getMonthDisplayName(selectedMonth.year, selectedMonth.month)}`}
+            </p>
+            <p className="text-[11px] text-zinc-500">Generated: {dateFmt(new Date().toISOString())}</p>
+          </div>
+        </div>
+      </div>
+
       {/* Title & Navigation Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -1197,6 +1262,15 @@ function AttendanceWeeklySheetPage() {
             title="Monthly Wage Print (All Staff: labour, supervisors and officers)"
           >
             <Printer className="mr-1.5 size-3.5" /> Monthly Wage PDF (All Staff)
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="h-9 text-xs"
+            title="Print Attendance Register (A4 Landscape)"
+          >
+            <Printer className="mr-1.5 size-3.5" /> Print Register / PDF
           </Button>
         </div>
       </div>
@@ -1664,11 +1738,25 @@ function AttendanceWeeklySheetPage() {
         </Card>
       )}
 
+      {/* Official Attendance Register Print Signature Block */}
+      <div className="hidden print:block print-signature-block pt-8 border-t border-zinc-300 text-xs text-center my-6">
+        <div className="grid grid-cols-2 gap-16 max-w-2xl mx-auto">
+          <div>
+            <div className="border-b border-zinc-400 pb-8"></div>
+            <p className="mt-2 font-semibold text-zinc-800">Prepared by (Accounts)</p>
+          </div>
+          <div>
+            <div className="border-b border-zinc-400 pb-8"></div>
+            <p className="mt-2 font-semibold text-zinc-800">Approved by (MD)</p>
+          </div>
+        </div>
+      </div>
+
       {/* ========================================================================= */}
       {/* 3C. TEAM-WISE PAYMENT TABLES & 3D. OTHER PAYMENTS PLACEHOLDER */}
       {/* ========================================================================= */}
       {permissions.canViewWagesAndPayments && (
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 print:grid-cols-2 print-break-inside-avoid">
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -2136,18 +2224,52 @@ function AttendanceWeeklySheetPage() {
       {/* 3F. MONTHLY WORKER DAY-BY-DAY DRILLDOWN DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={!!drilldownWorker} onOpenChange={(open) => !open && setDrilldownWorker(null)}>
-        <DialogContent className="w-full max-w-3xl max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="size-5 text-primary" /> {drilldownWorker?.full_name} — Daily Breakdown
-            </DialogTitle>
-            <DialogDescription>
-              Day-by-day attendance log for {getMonthDisplayName(selectedMonth.year, selectedMonth.month)} ({drilldownWorker?.designation || "Worker"}).
-            </DialogDescription>
+        <DialogContent className="print-portrait w-full max-w-3xl max-h-[85vh] overflow-y-auto sm:max-w-3xl print:max-h-none print:overflow-visible print:border-0 print:p-0">
+          <DialogHeader className="no-print">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  <Calendar className="size-5 text-primary" /> {drilldownWorker?.full_name} — Daily Breakdown
+                </DialogTitle>
+                <DialogDescription>
+                  Day-by-day attendance log for {getMonthDisplayName(selectedMonth.year, selectedMonth.month)} ({drilldownWorker?.designation || "Worker"}).
+                </DialogDescription>
+              </div>
+              <Button size="sm" onClick={() => window.print()} className="gap-1.5 h-8">
+                <Printer className="size-3.5" /> Print 30-Day Card (A4)
+              </Button>
+            </div>
           </DialogHeader>
 
           {drilldownWorker && (
             <div className="mt-3 space-y-4">
+              {/* Official Print-Only Letterhead for 30-Day Worker Timecard */}
+              <div className="hidden print:block border-b-2 border-zinc-900 pb-3 mb-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h1 className="text-xl font-bold tracking-tight uppercase text-zinc-900">
+                      Brickweld Private Limited
+                    </h1>
+                    <p className="text-xs text-zinc-600">Civil • Interior • Fabrication • Project Control</p>
+                    <p className="text-sm font-semibold text-zinc-800 mt-1">
+                      Worker Monthly Attendance Timecard — {drilldownWorker.full_name} ({drilldownWorker.employee_code || "EMP"})
+                    </p>
+                    <p className="text-xs text-zinc-600">
+                      Designation: {drilldownWorker.designation || "Helper"} | Daily Rate: {currency(drilldownWorker.wage_rate || 0)}
+                    </p>
+                  </div>
+                  <div className="text-right text-xs">
+                    <span className="inline-block px-2 py-0.5 font-bold tracking-wider uppercase bg-zinc-100 rounded border border-zinc-300">
+                      Monthly Timecard
+                    </span>
+                    <p className="font-semibold text-zinc-800 mt-1">
+                      {getMonthDisplayName(selectedMonth.year, selectedMonth.month)}
+                    </p>
+                    <p className="text-[11px] text-zinc-500">Generated: {dateFmt(new Date().toISOString())}</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="rounded-lg border bg-muted/40 p-2.5">
                   <p className="text-[10px] text-muted-foreground uppercase font-medium">Days Present</p>
@@ -2177,9 +2299,9 @@ function AttendanceWeeklySheetPage() {
                 )}
               </div>
 
-              <div className="rounded-md border overflow-x-auto max-h-[50vh] overflow-y-auto">
+              <div className="rounded-md border overflow-x-auto max-h-[50vh] overflow-y-auto print:max-h-none print:overflow-visible print:border-0">
                 <Table className="text-xs">
-                  <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableHeader className="sticky top-0 bg-background z-10 print:static">
                     <TableRow>
                       <TableHead className="w-12 text-center font-bold">DATE</TableHead>
                       <TableHead className="w-20 font-bold">DAY</TableHead>
@@ -2237,7 +2359,7 @@ function AttendanceWeeklySheetPage() {
                           {permissions.canViewWagesAndPayments && (
                             <TableCell className="text-right font-mono font-semibold">
                               {rec && !rec.is_leave
-                                ? currency(rec.calculated_wage ?? Math.round(Number(rec.day_value ?? 0) * (drilldownWorker.wage_rate || 0)))
+                                ? currency(rec.calculated_wage ?? Math.round(Number(rec.day_value ?? 0) * getDailyWageRate(drilldownWorker, monthDates.length)))
                                 : "—"}
                             </TableCell>
                           )}
@@ -2246,6 +2368,20 @@ function AttendanceWeeklySheetPage() {
                     })}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Timecard Signature Block for Print */}
+              <div className="hidden print:block print-signature-block pt-8 border-t border-zinc-300 text-xs text-center mt-6">
+                <div className="grid grid-cols-2 gap-16 max-w-xl mx-auto">
+                  <div>
+                    <div className="border-b border-zinc-400 pb-8"></div>
+                    <p className="mt-2 font-semibold text-zinc-800">Worker Signature / Thumb</p>
+                  </div>
+                  <div>
+                    <div className="border-b border-zinc-400 pb-8"></div>
+                    <p className="mt-2 font-semibold text-zinc-800">Verified &amp; Settled by (Accounts)</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2272,24 +2408,41 @@ function AttendanceWeeklySheetPage() {
             ? `Month: ${getMonthDisplayName(selectedMonth.year, selectedMonth.month)}`
             : `Week: ${dateFmt(weekStartISO)} to ${dateFmt(weekEndISO)}`
         }
+        daysInMonth={monthDates.length}
         workers={
           wagePrintModal === "monthly"
-            ? monthlyWorkerRows.map((r) => ({
-                id: r.employee.id,
-                code: r.employee.employee_code,
-                name: r.employee.full_name,
-                staff_type: (r.employee as any).staff_type || (r.employee.designation?.toLowerCase().includes("supervisor") ? "supervisor" : r.employee.designation?.toLowerCase().includes("officer") ? "officer" : "labour"),
-                designation: r.employee.designation,
-                team_name: r.team,
-                total_days: r.totalDays,
-                rate: r.employee.wage_rate || 0,
-                earned_wage: r.wage,
-                allowances: 0,
-                deductions: 0,
-                net_payable: r.wageBalance,
-                amount_paid: 0,
-                pending_balance: r.wageBalance,
-              }))
+            ? monthlyWorkerRows.map((r) => {
+                const dailyAttendance: Record<number, { day_value: number; is_leave?: boolean }> = {};
+                for (const d of monthDates) {
+                  const dayNum = d.getDate();
+                  const iso = formatDateISO(d);
+                  const rec = (r.records ?? []).find((a) => a.attendance_date === iso);
+                  if (rec) {
+                    dailyAttendance[dayNum] = {
+                      day_value: Number(rec.day_value ?? 0),
+                      is_leave: !!rec.is_leave,
+                    };
+                  }
+                }
+
+                return {
+                  id: r.employee.id,
+                  code: r.employee.employee_code,
+                  name: r.employee.full_name,
+                  staff_type: (r.employee as any).staff_type || (r.employee.designation?.toLowerCase().includes("supervisor") ? "supervisor" : r.employee.designation?.toLowerCase().includes("officer") ? "officer" : "labour"),
+                  designation: r.employee.designation,
+                  team_name: r.team,
+                  total_days: r.totalDays,
+                  rate: r.wageRate,
+                  earned_wage: r.wage,
+                  allowances: r.busPetrol,
+                  deductions: r.advance,
+                  net_payable: r.wageBalance,
+                  amount_paid: 0,
+                  pending_balance: r.wageBalance,
+                  dailyAttendance,
+                };
+              })
             : workerRows.map((r) => ({
                 id: r.employee.id,
                 code: r.employee.employee_code,
@@ -2298,7 +2451,7 @@ function AttendanceWeeklySheetPage() {
                 designation: r.employee.designation,
                 team_name: r.team,
                 total_days: r.totalDays,
-                rate: r.employee.wage_rate || 0,
+                rate: r.wageRate,
                 earned_wage: r.wage,
                 allowances: r.busPetrol,
                 deductions: r.advance,

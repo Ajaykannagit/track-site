@@ -4,6 +4,7 @@ import {
   calculateSuggestedDayValue,
   calculateWorkerWeeklyWage,
   getAttendanceWarning,
+  getDailyWageRate,
 } from "@/lib/wageRules";
 
 describe("Wage Rules & Day Value Calculations", () => {
@@ -65,5 +66,18 @@ describe("Wage Rules & Day Value Calculations", () => {
     expect(getAttendanceWarning("18", "6")).not.toBeNull();
     expect(getAttendanceWarning("6", "23")).not.toBeNull(); // 17 hours
     expect(getAttendanceWarning("9", "6")).toBeNull();
+  });
+
+  it("converts monthly salary into daily wage rate correctly", () => {
+    // ₹30,000 monthly salary -> ₹1,000 per day (not ₹30,000/day!)
+    const dailyRate = getDailyWageRate({ wage_type: "monthly", wage_rate: 30000 }, 30);
+    expect(dailyRate).toBe(1000);
+
+    // One Sunday entry of 1.5 days becomes ₹1,500 (not ₹45,000!)
+    const sundayWage = Math.round(1.5 * dailyRate);
+    expect(sundayWage).toBe(1500);
+
+    // Daily wage worker remains exact daily wage rate
+    expect(getDailyWageRate({ wage_type: "daily", wage_rate: 600 })).toBe(600);
   });
 });
