@@ -162,6 +162,37 @@ export function getDailyWageRate(
 }
 
 /**
+ * Number of calendar days in the month of an ISO date string (YYYY-MM-DD).
+ * Used as the monthly-staff pro-rata divisor so the rate always follows the
+ * attendance date's own month, never whichever month is selected in the UI.
+ */
+export function daysInMonthOf(isoDate: string): number {
+  const [y, m] = isoDate.split("-").map(Number);
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate();
+}
+
+/**
+ * Resolves the daily rate to store on an attendance record.
+ *
+ * Rate-locking rule (agreed with client):
+ * - Existing record with a stored rate > 0 → keep the stored (historical) rate,
+ *   even if the day value changes. Master rate changes never rewrite history.
+ * - New record, legacy record with no stored rate, or an explicit MD/Accounts
+ *   "reprice" → current master rate, pro-rated by the attendance date's month.
+ */
+export function resolveAttendanceDailyRate(params: {
+  employee: { wage_rate?: number | null; wage_type?: string | null };
+  attendanceDate: string;
+  storedRate?: number | null;
+  reprice?: boolean;
+}): number {
+  const stored = Number(params.storedRate || 0);
+  if (stored > 0 && !params.reprice) return stored;
+  return getDailyWageRate(params.employee, daysInMonthOf(params.attendanceDate));
+}
+
+/**
  * Calculates summary metrics for a worker given total days, daily wage rate, bus/petrol, and advance.
  */
 export function calculateWorkerWeeklyWage(

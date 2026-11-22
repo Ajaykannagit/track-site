@@ -69,7 +69,7 @@ import { TeamManagementDialog } from "@/components/TeamManagementDialog";
 import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency, dateFmt, today } from "@/lib/format";
 import { exportToExcel } from "@/lib/excel";
-import { calculateSuggestedDayValue, calculateWorkerWeeklyWage, getDailyWageRate } from "@/lib/wageRules";
+import { calculateSuggestedDayValue, calculateWorkerWeeklyWage, daysInMonthOf, getDailyWageRate, resolveAttendanceDailyRate } from "@/lib/wageRules";
 import { PrintableWageSheet, type PrintableWorkerRow } from "@/components/PrintableWageSheet";
 import { PayTeamWageDialog, type TeamWagePayTarget } from "@/components/PayTeamWageDialog";
 import { toast } from "sonner";
@@ -255,6 +255,10 @@ function AttendanceWeeklySheetPage() {
   const [siteInput, setSiteInput] = useState("");
   const [isLeaveInput, setIsLeaveInput] = useState(false);
   const [dayValueInput, setDayValueInput] = useState("1.5");
+  // Explicit "reprice at current master rate" (MD / Accounts only). Off by default:
+  // edits keep the stored historical rate.
+  const [repriceInput, setRepriceInput] = useState(false);
+  const canReprice = isMD || roles.includes("accounts");
   const [saveStatus, setSaveStatus] = useState<Record<string, "success" | "error">>({});
 
   // Local state for weekly adjustments (bus/petrol and advance) to support instant edits
@@ -449,6 +453,7 @@ function AttendanceWeeklySheetPage() {
     );
 
     setEditCell({ employee: emp, date, existing: rec ?? null });
+    setRepriceInput(false);
     if (rec) {
       setInTimeInput(rec.in_time ?? "6");
       setOutTimeInput(rec.out_time ?? "6");
@@ -479,43 +484,52 @@ function AttendanceWeeklySheetPage() {
     const { employee, date, existing } = editCell;
     const iso = formatDateISO(date);
     const dayVal = parseFloat(dayValueInput) || 0;
-    const dailyRate = getDailyWageRate(employee, monthDates?.length || 30);
-    const calcWage = Math.round(dayVal * dailyRate);
+    const reprice = Boolean(repriceInput && canReprice && existing?.id);
 
     try {
-      let targetId = existing?.id;
-      if (!targetId) {
-        const { data: dbAtt } = await (typedSupabase as any)
-          .from("attendance")
-          .select("id")
-          .eq("employee_id", employee.id)
-          .eq("attendance_date", iso)
-          .maybeSingle();
-        if (dbAtt?.id) {
-          targetId = dbAtt.id;
-        }
-      }
+      // Always read the stored record from the base table: attendance_view masks
+      // wage_rate as 0 for non-finance roles, which would otherwise look "unpriced".
+      const { data: dbAtt } = await (typedSupabase as any)
+        .from("attendance")
+        .select("id, wage_rate")
+        .eq("employee_id", employee.id)
+        .eq("attendance_date", iso)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      const targetId: string | undefined = existing?.id ?? dbAtt?.id ?? undefined;
+      const storedRate = targetId ? Number(dbAtt?.wage_rate || existing?.wage_rate || 0) : 0;
 
-      await saveAttendance.mutateAsync({
-        id: targetId,
-        values: {
-          employee_id: employee.id,
-          attendance_date: iso,
-          kind: "labour",
-          status: isLeaveInput ? "leave" : dayVal === 0 ? "absent" : "present",
-          in_time: inTimeInput,
-          out_time: outTimeInput,
-          site_name: isLeaveInput ? "Leave" : siteInput,
-          is_leave: isLeaveInput,
-          day_value: dayVal,
-          wage_rate: dailyRate,
-          calculated_wage: calcWage,
-          working_hours: dayVal * 8,
-          ot_hours: dayVal > 1.0 ? (dayVal - 1.0) * 8 : 0,
-          deleted_at: null,
-          is_void: false,
-        },
+      // Bug B/C: keep the stored historical rate on edits; new days use the
+      // master rate pro-rated by the attendance date's own month.
+      const dailyRate = resolveAttendanceDailyRate({
+        employee,
+        attendanceDate: iso,
+        storedRate,
+        reprice,
       });
+      const calcWage = Math.round(dayVal * dailyRate);
+
+      const values: Record<string, unknown> = {
+        employee_id: employee.id,
+        attendance_date: iso,
+        kind: "labour",
+        status: isLeaveInput ? "leave" : dayVal === 0 ? "absent" : "present",
+        in_time: inTimeInput,
+        out_time: outTimeInput,
+        site_name: isLeaveInput ? "Leave" : siteInput,
+        is_leave: isLeaveInput,
+        day_value: dayVal,
+        working_hours: dayVal * 8,
+        ot_hours: dayVal > 1.0 ? (dayVal - 1.0) * 8 : 0,
+        deleted_at: null,
+        // NOTE: attendance has no is_void column — never send it (Bug A).
+        // Only send a rate when we actually know it; otherwise the DB trigger
+        // keeps the stored rate / looks up the master rate.
+        ...(dailyRate > 0 ? { wage_rate: dailyRate, calculated_wage: calcWage } : {}),
+      };
+
+      await saveAttendance.mutateAsync({ id: targetId, values });
 
       setEditCell(null);
     } catch (err: any) {
@@ -682,13 +696,19 @@ function AttendanceWeeklySheetPage() {
       const recordsToUpsert: any[] = [];
 
       for (const emp of activeWorkers) {
-        const dailyRate = getDailyWageRate(emp, 30);
-        const dailyWage = Math.round(1.0 * dailyRate);
         for (const iso of targetDatesList) {
           const existing = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
           if (!markAllOverwrite && existing && existing.day_value && existing.day_value > 0) {
             continue; // Skip already marked cells unless overwrite is checked
           }
+
+          // Keep stored rate on existing rows; new rows use master rate pro-rated by the date's month.
+          // attendance_view shows wage_rate = 0 to non-finance roles, so for an existing row with a
+          // hidden rate we send no rate at all and let the DB trigger keep the stored one.
+          const viewRate = Number(existing?.wage_rate || 0);
+          const dailyRate = existing?.id
+            ? viewRate
+            : resolveAttendanceDailyRate({ employee: emp, attendanceDate: iso });
 
           recordsToUpsert.push({
             ...(existing?.id ? { id: existing.id } : {}),
@@ -701,8 +721,7 @@ function AttendanceWeeklySheetPage() {
             site_name: existing?.site_name || defaultSiteName,
             is_leave: false,
             day_value: 1.0,
-            wage_rate: dailyRate,
-            calculated_wage: dailyWage,
+            ...(dailyRate > 0 ? { wage_rate: dailyRate, calculated_wage: Math.round(dailyRate) } : {}),
             working_hours: 8,
             ot_hours: 0,
           });
@@ -716,36 +735,42 @@ function AttendanceWeeklySheetPage() {
         return;
       }
 
-      // Single batched upsert
+      // Save row by row (there is no unique constraint on (employee_id, attendance_date)
+      // that a batched upsert could target). Every error is collected and reported.
       const supabase = typedSupabase as any;
-      const { error } = await supabase.from("attendance").upsert(recordsToUpsert, {
-        onConflict: "employee_id,attendance_date",
-      });
-
-      if (error) {
-        // Fallback: save individually if onConflict composite unique index differs
-        for (const row of recordsToUpsert) {
-          if (row.id) {
-            await supabase.from("attendance").update({ ...row, deleted_at: null, is_void: false }).eq("id", row.id);
+      const failures: string[] = [];
+      for (const row of recordsToUpsert) {
+        const { id: rowId, ...payload } = row;
+        let error: any = null;
+        if (rowId) {
+          ({ error } = await supabase.from("attendance").update(payload).eq("id", rowId));
+        } else {
+          const { data: dbAtt } = await supabase
+            .from("attendance")
+            .select("id")
+            .eq("employee_id", row.employee_id)
+            .eq("attendance_date", row.attendance_date)
+            .is("deleted_at", null)
+            .limit(1)
+            .maybeSingle();
+          if (dbAtt?.id) {
+            ({ error } = await supabase.from("attendance").update(payload).eq("id", dbAtt.id));
           } else {
-            const { data: dbAtt } = await supabase
-              .from("attendance")
-              .select("id")
-              .eq("employee_id", row.employee_id)
-              .eq("attendance_date", row.attendance_date)
-              .maybeSingle();
-            if (dbAtt?.id) {
-              await supabase.from("attendance").update({ ...row, id: dbAtt.id, deleted_at: null, is_void: false }).eq("id", dbAtt.id);
-            } else {
-              await supabase.from("attendance").insert(row);
-            }
+            ({ error } = await supabase.from("attendance").insert(payload));
           }
         }
+        if (error) failures.push(error.message || String(error));
       }
 
       // Invalidate queries so grid and wage totals refresh immediately
       qc.invalidateQueries({ queryKey: ["attendance"] });
       qc.invalidateQueries({ queryKey: ["attendance_view"] });
+
+      if (failures.length > 0) {
+        const saved = recordsToUpsert.length - failures.length;
+        toast.error(`Saved ${saved} of ${recordsToUpsert.length} records. ${failures.length} failed: ${failures[0]}`);
+        return;
+      }
 
       toast.success(`Successfully marked ${recordsToUpsert.length} attendance records as Present (1.0 Day).`);
       setMarkAllOpen(false);
@@ -768,7 +793,7 @@ function AttendanceWeeklySheetPage() {
       let totalDays = 0;
       let recordedWageSum = 0;
       let hasAnyRecordedWage = false;
-      const currentDailyRate = getDailyWageRate(emp, 30);
+      const currentDailyRate = getDailyWageRate(emp, daysInMonthOf(weekStartISO));
       let latestDayRate = currentDailyRate;
 
       for (const d of weekDates) {
@@ -2147,6 +2172,27 @@ function AttendanceWeeklySheetPage() {
                 className="font-mono text-base font-bold text-primary text-right"
               />
             </div>
+
+            {editCell?.existing?.id && canReprice && (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={repriceInput}
+                  onChange={(e) => setRepriceInput(e.target.checked)}
+                />
+                <span>
+                  <span className="block text-xs font-semibold">Reprice at current master rate</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Off by default — edits keep this day's stored rate
+                    {Number(editCell.existing.wage_rate || 0) > 0
+                      ? ` (${currency(Number(editCell.existing.wage_rate))}/day)`
+                      : ""}
+                    . Tick only to correct a wrong historical rate.
+                  </span>
+                </span>
+              </label>
+            )}
 
             <div className="flex items-center justify-between pt-2">
               {editCell?.existing?.id ? (
