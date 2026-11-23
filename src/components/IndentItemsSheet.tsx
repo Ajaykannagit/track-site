@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useRows, useSaveRow, useDeleteRow } from "@/lib/db";
 import { currency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -69,12 +71,23 @@ function ItemForm({
   const [qty, setQty] = useState(String(initial.quantity ?? ""));
   const [rate, setRate] = useState(String(initial.rate ?? ""));
   const [editReason, setEditReason] = useState(initial.edit_reason ?? "");
+  const [editReasonError, setEditReasonError] = useState(false);
   const [auditStatus, setAuditStatus] = useState(initial.audit_status ?? "corrected");
 
   const amount = (Number(qty) || 0) * (Number(rate) || 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!material.trim()) {
+      toast.error("Please enter a material name.");
+      return;
+    }
+    if (isEditing && !editReason.trim()) {
+      setEditReasonError(true);
+      toast.error("Please provide a reason for editing this line item.");
+      return;
+    }
+    setEditReasonError(false);
     await onSave({
       material: material.trim(),
       specification: spec.trim() || null,
@@ -82,12 +95,12 @@ function ItemForm({
       quantity: Number(qty) || 0,
       rate: Number(rate) || 0,
       amount,
-      ...(isEditing ? { edit_reason: editReason.trim() || "Item modified", audit_status: auditStatus } : {}),
+      ...(isEditing ? { edit_reason: editReason.trim(), audit_status: auditStatus } : {}),
     });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border bg-muted/40 p-3 space-y-3">
+    <form onSubmit={handleSubmit} noValidate className="rounded-lg border bg-muted/40 p-3 space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="sm:col-span-2">
           <Label className="text-xs mb-1 block">Material *</Label>
@@ -151,11 +164,19 @@ function ItemForm({
               <Label className="text-xs mb-1 block">Reason for edit *</Label>
               <Input
                 value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
+                onChange={(e) => {
+                  setEditReason(e.target.value);
+                  if (e.target.value.trim()) setEditReasonError(false);
+                }}
                 placeholder="Reason for modifying this line item"
-                required
-                className="h-8 text-sm"
+                aria-invalid={editReasonError}
+                className={`h-8 text-sm ${editReasonError ? "border-destructive ring-1 ring-destructive" : ""}`}
               />
+              {editReasonError && (
+                <p className="mt-1 text-[11px] font-medium text-destructive">
+                  Please enter a reason for editing this line item.
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs mb-1 block">Verification status</Label>
@@ -195,6 +216,7 @@ export function IndentItemsSheet({
   const [addingItem, setAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<RequestItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<RequestItem | null>(null);
+  const qc = useQueryClient();
 
   const items = useRows<RequestItem>("material_request_items", {
     filters: indent ? [{ col: "request_id", op: "eq", value: indent.id }] : [],
@@ -210,7 +232,7 @@ export function IndentItemsSheet({
 
   const syncParentIndent = async (itemList: RequestItem[]) => {
     if (!indent) return;
-    const newTotal = itemList.reduce((s, i) => s + i.amount, 0);
+    const newTotal = itemList.reduce((s, i) => s + Number(i.amount ?? 0), 0);
     const summaryNames = Array.from(new Set(itemList.map((i) => i.material))).slice(0, 3).join(", ");
     await saveIndent.mutateAsync({
       id: indent.id,
@@ -219,6 +241,11 @@ export function IndentItemsSheet({
         material_name: summaryNames || null,
       },
     });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["material_requests"] }),
+      qc.invalidateQueries({ queryKey: ["material_requests_view"] }),
+      qc.invalidateQueries({ queryKey: ["material_request_items"] }),
+    ]);
     onTotalUpdated?.(newTotal, summaryNames);
   };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ShoppingCart, ArrowDownToLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,7 +104,9 @@ export function MultiMaterialPoDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<PoLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const [editReasonError, setEditReasonError] = useState(false);
   const isSavingRef = useRef(false);
+  const qc = useQueryClient();
 
   const savePo = useSaveRow("purchase_orders", "Purchase Order");
 
@@ -119,6 +122,7 @@ export function MultiMaterialPoDialog({
         setTaxPercent(editingPo.tax_percent ?? 0);
         setTerms(editingPo.terms ?? "");
         setEditReason("");
+        setEditReasonError(false);
 
         // Load existing PO line items
         supabase
@@ -255,9 +259,11 @@ export function MultiMaterialPoDialog({
     }
 
     if (editingPo && !editReason.trim()) {
+      setEditReasonError(true);
       toast.error("Please provide a reason for editing this purchase order.");
       return;
     }
+    setEditReasonError(false);
 
     isSavingRef.current = true;
     try {
@@ -350,9 +356,13 @@ export function MultiMaterialPoDialog({
         }
       }
 
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["purchase_orders"] }),
+        qc.invalidateQueries({ queryKey: ["purchase_order_items"] }),
+      ]);
       toast.success(isEdit ? "PO updated successfully" : "Purchase Order created with multiple materials");
+      await onSuccess?.();
       setOpen(false);
-      onSuccess?.();
     } catch (err: any) {
       const errMsg = err?.message || "Failed to save purchase order.";
       if (
@@ -378,7 +388,7 @@ export function MultiMaterialPoDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
               <ShoppingCart className="size-5 text-primary" />
@@ -689,11 +699,19 @@ export function MultiMaterialPoDialog({
               </Label>
               <Input
                 value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
+                onChange={(e) => {
+                  setEditReason(e.target.value);
+                  if (e.target.value.trim()) setEditReasonError(false);
+                }}
                 placeholder="Explain why this PO is being modified (notifies MD)..."
-                required
-                className="h-8 text-xs"
+                aria-invalid={editReasonError}
+                className={`h-8 text-xs ${editReasonError ? "border-destructive ring-1 ring-destructive" : ""}`}
               />
+              {editReasonError && (
+                <p className="text-[11px] font-medium text-destructive">
+                  Please enter a reason for editing this purchase order before saving.
+                </p>
+              )}
             </div>
           )}
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Truck, ArrowDownToLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,7 +103,9 @@ export function MultiMaterialReceiptDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<ReceiptLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const [editReasonError, setEditReasonError] = useState(false);
   const isSavingRef = useRef(false);
+  const qc = useQueryClient();
 
   const saveReceipt = useSaveRow("material_receipts", "Material Receipt");
 
@@ -116,6 +119,7 @@ export function MultiMaterialReceiptDialog({
         setReceiptDate(editingReceipt.receipt_date);
         setRemarks(editingReceipt.remarks ?? "");
         setEditReason("");
+        setEditReasonError(false);
 
         // Load existing receipt line items
         supabase
@@ -236,9 +240,11 @@ export function MultiMaterialReceiptDialog({
     }
 
     if (editingReceipt && !editReason.trim()) {
+      setEditReasonError(true);
       toast.error("Please provide a reason for editing this receipt.");
       return;
     }
+    setEditReasonError(false);
 
     isSavingRef.current = true;
     try {
@@ -318,9 +324,44 @@ export function MultiMaterialReceiptDialog({
         }
       }
 
+      // Synchronize linked Purchase Order status (received / partially_received)
+      if (poId && poId !== "none") {
+        try {
+          const [{ data: poRow }, { data: poReceipts }] = await Promise.all([
+            supabase.from("purchase_orders").select("id, total_amount, status").eq("id", poId).single(),
+            supabase.from("material_receipts").select("id, total_amount").eq("po_id", poId).is("deleted_at", null),
+          ]);
+          if (poRow && poRow.status !== "closed") {
+            const poTotal = Number(poRow.total_amount ?? 0);
+            const receivedTotal = (poReceipts ?? []).reduce(
+              (sum: number, r: any) => sum + Number(r.total_amount ?? 0),
+              0
+            );
+            const nextStatus =
+              poTotal > 0 && receivedTotal >= poTotal - 0.01
+                ? "received"
+                : receivedTotal > 0
+                ? "partially_received"
+                : poRow.status;
+            if (nextStatus !== poRow.status) {
+              await supabase.from("purchase_orders").update({ status: nextStatus }).eq("id", poId);
+            }
+          }
+        } catch {
+          // Non-fatal: PO status sync best-effort
+        }
+      }
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["material_receipts"] }),
+        qc.invalidateQueries({ queryKey: ["material_receipts_view"] }),
+        qc.invalidateQueries({ queryKey: ["material_receipt_items"] }),
+        qc.invalidateQueries({ queryKey: ["purchase_orders"] }),
+      ]);
+
       toast.success(isEdit ? "Receipt updated successfully" : "Material Receipt recorded with multiple materials");
+      await onSuccess?.(projectId);
       setOpen(false);
-      onSuccess?.(projectId);
     } catch (err: any) {
       const errMsg = err?.message || "Failed to save material receipt.";
       if (
@@ -346,7 +387,7 @@ export function MultiMaterialReceiptDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
               <Truck className="size-5 text-primary" />
@@ -550,11 +591,19 @@ export function MultiMaterialReceiptDialog({
               </Label>
               <Input
                 value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
+                onChange={(e) => {
+                  setEditReason(e.target.value);
+                  if (e.target.value.trim()) setEditReasonError(false);
+                }}
                 placeholder="Explain why this receipt is being modified (notifies MD)..."
-                required
-                className="h-8 text-xs"
+                aria-invalid={editReasonError}
+                className={`h-8 text-xs ${editReasonError ? "border-destructive ring-1 ring-destructive" : ""}`}
               />
+              {editReasonError && (
+                <p className="text-[11px] font-medium text-destructive">
+                  Please enter a reason for editing this receipt before saving.
+                </p>
+              )}
             </div>
           )}
 

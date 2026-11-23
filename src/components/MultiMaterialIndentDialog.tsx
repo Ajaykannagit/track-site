@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,7 +106,9 @@ export function MultiMaterialIndentDialog({
   const [editReason, setEditReason] = useState("");
   const [items, setItems] = useState<MaterialLineItem[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
+  const [editReasonError, setEditReasonError] = useState(false);
   const isSavingRef = useRef(false);
+  const qc = useQueryClient();
 
   const saveIndent = useSaveRow("material_requests", "Material Indent");
 
@@ -119,6 +122,7 @@ export function MultiMaterialIndentDialog({
         setStatus(editingIndent.status);
         setRemarks(editingIndent.remarks ?? "");
         setEditReason("");
+        setEditReasonError(false);
 
         // Load existing line items
         supabase
@@ -210,9 +214,11 @@ export function MultiMaterialIndentDialog({
     }
 
     if (editingIndent && !editReason.trim()) {
+      setEditReasonError(true);
       toast.error("Please provide a reason for editing this indent.");
       return;
     }
+    setEditReasonError(false);
 
     isSavingRef.current = true;
     try {
@@ -296,9 +302,14 @@ export function MultiMaterialIndentDialog({
         }
       }
 
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["material_requests"] }),
+        qc.invalidateQueries({ queryKey: ["material_requests_view"] }),
+        qc.invalidateQueries({ queryKey: ["material_request_items"] }),
+      ]);
       toast.success(isEdit ? "Indent updated successfully" : "Indent created with multiple materials");
+      await onSuccess?.();
       setOpen(false);
-      onSuccess?.();
     } catch (err: any) {
       const errMsg = err?.message || "Failed to save indent.";
       if (
@@ -324,7 +335,7 @@ export function MultiMaterialIndentDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
               <Package className="size-5 text-primary" />
@@ -531,11 +542,19 @@ export function MultiMaterialIndentDialog({
               </Label>
               <Input
                 value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
+                onChange={(e) => {
+                  setEditReason(e.target.value);
+                  if (e.target.value.trim()) setEditReasonError(false);
+                }}
                 placeholder="Explain why this indent is being modified (notifies MD)..."
-                required
-                className="h-8 text-xs"
+                aria-invalid={editReasonError}
+                className={`h-8 text-xs ${editReasonError ? "border-destructive ring-1 ring-destructive" : ""}`}
               />
+              {editReasonError && (
+                <p className="text-[11px] font-medium text-destructive">
+                  Please enter a reason for editing this indent before saving.
+                </p>
+              )}
             </div>
           )}
 

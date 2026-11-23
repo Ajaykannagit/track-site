@@ -46,7 +46,7 @@ const ROLE_OPTIONS = (Object.keys(ROLE_LABEL) as AppRole[]).map((r) => ({
 }));
 
 function SettingsPage() {
-  const { isMD, permissions, roles: myRoles, user, refreshRoles } = useAuth();
+  const { isMD, permissions, roles: myRoles, user, refreshRoles, loading: authLoading } = useAuth();
   const canManageRoles = isMD || permissions.canManageUsers;
 
   const profiles = useRows<Profile>("profiles", { order: { col: "full_name", asc: true } });
@@ -70,7 +70,20 @@ function SettingsPage() {
     },
     onError: (e: Error) => toast.error(e.message || "Failed to remove role"),
   });
-  const saveSetting = useSaveRow("app_settings", "Setting");
+  const saveSetting = useMutation({
+    mutationFn: async ({ key, value, description }: { key: string; value: unknown; description: string | null }) => {
+      const { error } = await supabase
+        .from("app_settings")
+        .update({ value, description })
+        .eq("key", key);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["app_settings"] });
+      toast.success("Setting saved");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to save setting"),
+  });
 
   const [editing, setEditing] = useState<Setting | null>(null);
   const [deletingRole, setDeletingRole] = useState<RoleRow | null>(null);
@@ -118,7 +131,7 @@ function SettingsPage() {
         }
       />
 
-      {!canManageRoles && (
+      {!authLoading && !canManageRoles && (
         <Card className="mb-4 border-warning/40">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             Only an MD or Accountant can change roles or configuration. You have read-only access
@@ -369,8 +382,9 @@ function SettingsPage() {
               throw new Error("Value is not valid JSON");
             }
             await saveSetting.mutateAsync({
-              id: editing.key,
-              values: { value: parsed, description: values["description"] || null },
+              key: editing.key,
+              value: parsed,
+              description: values["description"] ? String(values["description"]) : null,
             });
             setEditing(null);
           }}
