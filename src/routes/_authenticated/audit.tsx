@@ -123,18 +123,6 @@ function DetailsRow({ details }: { details: Record<string, unknown> | null }) {
 }
 
 function AuditPage() {
-  const { permissions } = useAuth();
-
-  // Redirect non-authorized users immediately
-  if (!permissions.canViewAuditLog) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <Shield className="size-12 text-destructive opacity-50" />
-        <p className="text-lg font-semibold text-muted-foreground">Access restricted to MD and Accounts only.</p>
-      </div>
-    );
-  }
-
   return <AuditPageInner />;
 }
 

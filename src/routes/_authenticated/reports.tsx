@@ -17,19 +17,19 @@ import {
 } from "@/components/ui/select";
 import { useRows, sum } from "@/lib/db";
 import { currency, dateFmt, monthStart, today } from "@/lib/format";
-import { Printer, RotateCcw, Building2, Lock } from "lucide-react";
+import { Printer, RotateCcw, Building2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
-      { title: "Reports & P&L — Brickweld Pvt Ltd" },
+      { title: "Reports & P&L —  Brickweld Pvt Ltd" },
       {
         name: "description",
         content:
           "Project-wise profit and loss: contract value against labour, material, contractor and other site costs.",
       },
-      { property: "og:title", content: "Reports & P&L — Brickweld Pvt Ltd" },
+      { property: "og:title", content: "Reports & P&L —  Brickweld Pvt Ltd" },
       {
         property: "og:description",
         content: "Company and project level profitability across a chosen date range.",
@@ -130,21 +130,6 @@ function ReportsPage() {
     },
   );
 
-  // Guard: If user lacks permission, show restricted message
-  if (!permissions.canViewProfitAndLoss) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <Lock className="size-12 text-muted-foreground/40" />
-        <div className="text-center">
-          <h2 className="font-display text-xl font-bold">Restricted: MD & Accounts Only</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Profit, loss and margin reports are visible only to the Managing Director and Accounts.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const loading =
     projects.isLoading ||
     expenses.isLoading ||
@@ -195,17 +180,6 @@ function ReportsPage() {
     if (selectedProjectId === "all") return null;
     return rows.find((r) => r.id === selectedProjectId) ?? null;
   }, [rows, selectedProjectId]);
-
-  // Project-specific sub-items
-  const selectedProjectExpenses = useMemo(() => {
-    if (selectedProjectId === "all") return [];
-    return (expenses.data ?? []).filter((e) => e.project_id === selectedProjectId);
-  }, [expenses.data, selectedProjectId]);
-
-  const selectedProjectBills = useMemo(() => {
-    if (selectedProjectId === "all") return [];
-    return (bills.data ?? []).filter((b) => b.project_id === selectedProjectId);
-  }, [bills.data, selectedProjectId]);
 
   const totalValue = selectedProjectRow ? selectedProjectRow.value : sum(rows, (r) => r.value);
   const totalCost = selectedProjectRow ? selectedProjectRow.cost : sum(rows, (r) => r.cost);
@@ -361,11 +335,12 @@ function ReportsPage() {
   ];
 
   return (
+    <RequirePermission permission="canViewProfitAndLoss" label="Reports & P&L">
     <div>
       <PageHeader
         title={
           selectedProjectObj
-            ? `P&L Report — ${selectedProjectObj.name} (${selectedProjectObj.project_code})`
+            ? `P&L Report —  ${selectedProjectObj.name} (${selectedProjectObj.project_code})`
             : "Reports & P&L"
         }
         description={
@@ -510,7 +485,7 @@ function ReportsPage() {
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Building2 className="size-4 text-primary" />
-                  Detailed Cost Breakdown — {selectedProjectObj.name} ({selectedProjectObj.project_code})
+                  Detailed Cost Breakdown —  {selectedProjectObj.name} ({selectedProjectObj.project_code})
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   Site: {selectedProjectObj.site_address ?? "Not specified"} | Status: {selectedProjectObj.status.toUpperCase()}
@@ -541,28 +516,28 @@ function ReportsPage() {
                     <td className="p-2.5 pl-6 border">Labour & Wages Cost</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.labour)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.labour / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.labour / selectedProjectRow.value) * 100).toFixed(1)}%` : "— "}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Material Goods Received Cost</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.material)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.material / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.material / selectedProjectRow.value) * 100).toFixed(1)}%` : "— "}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Contractor Works Net Billed</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.contractor)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.contractor / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.contractor / selectedProjectRow.value) * 100).toFixed(1)}%` : "— "}
                     </td>
                   </tr>
                   <tr className="bg-muted/10">
                     <td className="p-2.5 pl-6 border">Other Site & Fuel Expenses</td>
                     <td className="p-2.5 text-right border font-mono">{currency(selectedProjectRow.other)}</td>
                     <td className="p-2.5 text-right border font-mono text-xs text-muted-foreground">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.other / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.other / selectedProjectRow.value) * 100).toFixed(1)}%` : "— "}
                     </td>
                   </tr>
                   <tr className="bg-warning/10 font-semibold">
@@ -571,7 +546,7 @@ function ReportsPage() {
                       {currency(selectedProjectRow.cost)}
                     </td>
                     <td className="p-2.5 text-right border font-mono">
-                      {selectedProjectRow.value ? `${((selectedProjectRow.cost / selectedProjectRow.value) * 100).toFixed(1)}%` : "—"}
+                      {selectedProjectRow.value ? `${((selectedProjectRow.cost / selectedProjectRow.value) * 100).toFixed(1)}%` : "— "}
                     </td>
                   </tr>
                   <tr className={selectedProjectRow.profit >= 0 ? "bg-emerald-500/10 font-bold" : "bg-destructive/10 font-bold"}>
@@ -603,7 +578,7 @@ function ReportsPage() {
             loading={loading}
             exportName="brickweld-project-pnl"
             exportTitle={selectedProjectObj ? `P&L Report: ${selectedProjectObj.name}` : "Project Profit & Loss (P&L) Report"}
-            exportDescription="Construction Project Control System — Project-wise Profit & Loss Report"
+            exportDescription="Construction Project Control System —  Project-wise Profit & Loss Report"
             appliedFilters={{
               "Scope": selectedProjectObj ? selectedProjectObj.name : "All Projects",
               "Date Range": `${from} to ${to}`,
@@ -631,7 +606,7 @@ function ReportsPage() {
               searchable={false}
               exportName="brickweld-expenses-by-category"
               exportTitle="Expenses by Category Report"
-              exportDescription="Construction Project Control System — Expenses by Category"
+              exportDescription="Construction Project Control System —  Expenses by Category"
               appliedFilters={{ "Date Range": `${from} to ${to}` }}
               empty="No expenses recorded in this range."
               columns={[
@@ -660,7 +635,7 @@ function ReportsPage() {
               searchable={false}
               exportName="brickweld-expenses-by-payment-method"
               exportTitle="Expenses by Payment Method Report"
-              exportDescription="Construction Project Control System — Expenses by Payment Method"
+              exportDescription="Construction Project Control System —  Expenses by Payment Method"
               appliedFilters={{ "Date Range": `${from} to ${to}` }}
               empty="No expenses recorded in this range."
               columns={[
@@ -695,7 +670,7 @@ function ReportsPage() {
                 },
                 {
                   header: "Description",
-                  cell: (r) => r.description ?? "—",
+                  cell: (r) => r.description ?? "— ",
                   value: (r) => r.description,
                 },
               ]}
@@ -720,9 +695,10 @@ function ReportsPage() {
 
       <p className="mt-4 text-xs text-muted-foreground">
         Report generated {dateFmt(today())}. Figures come strictly from recorded attendance wages,
-        material receipts, contractor bills and expenses — no estimated or projected values are
+        material receipts, contractor bills and expenses —  no estimated or projected values are
         added.
       </p>
     </div>
+    </RequirePermission>
   );
 }
