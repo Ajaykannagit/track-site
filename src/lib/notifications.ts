@@ -5,7 +5,19 @@ const supabase = typedSupabase as any;
 
 export type NotificationItem = {
   id: string;
-  type: "edit" | "delete_request" | "delete_approved" | "delete_rejected";
+  type:
+    | "edit"
+    | "delete"
+    | "hard_delete"
+    | "bulk_delete"
+    | "void"
+    | "unvoid"
+    | "restore"
+    | "bulk_restore"
+    | "delete_request"
+    | "delete_approved"
+    | "delete_rejected"
+    | string;
   title: string;
   message?: string | null;
   table_name?: string | null;

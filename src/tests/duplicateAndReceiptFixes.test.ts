@@ -187,6 +187,107 @@ describe("Problem 1 & 2 Automated Verification Tests", () => {
       expect(invalidatedKeys).toContainEqual(["projects_view"]);
     });
 
+    it("Audit Log Deleted Items tab matches soft_delete and restore actions case-insensitively", () => {
+      const logs = [
+        { id: "1", table_name: "attendance", record_id: "rec-1", action: "soft_delete", performed_at: "2026-11-22T15:00:00Z" },
+        { id: "2", table_name: "expenses", record_id: "rec-2", action: "soft_delete", performed_at: "2026-11-22T14:00:00Z" },
+        { id: "3", table_name: "expenses", record_id: "rec-2", action: "restore", performed_at: "2026-11-22T14:30:00Z" },
+        { id: "4", table_name: "client_payments", record_id: "rec-3", action: "deleted", performed_at: "2026-11-22T12:00:00Z" },
+      ];
+
+      const deletedMap = new Map<string, (typeof logs)[0]>();
+      const restoredMap = new Map<string, string>();
+
+      for (const log of logs) {
+        const key = `${log.table_name}::${log.record_id}`;
+        const act = log.action.toLowerCase();
+        if (act === "deleted" || act === "soft_delete" || act === "delete") {
+          if (!deletedMap.has(key) || log.performed_at > deletedMap.get(key)!.performed_at) {
+            deletedMap.set(key, log);
+          }
+        } else if (act === "restored" || act === "restore") {
+          if (!restoredMap.has(key) || log.performed_at > restoredMap.get(key)!) {
+            restoredMap.set(key, log.performed_at);
+          }
+        }
+      }
+
+      const activeDeleted = Array.from(deletedMap.values()).filter((log) => {
+        const key = `${log.table_name}::${log.record_id}`;
+        const restoredAt = restoredMap.get(key);
+        return !restoredAt || log.performed_at > restoredAt;
+      });
+
+      // rec-1 (soft_delete) and rec-3 (deleted) remain deleted; rec-2 was restored at 14:30
+      expect(activeDeleted.map((l) => l.record_id)).toEqual(["rec-1", "rec-3"]);
+    });
+
+    it("MD Notification severity classifies bulk/hard deletes as critical (red), single soft deletes/voids as warning (yellow), and edits as normal", async () => {
+      const { getNotificationSeverity } = await import("@/components/NotificationCenter");
+
+      expect(
+        getNotificationSeverity({
+          id: "n1",
+          type: "edit",
+          title: "Edit in expenses",
+          is_read: false,
+          created_at: "2026-11-22T10:00:00Z",
+        })
+      ).toBe("normal");
+
+      expect(
+        getNotificationSeverity({
+          id: "n2",
+          type: "delete",
+          title: "Record Deleted: RCP-1001 (Client Payments)",
+          is_read: false,
+          created_at: "2026-11-22T10:05:00Z",
+          details: { deleted_count: 1 },
+        })
+      ).toBe("warning");
+
+      expect(
+        getNotificationSeverity({
+          id: "n3",
+          type: "void",
+          title: "Record Voided: RCP-1002 (Client Payments)",
+          is_read: false,
+          created_at: "2026-11-22T10:06:00Z",
+        })
+      ).toBe("warning");
+
+      expect(
+        getNotificationSeverity({
+          id: "n4",
+          type: "delete",
+          title: "Bulk Delete: 5 purchase orders record(s) deleted",
+          is_read: false,
+          created_at: "2026-11-22T10:07:00Z",
+          details: { deleted_count: 5 },
+        })
+      ).toBe("critical");
+
+      expect(
+        getNotificationSeverity({
+          id: "n5",
+          type: "hard_delete",
+          title: "Hard Delete: Project removed",
+          is_read: false,
+          created_at: "2026-11-22T10:08:00Z",
+        })
+      ).toBe("critical");
+
+      expect(
+        getNotificationSeverity({
+          id: "n6",
+          type: "restore",
+          title: "Record Restored: RCP-1001 (Client Payments)",
+          is_read: false,
+          created_at: "2026-11-22T10:09:00Z",
+        })
+      ).toBe("restore");
+    });
+
     it("Historical attendance wages remain locked when worker master wage rate changes from 600 to 700", () => {
       // Historical records for a week in the past, recorded when wage was ₹600
       const oldRecords = [

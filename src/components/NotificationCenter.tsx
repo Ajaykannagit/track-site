@@ -39,6 +39,52 @@ import {
 } from "@/lib/approvals";
 import { useQueryClient } from "@tanstack/react-query";
 
+export type NotificationSeverity = "critical" | "warning" | "restore" | "normal";
+
+export function getNotificationSeverity(notif: NotificationItem): NotificationSeverity {
+  const type = (notif.type || "").toLowerCase();
+  const title = (notif.title || "").toLowerCase();
+  const deletedCount = Number((notif.details as Record<string, unknown> | undefined)?.deleted_count ?? 0);
+
+  // Red (Critical): Hard delete, bulk delete, or deleting multiple records at once
+  if (
+    type === "hard_delete" ||
+    type === "bulk_delete" ||
+    deletedCount > 1 ||
+    title.startsWith("bulk delete") ||
+    (title.startsWith("deleted ") && deletedCount > 1)
+  ) {
+    return "critical";
+  }
+
+  // Light Yellow (Warning): Single soft delete or voiding a record
+  if (
+    type === "delete" ||
+    type === "soft_delete" ||
+    type === "void" ||
+    type === "delete_request" ||
+    title.startsWith("record deleted") ||
+    title.startsWith("record voided")
+  ) {
+    return "warning";
+  }
+
+  // Green (Restore): Restored / unvoided record(s)
+  if (
+    type === "restore" ||
+    type === "bulk_restore" ||
+    type === "unvoid" ||
+    title.startsWith("record restored") ||
+    title.startsWith("bulk restore") ||
+    title.startsWith("void restored")
+  ) {
+    return "restore";
+  }
+
+  // Normal: Standard field edit or informational notification
+  return "normal";
+}
+
 export function NotificationCenter() {
   const { isMD } = useAuth();
   const qc = useQueryClient();
@@ -196,12 +242,38 @@ export function NotificationCenter() {
                 No notifications yet.
               </div>
             ) : (
-              notifications.map((notif) => (
+              notifications.map((notif) => {
+                const severity = getNotificationSeverity(notif);
+                const cardClass =
+                  severity === "critical"
+                    ? notif.is_read
+                      ? "bg-red-50/60 border-red-300 dark:bg-red-950/25 dark:border-red-900/60"
+                      : "bg-red-100/80 border-red-400 dark:bg-red-950/45 dark:border-red-700 shadow-xs"
+                    : severity === "warning"
+                    ? notif.is_read
+                      ? "bg-amber-50/60 border-amber-300 dark:bg-amber-950/25 dark:border-amber-900/60"
+                      : "bg-amber-100/75 border-amber-400 dark:bg-amber-950/40 dark:border-amber-700 shadow-xs"
+                    : severity === "restore"
+                    ? notif.is_read
+                      ? "bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50"
+                      : "bg-emerald-100/60 border-emerald-400 dark:bg-emerald-950/35 dark:border-emerald-700"
+                    : notif.is_read
+                    ? "bg-card border-border/60"
+                    : "bg-blue-500/5 border-blue-300 dark:border-blue-900/60";
+
+                const dotClass =
+                  severity === "critical"
+                    ? "bg-red-600"
+                    : severity === "warning"
+                    ? "bg-amber-500"
+                    : severity === "restore"
+                    ? "bg-emerald-600"
+                    : "bg-blue-500";
+
+                return (
                 <div
                   key={notif.id}
-                  className={`rounded-lg border p-3 text-xs transition-colors cursor-pointer ${
-                    notif.is_read ? "bg-card border-border/60" : "bg-blue-500/5 border-blue-300 dark:border-blue-900/60"
-                  }`}
+                  className={`rounded-lg border p-3 text-xs transition-colors cursor-pointer ${cardClass}`}
                   onClick={() => {
                     if (!notif.is_read) {
                       markNotificationAsRead(notif.id).then(loadData).catch((err) =>
@@ -211,9 +283,24 @@ export function NotificationCenter() {
                   }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground flex-wrap">
                       {!notif.is_read && (
-                        <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                        <span className={`size-2 rounded-full shrink-0 ${dotClass}`} />
+                      )}
+                      {severity === "critical" && (
+                        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-red-600 text-white">
+                          <AlertTriangle className="size-2.5" /> Critical Delete
+                        </span>
+                      )}
+                      {severity === "warning" && (
+                        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-amber-500/20 text-amber-900 border border-amber-400 dark:text-amber-200">
+                          <AlertTriangle className="size-2.5 text-amber-600" /> Soft Delete / Void
+                        </span>
+                      )}
+                      {severity === "restore" && (
+                        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-900 border border-emerald-400 dark:text-emerald-200">
+                          Restored
+                        </span>
                       )}
                       <span>{notif.title}</span>
                     </div>
@@ -254,7 +341,8 @@ export function NotificationCenter() {
                     <span className="capitalize">{notif.table_name?.replace(/_/g, " ")}</span>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
               </div>
             </ScrollArea>

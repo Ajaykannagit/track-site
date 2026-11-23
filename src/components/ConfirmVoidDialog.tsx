@@ -34,7 +34,7 @@ export function ConfirmVoidDialog({
   isAlreadyVoid = false,
   label = "record",
 }: ConfirmVoidDialogProps) {
-  const { isMD } = useAuth();
+  const { isMD, canWriteFinance } = useAuth();
   const [reason, setReason] = useState("");
   const voidMutation = useVoidRow(tableName, label);
   const unvoidMutation = useUnvoidRow(tableName, label);
@@ -50,8 +50,8 @@ export function ConfirmVoidDialog({
 
     try {
       if (isAlreadyVoid) {
-        if (!isMD) {
-          toast.error("Only the MD can unvoid records.");
+        if (!isMD && !canWriteFinance) {
+          toast.error("Only the MD or Accountant can restore voided records.");
           return;
         }
         await unvoidMutation.mutateAsync({ id: recordId, reason: reason.trim() });
@@ -83,7 +83,7 @@ export function ConfirmVoidDialog({
             </DialogTitle>
             <DialogDescription className="text-xs">
               {isAlreadyVoid
-                ? `Restore "${recordTitle}" back into active records and calculations? (Requires MD role).`
+                ? `Restore "${recordTitle}" back into active records and calculations? (MD will be notified).`
                 : `Mark "${recordTitle}" as VOID. It will be excluded from all calculations, ledgers, and totals.`}
             </DialogDescription>
           </DialogHeader>

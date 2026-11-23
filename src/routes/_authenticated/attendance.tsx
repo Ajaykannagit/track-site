@@ -487,20 +487,38 @@ function AttendanceWeeklySheetPage() {
     const reprice = Boolean(repriceInput && canReprice && existing?.id);
 
     try {
-      // Always read the stored record from the base table: attendance_view masks
-      // wage_rate as 0 for non-finance roles, which would otherwise look "unpriced".
-      const { data: dbAtt } = await (typedSupabase as any)
+      // Look up any existing row from the base table (active first, or soft-deleted if re-entering):
+      // attendance_view masks wage_rate as 0 for non-finance roles, which would otherwise look "unpriced".
+      const { data: activeAtt } = await (typedSupabase as any)
         .from("attendance")
-        .select("id, wage_rate")
+        .select("id, wage_rate, deleted_at")
         .eq("employee_id", employee.id)
         .eq("attendance_date", iso)
         .is("deleted_at", null)
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      const targetId: string | undefined = existing?.id ?? dbAtt?.id ?? undefined;
-      const storedRate = targetId ? Number(dbAtt?.wage_rate || existing?.wage_rate || 0) : 0;
 
-      // Bug B/C: keep the stored historical rate on edits; new days use the
+      let dbAtt = activeAtt;
+      if (!dbAtt && !existing?.id) {
+        const { data: deletedAtt } = await (typedSupabase as any)
+          .from("attendance")
+          .select("id, wage_rate, deleted_at")
+          .eq("employee_id", employee.id)
+          .eq("attendance_date", iso)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        dbAtt = deletedAtt;
+      }
+
+      const targetId: string | undefined = existing?.id ?? dbAtt?.id ?? undefined;
+      const isRevivingDeleted = Boolean(dbAtt?.deleted_at && !existing?.id);
+      const storedRate = targetId && !isRevivingDeleted
+        ? Number(dbAtt?.wage_rate || existing?.wage_rate || 0)
+        : 0;
+
+      // Bug B/C: keep the stored historical rate on edits; new or revived days use the
       // master rate pro-rated by the attendance date's own month.
       const dailyRate = resolveAttendanceDailyRate({
         employee,
@@ -530,6 +548,7 @@ function AttendanceWeeklySheetPage() {
       };
 
       await saveAttendance.mutateAsync({ id: targetId, values });
+      await Promise.all([attendance.refetch(), monthlyAttendance.refetch()]);
 
       setEditCell(null);
     } catch (err: any) {
@@ -741,30 +760,34 @@ function AttendanceWeeklySheetPage() {
       const failures: string[] = [];
       for (const row of recordsToUpsert) {
         const { id: rowId, ...payload } = row;
+        const cleanPayload = { ...payload, deleted_at: null };
         let error: any = null;
         if (rowId) {
-          ({ error } = await supabase.from("attendance").update(payload).eq("id", rowId));
+          ({ error } = await supabase.from("attendance").update(cleanPayload).eq("id", rowId));
         } else {
           const { data: dbAtt } = await supabase
             .from("attendance")
             .select("id")
             .eq("employee_id", row.employee_id)
             .eq("attendance_date", row.attendance_date)
-            .is("deleted_at", null)
+            .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
           if (dbAtt?.id) {
-            ({ error } = await supabase.from("attendance").update(payload).eq("id", dbAtt.id));
+            ({ error } = await supabase.from("attendance").update(cleanPayload).eq("id", dbAtt.id));
           } else {
-            ({ error } = await supabase.from("attendance").insert(payload));
+            ({ error } = await supabase.from("attendance").insert(cleanPayload));
           }
         }
         if (error) failures.push(error.message || String(error));
       }
 
       // Invalidate queries so grid and wage totals refresh immediately
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      qc.invalidateQueries({ queryKey: ["attendance_view"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["attendance"] }),
+        qc.invalidateQueries({ queryKey: ["attendance_view"] }),
+        attendance.refetch(),
+      ]);
 
       if (failures.length > 0) {
         const saved = recordsToUpsert.length - failures.length;

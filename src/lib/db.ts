@@ -204,20 +204,20 @@ export function useSaveRow(table: string, label = "Record") {
       if (error) throw error;
       return (data as { id: string }).id;
     },
-    onSuccess: () => {
-      // Invalidate the base table query key
-      qc.invalidateQueries({ queryKey: [table] });
-      // Invalidate the _view variant (legacy pattern used in some places)
-      qc.invalidateQueries({ queryKey: [`${table}_view`] });
-      // Invalidate financial and balance caches
-      qc.invalidateQueries({ queryKey: ["account_balances"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects_view"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      // Invalidate any view aliases that are used in list queries
-      for (const alias of VIEW_ALIASES[table] ?? []) {
-        qc.invalidateQueries({ queryKey: [alias] });
-      }
+    onSuccess: async () => {
+      // Invalidate the base table query key and wait for active queries to refetch
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [table] }),
+        qc.invalidateQueries({ queryKey: [`${table}_view`] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["audit_logs"] }),
+        ...(VIEW_ALIASES[table] ?? []).map((alias) =>
+          qc.invalidateQueries({ queryKey: [alias] })
+        ),
+      ]);
       toast.success(`${label} saved`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "save")),
@@ -238,14 +238,19 @@ export function useDeleteRow(table: string, label = "Record") {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [table] });
-      qc.invalidateQueries({ queryKey: [`${table}_view`] });
-      qc.invalidateQueries({ queryKey: ["account_balances"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      for (const alias of VIEW_ALIASES[table] ?? []) {
-        qc.invalidateQueries({ queryKey: [alias] });
-      }
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [table] }),
+        qc.invalidateQueries({ queryKey: [`${table}_view`] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["audit_logs"] }),
+        ...(VIEW_ALIASES[table] ?? []).map((alias) =>
+          qc.invalidateQueries({ queryKey: [alias] })
+        ),
+      ]);
       toast.success(`${label} deleted successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "delete")),
@@ -263,16 +268,19 @@ export function useRestoreRow(table: string, label = "Record") {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [table] });
-      qc.invalidateQueries({ queryKey: [`${table}_view`] });
-      qc.invalidateQueries({ queryKey: ["account_balances"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects_view"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      for (const alias of VIEW_ALIASES[table] ?? []) {
-        qc.invalidateQueries({ queryKey: [alias] });
-      }
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [table] }),
+        qc.invalidateQueries({ queryKey: [`${table}_view`] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["audit_logs"] }),
+        ...(VIEW_ALIASES[table] ?? []).map((alias) =>
+          qc.invalidateQueries({ queryKey: [alias] })
+        ),
+      ]);
       toast.success(`${label} restored successfully`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "restore")),
@@ -294,16 +302,19 @@ export function useVoidRow(table: string, label = "Record") {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [table] });
-      qc.invalidateQueries({ queryKey: [`${table}_view`] });
-      qc.invalidateQueries({ queryKey: ["account_balances"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects_view"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      for (const alias of VIEW_ALIASES[table] ?? []) {
-        qc.invalidateQueries({ queryKey: [alias] });
-      }
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [table] }),
+        qc.invalidateQueries({ queryKey: [`${table}_view`] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["audit_logs"] }),
+        ...(VIEW_ALIASES[table] ?? []).map((alias) =>
+          qc.invalidateQueries({ queryKey: [alias] })
+        ),
+      ]);
       toast.success(`${label} marked as Void.`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "void")),
@@ -322,16 +333,19 @@ export function useUnvoidRow(table: string, label = "Record") {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [table] });
-      qc.invalidateQueries({ queryKey: [`${table}_view`] });
-      qc.invalidateQueries({ queryKey: ["account_balances"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects_view"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      for (const alias of VIEW_ALIASES[table] ?? []) {
-        qc.invalidateQueries({ queryKey: [alias] });
-      }
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [table] }),
+        qc.invalidateQueries({ queryKey: [`${table}_view`] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["audit_logs"] }),
+        ...(VIEW_ALIASES[table] ?? []).map((alias) =>
+          qc.invalidateQueries({ queryKey: [alias] })
+        ),
+      ]);
       toast.success(`${label} unvoided successfully.`);
     },
     onError: (e: Error) => toast.error(formatDbError(e, "unvoid")),

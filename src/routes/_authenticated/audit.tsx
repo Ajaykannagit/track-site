@@ -1,6 +1,7 @@
 import { RequirePermission } from "@/components/RequirePermission";
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Shield, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,13 +47,6 @@ type AuditLog = {
   details: Record<string, unknown> | null;
 };
 
-type DeletedRow = {
-  id: string;
-  table_name: string;
-  deleted_at: string;
-  details: Record<string, unknown> | null;
-};
-
 // Human-readable table names
 const TABLE_LABELS: Record<string, string> = {
   expenses: "Expenses",
@@ -62,25 +56,46 @@ const TABLE_LABELS: Record<string, string> = {
   contractor_bills: "Contractor Bills",
   attendance: "Attendance",
   weekly_wage_adj: "Wage Adjustments",
+  weekly_wage_adjustments: "Wage Adjustments",
+  labour_wage_payments: "Labour Wage Payments",
+  wage_payments: "Team Wage Payments",
   cash_closing: "Cash Closings",
   purchase_orders: "Purchase Orders",
   material_receipts: "Material Receipts",
+  material_requests: "Material Indents",
   client_payments: "Client Payments",
+  account_transfers: "Account Transfers",
+  group_payments: "Group Payments",
+  md_investments: "MD Investments & Drawings",
+  work_orders: "Work Orders",
+  measurement_books: "Measurement Books",
+  project_quotations: "Project Quotations",
+  payment_milestones: "Payment Milestones",
+  projects: "Projects",
+  employees: "Employees / Workers",
+  contractors: "Contractors",
+  suppliers: "Suppliers",
+  clients: "Clients",
+  machines: "Machines",
+  job_types: "Job Types",
 };
 
-const ACTION_COLORS: Record<string, string> = {
-  created: "bg-emerald-100 text-emerald-800",
-  updated: "bg-blue-100 text-blue-800",
-  corrected: "bg-amber-100 text-amber-800",
-  deleted: "bg-destructive/10 text-destructive",
-  restored: "bg-purple-100 text-purple-800",
-};
+function getActionBadgeStyle(action: string): string {
+  const norm = (action || "").toLowerCase();
+  if (norm === "created" || norm === "insert") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
+  if (norm === "updated" || norm === "update") return "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300";
+  if (norm === "corrected") return "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300";
+  if (norm === "deleted" || norm === "soft_delete" || norm === "delete") return "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/50 dark:text-amber-300";
+  if (norm === "restored" || norm === "restore") return "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300";
+  return "bg-muted text-muted-foreground";
+}
 
 function ActionBadge({ action }: { action: string }) {
-  const cls = ACTION_COLORS[action] ?? "bg-muted text-muted-foreground";
+  const cls = getActionBadgeStyle(action);
+  const label = (action || "").replace(/_/g, " ");
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${cls}`}>
-      {action}
+      {label}
     </span>
   );
 }
@@ -187,31 +202,65 @@ function AuditPageInner() {
     "client_payments",
   ] as const;
 
-  // We use a single aggregated query approach: fetch from audit_logs where action = 'deleted'
-  // and cross-reference with restored ones to find currently-deleted records
+  const qc = useQueryClient();
+  const [restoringAll, setRestoringAll] = useState(false);
+
+  // We use an aggregated query approach: fetch from audit_logs where action is 'deleted' / 'soft_delete'
+  // and cross-reference with later 'restored' / 'restore' entries to find currently-deleted records
   const deletedLogs = useMemo(() => {
     const allLogs = logs.data ?? [];
-    const deletedMap = new Map<string, AuditLog>(); // key: table_name+record_id
-    const restoredSet = new Set<string>();
+    const deletedMap = new Map<string, AuditLog>(); // key: table_name::record_id
+    const restoredMap = new Map<string, string>(); // key: table_name::record_id -> latest restore timestamp
 
-    // First pass: collect all deleted and restored
     for (const log of allLogs) {
+      if (!log.record_id) continue;
       const key = `${log.table_name}::${log.record_id}`;
-      if (log.action === "deleted") {
-        // Keep most recent delete
+      const act = (log.action || "").toLowerCase();
+      if (act === "deleted" || act === "soft_delete" || act === "delete") {
         if (!deletedMap.has(key) || log.performed_at > deletedMap.get(key)!.performed_at) {
           deletedMap.set(key, log);
         }
-      } else if (log.action === "restored") {
-        restoredSet.add(key);
+      } else if (act === "restored" || act === "restore") {
+        if (!restoredMap.has(key) || log.performed_at > restoredMap.get(key)!) {
+          restoredMap.set(key, log.performed_at);
+        }
       }
     }
 
-    // Return only those that haven't been restored
-    return Array.from(deletedMap.values()).filter(
-      (log) => !restoredSet.has(`${log.table_name}::${log.record_id}`)
-    );
+    // Return only those whose latest delete is newer than any restore
+    return Array.from(deletedMap.values()).filter((log) => {
+      const key = `${log.table_name}::${log.record_id}`;
+      const restoredAt = restoredMap.get(key);
+      return !restoredAt || log.performed_at > restoredAt;
+    });
   }, [logs.data]);
+
+  const handleRestoreAll = async () => {
+    if (deletedLogs.length === 0) return;
+    setRestoringAll(true);
+    try {
+      const payload = deletedLogs
+        .filter((l) => l.record_id)
+        .map((l) => ({ table_name: l.table_name, record_id: l.record_id }));
+      const { data, error } = await supabase.rpc("restore_records", { p_items: payload });
+      if (error) throw error;
+      await Promise.all([
+        logs.refetch(),
+        qc.invalidateQueries({ queryKey: ["attendance"] }),
+        qc.invalidateQueries({ queryKey: ["attendance_view"] }),
+        qc.invalidateQueries({ queryKey: ["account_balances"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["projects_view"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+      toast.success(`Restored ${data ?? payload.length} deleted record(s). MD has been notified.`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to restore all records";
+      toast.error(msg);
+    } finally {
+      setRestoringAll(false);
+    }
+  };
 
   return (
     <RequirePermission permission="canViewAuditLog" label="Audit Log">
@@ -377,9 +426,22 @@ function AuditPageInner() {
 
         {/* ===== DELETED ITEMS TAB ===== */}
         <TabsContent value="deleted" className="space-y-4">
-          <div className="rounded-md bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 border border-amber-500/20">
-            These records have been soft-deleted and are hidden from all normal screens. Only the MD can restore them.
-            Restoring a record makes it visible again in all lists and totals.
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 border border-amber-500/20">
+            <span>
+              These records have been soft-deleted and are hidden from normal screens. MD and Accountant can restore individual items or restore all at once (the MD is automatically notified of every restoration).
+            </span>
+            {deletedLogs.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-emerald-600/40 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 shrink-0"
+                disabled={restoringAll}
+                onClick={handleRestoreAll}
+              >
+                <RotateCcw className="mr-1.5 size-3.5" />
+                {restoringAll ? "Restoring All…" : `Restore All (${deletedLogs.length})`}
+              </Button>
+            )}
           </div>
 
           {logs.isLoading ? (
@@ -392,7 +454,7 @@ function AuditPageInner() {
                 <thead className="border-b bg-muted/50">
                   <tr>
                     <th className="p-2.5 text-left font-semibold">Table</th>
-                    <th className="p-2.5 text-left font-semibold">Record ID</th>
+                    <th className="p-2.5 text-left font-semibold">Record / Title</th>
                     <th className="p-2.5 text-left font-semibold">Deleted at</th>
                     <th className="p-2.5 text-left font-semibold">Deleted by</th>
                     <th className="p-2.5 text-left font-semibold">Reason</th>
@@ -401,7 +463,19 @@ function AuditPageInner() {
                 </thead>
                 <tbody className="divide-y">
                   {deletedLogs.map((log) => (
-                    <DeletedItemRow key={log.id} log={log} onRestored={() => logs.refetch()} />
+                    <DeletedItemRow
+                      key={log.id}
+                      log={log}
+                      onRestored={async () => {
+                        await Promise.all([
+                          logs.refetch(),
+                          qc.invalidateQueries({ queryKey: [log.table_name] }),
+                          qc.invalidateQueries({ queryKey: [`${log.table_name}_view`] }),
+                          qc.invalidateQueries({ queryKey: ["account_balances"] }),
+                          qc.invalidateQueries({ queryKey: ["notifications"] }),
+                        ]);
+                      }}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -414,8 +488,9 @@ function AuditPageInner() {
   );
 }
 
-function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => void }) {
-  const { isMD } = useAuth();
+function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => void | Promise<void> }) {
+  const { isMD, canWriteFinance } = useAuth();
+  const canRestore = isMD || canWriteFinance;
   const [restoring, setRestoring] = useState(false);
 
   const handleRestore = async () => {
@@ -426,8 +501,8 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
         p_record_id: log.record_id,
       });
       if (error) throw error;
+      await onRestored();
       toast.success(`Record restored from ${TABLE_LABELS[log.table_name] ?? log.table_name}`);
-      onRestored();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to restore record";
       toast.error(msg);
@@ -436,11 +511,17 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
     }
   };
 
+  const recordTitle =
+    (log.details as Record<string, unknown> | null)?.record_title as string | undefined;
+
   return (
     <tr className="hover:bg-muted/30">
       <td className="p-2.5 font-medium">{TABLE_LABELS[log.table_name] ?? log.table_name}</td>
-      <td className="p-2.5 font-mono text-[10px] text-muted-foreground">
-        {log.record_id ? log.record_id.slice(0, 16) + "…" : "—"}
+      <td className="p-2.5">
+        {recordTitle && <span className="font-semibold block text-foreground">{recordTitle}</span>}
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {log.record_id ? log.record_id.slice(0, 16) + "…" : "—"}
+        </span>
       </td>
       <td className="p-2.5 whitespace-nowrap">
         {new Date(log.performed_at).toLocaleString("en-IN", {
@@ -452,11 +533,12 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
         })}
       </td>
       <td className="p-2.5 font-mono text-[10px] text-muted-foreground">
-        {log.performed_by ? log.performed_by.slice(0, 12) + "…" : "—"}
+        {((log.details as Record<string, unknown> | null)?.performer_email as string | undefined) ??
+          (log.performed_by ? log.performed_by.slice(0, 12) + "…" : "—")}
       </td>
       <td className="p-2.5 text-muted-foreground italic">{log.reason ?? "—"}</td>
       <td className="p-2.5 text-right">
-        {isMD ? (
+        {canRestore ? (
           <Button
             size="sm"
             variant="outline"
@@ -468,7 +550,7 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
             {restoring ? "Restoring…" : "Restore"}
           </Button>
         ) : (
-          <span className="text-[10px] text-muted-foreground">MD only</span>
+          <span className="text-[10px] text-muted-foreground">Restricted</span>
         )}
       </td>
     </tr>
