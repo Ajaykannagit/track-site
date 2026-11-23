@@ -110,12 +110,12 @@ function DetailsRow({ details }: { details: Record<string, unknown> | null }) {
 function AuditPage() {
   const { permissions } = useAuth();
 
-  // Redirect non-MD immediately
+  // Redirect non-authorized users immediately
   if (!permissions.canViewAuditLog) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Shield className="size-12 text-destructive opacity-50" />
-        <p className="text-lg font-semibold text-muted-foreground">Access restricted to MD only.</p>
+        <p className="text-lg font-semibold text-muted-foreground">Access restricted to MD and Accounts only.</p>
       </div>
     );
   }
@@ -218,7 +218,7 @@ function AuditPageInner() {
     <div>
       <PageHeader
         title="Audit Log"
-        description="Complete record of all data changes, deletions, and restorations. MD-only view."
+        description="Complete record of all data changes, deletions, and restorations. MD & Accounts view."
       />
 
       <Tabs defaultValue="log">
@@ -415,6 +415,7 @@ function AuditPageInner() {
 }
 
 function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => void }) {
+  const { isMD } = useAuth();
   const [restoring, setRestoring] = useState(false);
 
   const handleRestore = async () => {
@@ -455,16 +456,20 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
       </td>
       <td className="p-2.5 text-muted-foreground italic">{log.reason ?? "—"}</td>
       <td className="p-2.5 text-right">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs border-emerald-500/40 text-emerald-700 hover:bg-emerald-50"
-          disabled={restoring || !log.record_id}
-          onClick={handleRestore}
-        >
-          <RotateCcw className="mr-1 size-3" />
-          {restoring ? "Restoring…" : "Restore"}
-        </Button>
+        {isMD ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-emerald-500/40 text-emerald-700 hover:bg-emerald-50"
+            disabled={restoring || !log.record_id}
+            onClick={handleRestore}
+          >
+            <RotateCcw className="mr-1 size-3" />
+            {restoring ? "Restoring…" : "Restore"}
+          </Button>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">MD only</span>
+        )}
       </td>
     </tr>
   );

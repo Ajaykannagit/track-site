@@ -243,7 +243,7 @@ function Dashboard() {
     enabled: isMD,
   });
   const allQuotations = useRows<{ project_id: string; amount: number; status: string }>("project_quotations", {
-    select: "project_id,amount,status,is_void,deleted_at",
+    select: "project_id,amount,status,deleted_at",
     enabled: isMD || permissions.canViewProfitAndLoss || permissions.canViewProjectFinancials,
   });
   const allClientPayments = useRows<ClientPaymentRow>("client_payments", {

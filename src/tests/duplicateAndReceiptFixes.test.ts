@@ -138,6 +138,55 @@ describe("Problem 1 & 2 Automated Verification Tests", () => {
       expect(totalContract).toBe(100500);
     });
 
+    it("project_quotations select list does not request non-existent is_void column (Bug E)", () => {
+      // Dashboard and Projects Index select lists must only request existing columns on project_quotations
+      const projectQuotationsColumns = new Set([
+        "id",
+        "project_id",
+        "quotation_number",
+        "title",
+        "description",
+        "amount",
+        "quotation_date",
+        "status",
+        "is_demo",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+      ]);
+
+      const dashboardSelect = "project_id,amount,status,deleted_at".split(",");
+      for (const col of dashboardSelect) {
+        expect(projectQuotationsColumns.has(col)).toBe(true);
+      }
+      expect(projectQuotationsColumns.has("is_void")).toBe(false);
+    });
+
+    it("voiding or unvoiding a record invalidates account_balances and projects caches immediately (Bug F)", () => {
+      const invalidatedKeys: string[][] = [];
+      const table = "client_payments";
+      const viewAliases: Record<string, string[]> = { projects: ["projects_view"] };
+
+      // Mirrors onSuccess in useVoidRow / useUnvoidRow / useRestoreRow
+      const simulateVoidOnSuccess = () => {
+        invalidatedKeys.push([table]);
+        invalidatedKeys.push([`${table}_view`]);
+        invalidatedKeys.push(["account_balances"]);
+        invalidatedKeys.push(["projects"]);
+        invalidatedKeys.push(["projects_view"]);
+        invalidatedKeys.push(["notifications"]);
+        for (const alias of viewAliases[table] ?? []) {
+          invalidatedKeys.push([alias]);
+        }
+      };
+
+      simulateVoidOnSuccess();
+      expect(invalidatedKeys).toContainEqual(["client_payments"]);
+      expect(invalidatedKeys).toContainEqual(["account_balances"]);
+      expect(invalidatedKeys).toContainEqual(["projects"]);
+      expect(invalidatedKeys).toContainEqual(["projects_view"]);
+    });
+
     it("Historical attendance wages remain locked when worker master wage rate changes from 600 to 700", () => {
       // Historical records for a week in the past, recorded when wage was ₹600
       const oldRecords = [

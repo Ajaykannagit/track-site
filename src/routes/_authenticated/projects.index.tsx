@@ -65,7 +65,7 @@ function ProjectsPage() {
   const projects = useRows<Project>("projects_view", { order: { col: "created_at", asc: false } });
   const clients = useRows<{ id: string; name: string }>("clients", { select: "id,name" });
   const allQuotations = useRows<{ project_id: string; amount: number; status: string }>("project_quotations", {
-    select: "project_id,amount,status,is_void,deleted_at",
+    select: "project_id,amount,status,deleted_at",
     enabled: permissions.canViewProjectFinancials || isMD,
   });
 

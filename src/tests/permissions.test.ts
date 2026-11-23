@@ -2,11 +2,16 @@ import { describe, it, expect } from "vitest";
 import { ROLE_PERMISSIONS, getEffectivePermissions } from "@/lib/permissions";
 
 describe("Permissions Matrix Enforcement", () => {
-  it("MD and Accounts have canViewProfitAndLoss per client rule", () => {
+  it("MD and Accounts have canViewProfitAndLoss and canViewAuditLog per client rule", () => {
     expect(ROLE_PERMISSIONS.md.canViewProfitAndLoss).toBe(true);
     expect(ROLE_PERMISSIONS.accounts.canViewProfitAndLoss).toBe(true);
     expect(ROLE_PERMISSIONS.supervisor.canViewProfitAndLoss).toBe(false);
     expect(ROLE_PERMISSIONS.viewer.canViewProfitAndLoss).toBe(false);
+
+    expect(ROLE_PERMISSIONS.md.canViewAuditLog).toBe(true);
+    expect(ROLE_PERMISSIONS.accounts.canViewAuditLog).toBe(true);
+    expect(ROLE_PERMISSIONS.supervisor.canViewAuditLog).toBe(false);
+    expect(ROLE_PERMISSIONS.viewer.canViewAuditLog).toBe(false);
   });
 
   it("both MD and Accounts can enter attendance and manage attendance records", () => {

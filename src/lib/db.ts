@@ -266,6 +266,10 @@ export function useRestoreRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       for (const alias of VIEW_ALIASES[table] ?? []) {
         qc.invalidateQueries({ queryKey: [alias] });
       }
@@ -293,6 +297,10 @@ export function useVoidRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       for (const alias of VIEW_ALIASES[table] ?? []) {
         qc.invalidateQueries({ queryKey: [alias] });
       }
@@ -317,6 +325,10 @@ export function useUnvoidRow(table: string, label = "Record") {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: [`${table}_view`] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       for (const alias of VIEW_ALIASES[table] ?? []) {
         qc.invalidateQueries({ queryKey: [alias] });
       }
@@ -375,8 +387,10 @@ export function useCreateGroupPayment() {
       qc.invalidateQueries({ queryKey: ["contractor_bills"] });
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
       qc.invalidateQueries({ queryKey: ["cash_closing"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
       toast.success(
         variables.payment_type === "contractor"
           ? "Contractor group payment recorded successfully."
@@ -407,8 +421,10 @@ export function useVoidGroupPayment() {
       qc.invalidateQueries({ queryKey: ["contractor_bills"] });
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["account_balances"] });
       qc.invalidateQueries({ queryKey: ["cash_closing"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects_view"] });
       toast.success("Group payment marked as Void.");
     },
     onError: (e: Error) => toast.error(formatDbError(e, "void group payment")),

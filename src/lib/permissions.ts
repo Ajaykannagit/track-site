@@ -6,13 +6,11 @@ export interface RolePermissions {
   canViewCompanyCashOnHand: boolean; // Company-wide cash on hand & cash balance (MD only)
   canViewOfficeExpense: boolean;     // Office expense details & receipts (Accountant sees own, MD sees all)
   canManageUsers: boolean;           // User and role management in settings (MD only)
-  canViewAuditLog: boolean;          // MD-only: audit trail and deleted-items restore
+  canViewAuditLog: boolean;          // MD & Accounts: audit trail (deleted-items restore remains MD-only)
 
-  // P&L — MD-only. Accounts keeps access to payments, bills, supplier/contractor costs and
-  // client receipts (they need them for their job), but NO profit, loss or margin figure and
-  // NO P&L page anywhere. Change the single value below if the MD wants accounts to also
-  // lose cost totals.
-  canViewProfitAndLoss: boolean;     // MD only: Profit/Loss/Margin figures and Reports page
+  // P&L — MD & Accounts. Both have access to payments, bills, supplier/contractor costs,
+  // client receipts, and P&L / Reports page.
+  canViewProfitAndLoss: boolean;     // MD & Accounts: Profit/Loss/Margin figures and Reports page
 
   // Projects & Master Records
   canViewProjects: boolean;
