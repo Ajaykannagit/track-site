@@ -328,6 +328,39 @@ function AttendanceWeeklySheetPage() {
     order: { col: "name", asc: true },
   });
 
+  // Combined Site & Project Location Options for Attendance
+  const locationOptions = useMemo(() => {
+    const list: { id: string; name: string; group?: string }[] = [];
+    const seen = new Set<string>();
+
+    // 1. Projects created in Projects module
+    (projects.data ?? []).forEach((p) => {
+      if (p.name && !seen.has(p.name)) {
+        seen.add(p.name);
+        list.push({ id: `prj-${p.id}`, name: p.name, group: "Projects / Sites" });
+      }
+    });
+
+    // 2. Physical sites from sites table
+    (sites.data ?? []).forEach((s) => {
+      if (s.name && !seen.has(s.name)) {
+        seen.add(s.name);
+        list.push({ id: `site-${s.id}`, name: s.name, group: "General Locations" });
+      }
+    });
+
+    if (list.length === 0) {
+      list.push(
+        { id: "1", name: "Site 637" },
+        { id: "2", name: "Site 3033" },
+        { id: "3", name: "Kelamangalam" },
+        { id: "4", name: "Kolar" },
+        { id: "5", name: "Head Office" },
+      );
+    }
+    return list;
+  }, [projects.data, sites.data]);
+
   // Weekly Attendance Query
   const attendance = useRows<AttendanceRecord>("attendance_view", {
     filters: [
@@ -454,16 +487,17 @@ function AttendanceWeeklySheetPage() {
 
     setEditCell({ employee: emp, date, existing: rec ?? null });
     setRepriceInput(false);
+    const defaultSite = locationOptions[0]?.name ?? "Head Office";
     if (rec) {
       setInTimeInput(rec.in_time ?? "6");
       setOutTimeInput(rec.out_time ?? "6");
-      setSiteInput(rec.site_name ?? sites.data?.[0]?.name ?? "Site 637");
+      setSiteInput(rec.site_name ?? defaultSite);
       setIsLeaveInput(Boolean(rec.is_leave));
       setDayValueInput(String(rec.day_value ?? 1.0));
     } else {
       setInTimeInput("6");
       setOutTimeInput("6");
-      setSiteInput(sites.data?.[0]?.name ?? "Site 637");
+      setSiteInput(defaultSite);
       setIsLeaveInput(false);
       setDayValueInput("1.5");
     }
@@ -711,7 +745,7 @@ function AttendanceWeeklySheetPage() {
     setMarkingAll(true);
     try {
       const attList = attendance.data ?? [];
-      const defaultSiteName = sites.data?.[0]?.name ?? "Site 637";
+      const defaultSiteName = locationOptions[0]?.name ?? "Head Office";
       const recordsToUpsert: any[] = [];
 
       for (const emp of activeWorkers) {
@@ -1389,7 +1423,7 @@ function AttendanceWeeklySheetPage() {
             <TeamManagementDialog
               teams={(teams.data ?? []).map((t) => ({ id: t.id, name: t.name, leader_name: t.leader_name || null }))}
               employees={(employees.data ?? []).map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code || undefined, team_id: e.team_id || null, status: e.status || undefined }))}
-              projects={(sites.data ?? []).map((s) => ({ id: s.id, name: s.name }))}
+              projects={locationOptions.map((s) => ({ id: s.id, name: s.name }))}
               canManage={true}
             />
           )}
@@ -2152,16 +2186,10 @@ function AttendanceWeeklySheetPage() {
               <Label className="text-xs">Work Site Location</Label>
               <Select value={siteInput} onValueChange={(val) => setSiteInput(val)} disabled={isLeaveInput}>
                 <SelectTrigger className="w-full text-xs">
-                  <SelectValue placeholder="Select site" />
+                  <SelectValue placeholder="Select site / project location" />
                 </SelectTrigger>
-                <SelectContent>
-                  {(sites.data ?? [
-                    { id: "1", name: "Site 637" },
-                    { id: "2", name: "Site 3033" },
-                    { id: "3", name: "Kelamangalam" },
-                    { id: "4", name: "Kolar" },
-                    { id: "5", name: "Head Office" },
-                  ]).map((s) => (
+                <SelectContent className="max-h-64">
+                  {locationOptions.map((s) => (
                     <SelectItem key={s.id} value={s.name}>
                       {s.name}
                     </SelectItem>
