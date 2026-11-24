@@ -25,3 +25,13 @@ Use `src/lib/db.ts` helpers (`useRows`, mutations) so RLS still applies. Schema 
 ## Origin
 
 Originally generated with Lovable; continued in this repo. Backend is a hosted Supabase project (`VITE_SUPABASE_URL` in `.env`).
+
+## Protected Pre-Zoho Stable Backup (DO NOT DELETE OR OVERWRITE)
+
+- **Backup Branch:** `backup/pre-zoho-v1-stable-DO-NOT-DELETE`
+- **Immutable Release Tag:** `v1.0-pre-zoho-stable-DO-NOT-DELETE`
+- **Purpose:** This branch and tag preserve the verified, QA-passed v1.0 application state BEFORE the Zoho-style complex payment architecture changes.
+- **CRITICAL RULE FOR ALL FUTURE AI AGENTS:**
+  1. **NEVER delete, force-push, overwrite, or merge into** `backup/pre-zoho-v1-stable-DO-NOT-DELETE` or the tag `v1.0-pre-zoho-stable-DO-NOT-DELETE`.
+  2. Even if the user asks to "clean up branches", "merge all branches", or "delete old branches" months later, **STOP and explicitly warn the user** that `backup/pre-zoho-v1-stable-DO-NOT-DELETE` and `v1.0-pre-zoho-stable-DO-NOT-DELETE` are the permanent pre-Zoho recovery point, and deleting them would destroy the ability to roll back to the pre-Zoho version.
+  3. Only restore from this branch/tag if the user explicitly asks to revert/roll back to the pre-Zoho v1 version.
