@@ -127,6 +127,8 @@ function MaterialsPage() {
   const [editingPo, setEditingPo] = useState<Po | null>(null);
   const [deletingPo, setDeletingPo] = useState<Po | null>(null);
 
+  const [activeTab, setActiveTab] = useState("requests");
+
   const [newReceiptOpen, setNewReceiptOpen] = useState(false);
   const [receiptInitialPoId, setReceiptInitialPoId] = useState<string | undefined>(undefined);
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
@@ -181,10 +183,12 @@ function MaterialsPage() {
   const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
   const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.name }));
   const supplierOptions = (suppliers.data ?? []).map((s) => ({ value: s.id, label: s.name }));
-  const indentOptions = (requests.data ?? []).map((r) => ({
-    value: r.id,
-    label: `${r.request_number} — ${projectName(r.project_id)} (${currency(r.total_amount)})`,
-  }));
+  const indentOptions = (requests.data ?? [])
+    .filter((r) => r.status === "approved" && !(r as any).is_void && !(r as any).deleted_at)
+    .map((r) => ({
+      value: r.id,
+      label: `${r.request_number} — ${projectName(r.project_id)} (${currency(r.total_amount)})`,
+    }));
   const poOptions = (pos.data ?? []).map((p) => ({
     value: p.id,
     label: `${p.po_number} — ${supplierName(p.supplier_id)} (${currency(p.total_amount)})`,
@@ -458,9 +462,19 @@ function MaterialsPage() {
           .filter((p) => p.po_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         const bal = r.total_amount - paid;
-        if (bal <= 0) {
+        if (bal < 0) {
           return (
-            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+            <span
+              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800 dark:bg-purple-950/50 dark:text-purple-300"
+              title={`Paid ₹${paid.toLocaleString()} exceeds PO value ₹${r.total_amount.toLocaleString()}`}
+            >
+              Overpaid ({currency(Math.abs(bal))})
+            </span>
+          );
+        }
+        if (bal === 0) {
+          return (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
               Paid
             </span>
           );
@@ -520,6 +534,7 @@ function MaterialsPage() {
                   title="Receive materials against this PO (Record GRN)"
                   onClick={() => {
                     setReceiptInitialPoId(r.id);
+                    setActiveTab("receipts");
                     setNewReceiptOpen(true);
                   }}
                 >
@@ -930,7 +945,7 @@ function MaterialsPage() {
         />
       </div>
 
-      <Tabs defaultValue="requests">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="no-print">
           <TabsTrigger value="requests">Indents</TabsTrigger>
           <TabsTrigger value="pos">Purchase orders</TabsTrigger>

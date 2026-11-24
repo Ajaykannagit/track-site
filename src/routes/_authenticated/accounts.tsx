@@ -1877,8 +1877,20 @@ const mapToAccountHead = (category: string): string => {
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total expenses"
-          value={currency(sum(filteredExpenses, (r) => r.amount))}
+          value={currency(
+            sum(
+              (expenses.data ?? []).filter(
+                (e) =>
+                  !(e as any).is_void &&
+                  !(e as any).deleted_at &&
+                  (expenseProjectFilter === "all" || e.project_id === expenseProjectFilter) &&
+                  (expenseCategoryFilter === "all" || e.category === expenseCategoryFilter)
+              ),
+              (r) => r.amount
+            )
+          )}
           tone="destructive"
+          hint={showVoided ? "Active expenses (voided excluded from total)" : undefined}
         />
         <StatCard
           label="Money received"

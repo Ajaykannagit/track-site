@@ -1976,10 +1976,16 @@ function AttendanceWeeklySheetPage() {
                         className={`font-mono text-xs font-bold whitespace-nowrap ${
                           grp.pendingBalance > 0
                             ? "text-primary"
-                            : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+                            : grp.alreadyPaid > grp.teamTotal
+                              ? "text-purple-700 bg-purple-50 dark:bg-purple-950/30"
+                              : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
                         }`}
                       >
-                        {grp.pendingBalance === 0 && grp.alreadyPaid > 0 ? "Settled" : currency(grp.pendingBalance)}
+                        {grp.alreadyPaid > grp.teamTotal
+                          ? `Excess Paid: ${currency(grp.alreadyPaid - grp.teamTotal)}`
+                          : grp.pendingBalance === 0 && grp.alreadyPaid > 0
+                            ? "Settled"
+                            : currency(grp.pendingBalance)}
                       </Badge>
                       {permissions.canViewWagesAndPayments && (
                         <Button
@@ -2003,7 +2009,7 @@ function AttendanceWeeklySheetPage() {
                             });
                           }}
                         >
-                          <Banknote className="size-3" /> {grp.pendingBalance === 0 && grp.alreadyPaid > 0 ? "Paid" : "Pay Team"}
+                          <Banknote className="size-3" /> {grp.alreadyPaid > grp.teamTotal ? "Excess Paid" : grp.pendingBalance === 0 && grp.alreadyPaid > 0 ? "Paid" : "Pay Team"}
                         </Button>
                       )}
                     </div>
