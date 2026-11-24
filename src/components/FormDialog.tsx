@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +63,7 @@ export function FormDialog({
   const [values, setValues] = useState<FormValues>(initial ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -124,12 +125,14 @@ export function FormDialog({
           noValidate
           onSubmit={async (e) => {
             e.preventDefault();
+            if (submitLockRef.current) return;
             if (!validate()) return;
             // Build cleaned and trimmed values
             const cleanValues: FormValues = {};
             for (const [k, v] of Object.entries(values)) {
               cleanValues[k] = typeof v === "string" ? v.trim() : v;
             }
+            submitLockRef.current = true;
             setIsSubmitting(true);
             try {
               await onSubmit(cleanValues);
@@ -137,6 +140,7 @@ export function FormDialog({
             } catch {
               // Error is handled by the caller (toast shown by mutation onError)
             } finally {
+              submitLockRef.current = false;
               setIsSubmitting(false);
             }
           }}
