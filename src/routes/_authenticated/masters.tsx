@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { FileText, Pencil, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { TeamManagementDialog } from "@/components/TeamManagementDialog";
+import { Party360Dialog, type Party360Type } from "@/components/Party360Dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
-import { useRows, useSaveRow, useDeleteRow } from "@/lib/db";
+import { useRows, useSaveRow, useDeleteRow, sum } from "@/lib/db";
 import { currency } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/masters")({
@@ -135,17 +136,57 @@ function MastersPage() {
 
   const [conTypeFilter, setConTypeFilter] = useState<string>("all");
   const [conStatusFilter, setConStatusFilter] = useState<string>("all");
+  const [conProjectFilter, setConProjectFilter] = useState<string>("all");
 
   const [supStatusFilter, setSupStatusFilter] = useState<string>("all");
+  const [supProjectFilter, setSupProjectFilter] = useState<string>("all");
+
+  // Party 360° Workspace Dialog state (Zoho Books Buyer & Vendor 360°)
+  const [party360Target, setParty360Target] = useState<{
+    type: Party360Type;
+    id: string;
+    tab?: "overview" | "transactions" | "statement";
+  } | null>(null);
 
   // Data queries
   const clients = useRows<Client>("clients", { order: { col: "name", asc: true } });
   const employees = useRows<Employee>("employees_view", { order: { col: "full_name", asc: true } });
   const teams = useRows<{ id: string; name: string; leader_name?: string | null }>("teams", { order: { col: "name", asc: true } });
-  const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
+  const projects = useRows<{
+    id: string;
+    name: string;
+    client_id?: string | null;
+    quotation_amount?: number;
+  }>("projects_view", { select: "id,name,client_id,quotation_amount" });
   const contractors = useRows<Contractor>("contractors", { order: { col: "name", asc: true } });
   const suppliers = useRows<Supplier>("suppliers", { order: { col: "name", asc: true } });
   const machines = useRows<Machine>("machines", { order: { col: "name", asc: true } });
+
+  // Financial & Project linkage queries for live Zoho balance columns
+  const quotations = useRows<any>("project_quotations", {
+    select: "project_id,amount,status,is_void,deleted_at",
+  });
+  const clientPayments = useRows<any>("client_payments", {
+    select: "client_id,project_id,amount,tds_amount,payment_category,is_void,deleted_at",
+  });
+  const pos = useRows<any>("purchase_orders", {
+    select: "id,supplier_id,project_id,total_amount,is_void,deleted_at",
+  });
+  const receipts = useRows<any>("material_receipts_view", {
+    select: "id,supplier_id,project_id,po_id,total_amount,deleted_at",
+  });
+  const supplierPayments = useRows<any>("supplier_payments", {
+    select: "id,supplier_id,project_id,po_id,amount,is_void,deleted_at",
+  });
+  const workOrders = useRows<any>("work_orders", {
+    select: "id,contractor_id,project_id,total_amount,is_void,deleted_at",
+  });
+  const contractorBills = useRows<any>("contractor_bills", {
+    select: "id,contractor_id,project_id,net_amount,status,is_void,deleted_at",
+  });
+  const contractorPayments = useRows<any>("contractor_payments", {
+    select: "id,contractor_id,project_id,bill_id,amount,is_void,deleted_at",
+  });
 
   // Mutations
   const saveClient = useSaveRow("clients", "Client");
@@ -198,20 +239,188 @@ function MastersPage() {
     return list;
   }, [employees.data, empTypeFilter, empStatusFilter]);
 
+  const projectName = (pid: string) =>
+    (projects.data ?? []).find((p) => p.id === pid)?.name ?? "";
+
+  // Live financial metrics maps for Clients, Contractors, and Suppliers
+  const clientMetricsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        projectNames: string[];
+        contractValue: number;
+        received: number;
+        receivableDue: number;
+        unusedAdvance: number;
+      }
+    >();
+    for (const c of clients.data ?? []) {
+      const cProjects = (projects.data ?? []).filter((p) => p.client_id === c.id);
+      const pIds = new Set(cProjects.map((p) => p.id));
+      const baseVal = sum(cProjects, (p) => Number(p.quotation_amount || 0));
+      const extraVal = sum(
+        (quotations.data ?? []).filter(
+          (q: any) =>
+            pIds.has(q.project_id) && q.status === "approved" && !q.is_void && !q.deleted_at
+        ),
+        (q: any) => Number(q.amount || 0)
+      );
+      const contractValue = Number((c as any).opening_balance || 0) + baseVal + extraVal;
+      const received = sum(
+        (clientPayments.data ?? []).filter(
+          (cp: any) =>
+            (cp.client_id === c.id || pIds.has(cp.project_id)) &&
+            !cp.is_void &&
+            !cp.deleted_at
+        ),
+        (cp: any) =>
+          cp.payment_category === "reversal"
+            ? -Number(cp.amount || 0)
+            : Number(cp.amount || 0) + Number(cp.tds_amount || 0)
+      );
+      const net = contractValue - received;
+      map.set(c.id, {
+        projectNames: cProjects.map((p) => p.name),
+        contractValue,
+        received,
+        receivableDue: net > 0 ? net : 0,
+        unusedAdvance: net < 0 ? Math.abs(net) : 0,
+      });
+    }
+    return map;
+  }, [clients.data, projects.data, quotations.data, clientPayments.data]);
+
+  const contractorMetricsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        projectIds: string[];
+        projectNames: string[];
+        billed: number;
+        paid: number;
+        payableDue: number;
+        unusedAdvance: number;
+      }
+    >();
+    for (const c of contractors.data ?? []) {
+      const cWos = (workOrders.data ?? []).filter(
+        (w: any) => w.contractor_id === c.id && !w.is_void && !w.deleted_at
+      );
+      const cBills = (contractorBills.data ?? []).filter(
+        (b: any) =>
+          b.contractor_id === c.id &&
+          b.status !== "rejected" &&
+          !b.is_void &&
+          !b.deleted_at
+      );
+      const cPays = (contractorPayments.data ?? []).filter(
+        (p: any) => p.contractor_id === c.id && !p.is_void && !p.deleted_at
+      );
+      const pIds = Array.from(
+        new Set<string>([
+          ...cWos.map((x: any) => x.project_id).filter(Boolean),
+          ...cBills.map((x: any) => x.project_id).filter(Boolean),
+          ...cPays.map((x: any) => x.project_id).filter(Boolean),
+        ])
+      );
+      const billed =
+        Number((c as any).opening_balance || 0) +
+        sum(cBills, (b: any) => Number(b.net_amount || 0));
+      const paid = sum(cPays, (p: any) => Number(p.amount || 0));
+      const net = billed - paid;
+      const unapplied = sum(
+        cPays.filter((p: any) => !p.bill_id),
+        (p: any) => Number(p.amount || 0)
+      );
+      map.set(c.id, {
+        projectIds: pIds,
+        projectNames: pIds.map((pid) => projectName(pid)).filter(Boolean),
+        billed,
+        paid,
+        payableDue: net > 0 ? net : 0,
+        unusedAdvance: net < 0 ? Math.abs(net) : unapplied,
+      });
+    }
+    return map;
+  }, [contractors.data, workOrders.data, contractorBills.data, contractorPayments.data, projects.data]);
+
+  const supplierMetricsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        projectIds: string[];
+        projectNames: string[];
+        billed: number;
+        paid: number;
+        payableDue: number;
+        unusedAdvance: number;
+      }
+    >();
+    for (const s of suppliers.data ?? []) {
+      const sPos = (pos.data ?? []).filter(
+        (p: any) => p.supplier_id === s.id && !p.is_void && !p.deleted_at
+      );
+      const sGrns = (receipts.data ?? []).filter(
+        (r: any) => r.supplier_id === s.id && !r.deleted_at
+      );
+      const sPays = (supplierPayments.data ?? []).filter(
+        (p: any) => p.supplier_id === s.id && !p.is_void && !p.deleted_at
+      );
+      const pIds = Array.from(
+        new Set<string>([
+          ...sPos.map((x: any) => x.project_id).filter(Boolean),
+          ...sGrns.map((x: any) => x.project_id).filter(Boolean),
+          ...sPays.map((x: any) => x.project_id).filter(Boolean),
+        ])
+      );
+      const poTotal = sum(sPos, (p: any) => Number(p.total_amount || 0));
+      const standaloneGrn = sum(
+        sGrns.filter((g: any) => !g.po_id),
+        (g: any) => Number(g.total_amount || 0)
+      );
+      const billed = Number((s as any).opening_balance || 0) + poTotal + standaloneGrn;
+      const paid = sum(sPays, (p: any) => Number(p.amount || 0));
+      const net = billed - paid;
+      const unapplied = sum(
+        sPays.filter((p: any) => !p.po_id),
+        (p: any) => Number(p.amount || 0)
+      );
+      map.set(s.id, {
+        projectIds: pIds,
+        projectNames: pIds.map((pid) => projectName(pid)).filter(Boolean),
+        billed,
+        paid,
+        payableDue: net > 0 ? net : 0,
+        unusedAdvance: net < 0 ? Math.abs(net) : unapplied,
+      });
+    }
+    return map;
+  }, [suppliers.data, pos.data, receipts.data, supplierPayments.data, projects.data]);
+
   const filteredContractors = useMemo(() => {
     let list = contractors.data ?? [];
     if (conTypeFilter !== "all") list = list.filter((c) => c.contractor_type === conTypeFilter);
     if (conStatusFilter !== "all")
       list = list.filter((c) => (conStatusFilter === "active" ? c.active : !c.active));
+    if (conProjectFilter !== "all") {
+      list = list.filter((c) =>
+        (contractorMetricsMap.get(c.id)?.projectIds ?? []).includes(conProjectFilter)
+      );
+    }
     return list;
-  }, [contractors.data, conTypeFilter, conStatusFilter]);
+  }, [contractors.data, conTypeFilter, conStatusFilter, conProjectFilter, contractorMetricsMap]);
 
   const filteredSuppliers = useMemo(() => {
     let list = suppliers.data ?? [];
     if (supStatusFilter !== "all")
       list = list.filter((s) => (supStatusFilter === "active" ? s.active : !s.active));
+    if (supProjectFilter !== "all") {
+      list = list.filter((s) =>
+        (supplierMetricsMap.get(s.id)?.projectIds ?? []).includes(supProjectFilter)
+      );
+    }
     return list;
-  }, [suppliers.data, supStatusFilter]);
+  }, [suppliers.data, supStatusFilter, supProjectFilter, supplierMetricsMap]);
 
   // Unique contractor trades for filter
   const contractorTypes = useMemo(() => {
@@ -222,40 +431,103 @@ function MastersPage() {
     return Array.from(types);
   }, [contractors.data]);
 
-  // Client columns
+  // Client columns (with Zoho Buyer 360° clickable link & live Receivables / Advances)
   const clientColumns: Column<Client>[] = [
-    { header: "Name", cell: (r) => r.name, value: (r) => r.name },
-    { header: "Contact", cell: (r) => r.contact_person ?? "—", value: (r) => r.contact_person },
-    { header: "Phone", cell: (r) => r.phone ?? "—", value: (r) => r.phone },
-    { header: "Email", cell: (r) => r.email ?? "—", value: (r) => r.email },
-    ...(canManageMasters
-      ? [
-          {
-            header: "Actions",
-            className: "text-right w-24",
-            cell: (r: Client) => (
-              <div className="flex items-center justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setEditingClient(r)}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
-                  onClick={() => setDeletingClient(r)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ),
-          },
-        ]
-      : []),
+    {
+      header: "Buyer / Client Name",
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setParty360Target({ type: "client", id: r.id, tab: "statement" })}
+          className="text-left font-semibold text-primary hover:underline flex items-center gap-1.5"
+          title="Open Buyer 360° Ledger & Statement PDF"
+        >
+          <span>{r.name}</span>
+        </button>
+      ),
+      value: (r) => r.name,
+    },
+    {
+      header: "Projects / Sites",
+      cell: (r) => {
+        const pNames = clientMetricsMap.get(r.id)?.projectNames ?? [];
+        return pNames.length ? (
+          <span className="text-xs font-medium">{pNames.join(", ")}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      value: (r) => (clientMetricsMap.get(r.id)?.projectNames ?? []).join(", "),
+    },
+    { header: "Contact / Phone", cell: (r) => r.phone || r.contact_person || "—", value: (r) => r.phone },
+    {
+      header: "Contract / Invoiced",
+      className: "text-right font-mono",
+      cell: (r) => currency(clientMetricsMap.get(r.id)?.contractValue ?? 0),
+      value: (r) => clientMetricsMap.get(r.id)?.contractValue ?? 0,
+    },
+    {
+      header: "Received (+TDS)",
+      className: "text-right font-mono text-emerald-700",
+      cell: (r) => currency(clientMetricsMap.get(r.id)?.received ?? 0),
+      value: (r) => clientMetricsMap.get(r.id)?.received ?? 0,
+    },
+    {
+      header: "Receivable Due",
+      className: "text-right font-mono",
+      cell: (r) => {
+        const due = clientMetricsMap.get(r.id)?.receivableDue ?? 0;
+        const adv = clientMetricsMap.get(r.id)?.unusedAdvance ?? 0;
+        if (due > 0) {
+          return <span className="font-bold text-destructive">{currency(due)}</span>;
+        }
+        if (adv > 0) {
+          return (
+            <span className="font-semibold text-amber-700">
+              Adv: {currency(adv)}
+            </span>
+          );
+        }
+        return <span className="text-emerald-600">₹0</span>;
+      },
+      value: (r) => clientMetricsMap.get(r.id)?.receivableDue ?? 0,
+    },
+    {
+      header: "Statement / Actions",
+      className: "text-right w-44",
+      cell: (r: Client) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px] gap-1"
+            onClick={() => setParty360Target({ type: "client", id: r.id, tab: "statement" })}
+          >
+            <Printer className="size-3 text-primary" /> 360° / PDF
+          </Button>
+          {canManageMasters && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => setEditingClient(r)}
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-destructive hover:text-destructive"
+                onClick={() => setDeletingClient(r)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   // Employee columns
@@ -316,85 +588,203 @@ function MastersPage() {
     },
   ];
 
-  // Contractor columns
+  // Contractor columns (with Zoho Vendor 360° clickable link, Project/Site tags & live Payables / Advances)
   const contractorColumns: Column<Contractor>[] = [
-    { header: "Code", cell: (r) => r.contractor_code, value: (r) => r.contractor_code },
-    { header: "Name", cell: (r) => r.name, value: (r) => r.name },
-    { header: "Type", cell: (r) => r.contractor_type ?? "—", value: (r) => r.contractor_type },
-    { header: "Phone", cell: (r) => r.phone ?? "—", value: (r) => r.phone },
+    { header: "Code", className: "font-mono", cell: (r) => r.contractor_code, value: (r) => r.contractor_code },
     {
-      header: "Status",
-      cell: (r) => <Active on={r.active} />,
-      value: (r) => (r.active ? "active" : "inactive"),
+      header: "Contractor Name (Vendor)",
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setParty360Target({ type: "contractor", id: r.id, tab: "statement" })}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Contractor 360° Ledger & Statement PDF"
+        >
+          {r.name}
+        </button>
+      ),
+      value: (r) => r.name,
     },
-    ...(canManageMasters
-      ? [
-          {
-            header: "Actions",
-            className: "text-right w-24",
-            cell: (r: Contractor) => (
-              <div className="flex items-center justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setEditingContractor(r)}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
-                  onClick={() => setDeletingContractor(r)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ),
-          },
-        ]
-      : []),
+    { header: "Trade", cell: (r) => r.contractor_type ?? "—", value: (r) => r.contractor_type },
+    {
+      header: "Projects / Sites",
+      cell: (r) => {
+        const pNames = contractorMetricsMap.get(r.id)?.projectNames ?? [];
+        return pNames.length ? (
+          <span className="text-xs font-medium">{pNames.join(", ")}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      value: (r) => (contractorMetricsMap.get(r.id)?.projectNames ?? []).join(", "),
+    },
+    {
+      header: "Billed (Net)",
+      className: "text-right font-mono",
+      cell: (r) => currency(contractorMetricsMap.get(r.id)?.billed ?? 0),
+      value: (r) => contractorMetricsMap.get(r.id)?.billed ?? 0,
+    },
+    {
+      header: "Paid",
+      className: "text-right font-mono text-emerald-700",
+      cell: (r) => currency(contractorMetricsMap.get(r.id)?.paid ?? 0),
+      value: (r) => contractorMetricsMap.get(r.id)?.paid ?? 0,
+    },
+    {
+      header: "Payable / Advance",
+      className: "text-right font-mono",
+      cell: (r) => {
+        const due = contractorMetricsMap.get(r.id)?.payableDue ?? 0;
+        const adv = contractorMetricsMap.get(r.id)?.unusedAdvance ?? 0;
+        if (due > 0) {
+          return <span className="font-bold text-destructive">{currency(due)}</span>;
+        }
+        if (adv > 0) {
+          return (
+            <span className="font-semibold text-amber-700">
+              Adv: {currency(adv)}
+            </span>
+          );
+        }
+        return <span className="text-emerald-600">₹0</span>;
+      },
+      value: (r) => contractorMetricsMap.get(r.id)?.payableDue ?? 0,
+    },
+    {
+      header: "Statement / Actions",
+      className: "text-right w-44",
+      cell: (r: Contractor) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px] gap-1"
+            onClick={() => setParty360Target({ type: "contractor", id: r.id, tab: "statement" })}
+          >
+            <Printer className="size-3 text-primary" /> 360° / PDF
+          </Button>
+          {canManageMasters && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => setEditingContractor(r)}
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-destructive hover:text-destructive"
+                onClick={() => setDeletingContractor(r)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
-  // Supplier columns
+  // Supplier columns (with Zoho Vendor 360° clickable link, Project/Site tags & live Payables / Advances)
   const supplierColumns: Column<Supplier>[] = [
-    { header: "Name", cell: (r) => r.name, value: (r) => r.name },
-    { header: "GST", cell: (r) => r.gst_number ?? "—", value: (r) => r.gst_number },
-    { header: "Phone", cell: (r) => r.phone ?? "—", value: (r) => r.phone },
     {
-      header: "Status",
-      cell: (r) => <Active on={r.active} />,
-      value: (r) => (r.active ? "active" : "inactive"),
+      header: "Supplier Name (Vendor)",
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setParty360Target({ type: "supplier", id: r.id, tab: "statement" })}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Supplier 360° Ledger & Statement PDF"
+        >
+          {r.name}
+        </button>
+      ),
+      value: (r) => r.name,
     },
-    ...(canManageMasters
-      ? [
-          {
-            header: "Actions",
-            className: "text-right w-24",
-            cell: (r: Supplier) => (
-              <div className="flex items-center justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setEditingSupplier(r)}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
-                  onClick={() => setDeletingSupplier(r)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ),
-          },
-        ]
-      : []),
+    { header: "GSTIN", className: "font-mono text-xs", cell: (r) => r.gst_number ?? "—", value: (r) => r.gst_number },
+    {
+      header: "Projects / Sites",
+      cell: (r) => {
+        const pNames = supplierMetricsMap.get(r.id)?.projectNames ?? [];
+        return pNames.length ? (
+          <span className="text-xs font-medium">{pNames.join(", ")}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      value: (r) => (supplierMetricsMap.get(r.id)?.projectNames ?? []).join(", "),
+    },
+    {
+      header: "PO / Billed",
+      className: "text-right font-mono",
+      cell: (r) => currency(supplierMetricsMap.get(r.id)?.billed ?? 0),
+      value: (r) => supplierMetricsMap.get(r.id)?.billed ?? 0,
+    },
+    {
+      header: "Paid",
+      className: "text-right font-mono text-emerald-700",
+      cell: (r) => currency(supplierMetricsMap.get(r.id)?.paid ?? 0),
+      value: (r) => supplierMetricsMap.get(r.id)?.paid ?? 0,
+    },
+    {
+      header: "Payable / Advance",
+      className: "text-right font-mono",
+      cell: (r) => {
+        const due = supplierMetricsMap.get(r.id)?.payableDue ?? 0;
+        const adv = supplierMetricsMap.get(r.id)?.unusedAdvance ?? 0;
+        if (due > 0) {
+          return <span className="font-bold text-destructive">{currency(due)}</span>;
+        }
+        if (adv > 0) {
+          return (
+            <span className="font-semibold text-amber-700">
+              Adv: {currency(adv)}
+            </span>
+          );
+        }
+        return <span className="text-emerald-600">₹0</span>;
+      },
+      value: (r) => supplierMetricsMap.get(r.id)?.payableDue ?? 0,
+    },
+    {
+      header: "Statement / Actions",
+      className: "text-right w-44",
+      cell: (r: Supplier) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px] gap-1"
+            onClick={() => setParty360Target({ type: "supplier", id: r.id, tab: "statement" })}
+          >
+            <Printer className="size-3 text-primary" /> 360° / PDF
+          </Button>
+          {canManageMasters && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => setEditingSupplier(r)}
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-destructive hover:text-destructive"
+                onClick={() => setDeletingSupplier(r)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   // Machine columns
@@ -849,6 +1239,22 @@ function MastersPage() {
 
             {/* Contractor Filters */}
             <div className="no-print flex flex-wrap items-end gap-2">
+              <div>
+                <Label className="mb-1 block text-xs">Project / Site</Label>
+                <Select value={conProjectFilter} onValueChange={setConProjectFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue placeholder="All Projects / Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects / Sites</SelectItem>
+                    {(projects.data ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {contractorTypes.length > 0 && (
                 <div>
                   <Label className="mb-1 block text-xs">Trade</Label>
@@ -880,13 +1286,14 @@ function MastersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {(conTypeFilter !== "all" || conStatusFilter !== "all") && (
+              {(conTypeFilter !== "all" || conStatusFilter !== "all" || conProjectFilter !== "all") && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setConTypeFilter("all");
                     setConStatusFilter("all");
+                    setConProjectFilter("all");
                   }}
                   className="h-8 px-2 text-xs"
                 >
@@ -972,8 +1379,24 @@ function MastersPage() {
               />
             )}
 
-            {/* Supplier Status Filter */}
+            {/* Supplier Project & Status Filter */}
             <div className="no-print flex flex-wrap items-end gap-2">
+              <div>
+                <Label className="mb-1 block text-xs">Project / Site</Label>
+                <Select value={supProjectFilter} onValueChange={setSupProjectFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs">
+                    <SelectValue placeholder="All Projects / Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects / Sites</SelectItem>
+                    {(projects.data ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label className="mb-1 block text-xs">Status</Label>
                 <Select value={supStatusFilter} onValueChange={setSupStatusFilter}>
@@ -987,11 +1410,14 @@ function MastersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {supStatusFilter !== "all" && (
+              {(supStatusFilter !== "all" || supProjectFilter !== "all") && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSupStatusFilter("all")}
+                  onClick={() => {
+                    setSupStatusFilter("all");
+                    setSupProjectFilter("all");
+                  }}
                   className="h-8 px-2 text-xs"
                 >
                   <RotateCcw className="mr-1 size-3" /> Reset
@@ -1191,6 +1617,17 @@ function MastersPage() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Universal Zoho Buyer & Vendor 360° Workspace Dialog */}
+      {party360Target && (
+        <Party360Dialog
+          open={!!party360Target}
+          onOpenChange={(v) => !v && setParty360Target(null)}
+          partyType={party360Target.type}
+          partyId={party360Target.id}
+          initialTab={party360Target.tab || "statement"}
+        />
+      )}
     </div>
   );
 }

@@ -4,12 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Layers } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Pencil, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Party360Dialog } from "@/components/Party360Dialog";
+import { PrintableVoucherDialog, type PrintableVoucherData } from "@/components/PrintableVoucherDialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -133,6 +135,10 @@ function ContractorsPage() {
   const [editingSubPay, setEditingSubPay] = useState<SubPay | null>(null);
   const [deletingSubPay, setDeletingSubPay] = useState<SubPay | null>(null);
 
+  // Zoho Books Contractor 360° Workspace & Printable A4 Voucher Dialog states
+  const [contractor360Id, setContractor360Id] = useState<string | null>(null);
+  const [voucherModalData, setVoucherModalData] = useState<PrintableVoucherData | null>(null);
+
   // Common Filters
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [contractorFilter, setContractorFilter] = useState<string>("all");
@@ -235,7 +241,16 @@ function ContractorsPage() {
     },
     {
       header: "Contractor",
-      cell: (r) => contractorName(r.contractor_id),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setContractor360Id(r.contractor_id)}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Contractor 360° Ledger & Statement PDF"
+        >
+          {contractorName(r.contractor_id)}
+        </button>
+      ),
       value: (r) => contractorName(r.contractor_id),
     },
     { header: "Date", cell: (r) => dateFmt(r.wo_date), value: (r) => r.wo_date },
@@ -250,9 +265,42 @@ function ContractorsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-32",
             cell: (r: Wo) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Work Order A4 PDF"
+                  onClick={() =>
+                    setVoucherModalData({
+                      type: "work_order",
+                      voucherNumber: r.work_order_number,
+                      date: r.wo_date,
+                      statusBadge: r.status,
+                      partyLabel: "Contractor / Subcontractor",
+                      partyName: contractorName(r.contractor_id),
+                      projectName: projectName(r.project_id),
+                      amount: Number(r.contract_amount || 0),
+                      notes: r.work_description,
+                      lineItems:
+                        r.quantity && r.rate
+                          ? [
+                              {
+                                description: r.work_description || jobTypeName(r.job_type_id ?? null),
+                                unit: r.unit,
+                                quantity: r.quantity,
+                                rate: r.rate,
+                                amount: Number(r.contract_amount || 0),
+                              },
+                            ]
+                          : undefined,
+                    })
+                  }
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -335,7 +383,16 @@ function ContractorsPage() {
     },
     {
       header: "Contractor",
-      cell: (r) => contractorName(r.contractor_id),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setContractor360Id(r.contractor_id)}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Contractor 360° Ledger & Statement PDF"
+        >
+          {contractorName(r.contractor_id)}
+        </button>
+      ),
       value: (r) => contractorName(r.contractor_id),
     },
     { header: "Date", cell: (r) => dateFmt(r.bill_date), value: (r) => r.bill_date },
@@ -399,9 +456,32 @@ function ContractorsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-32",
             cell: (r: Bill) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Contractor RA Bill A4 PDF"
+                  onClick={() =>
+                    setVoucherModalData({
+                      type: "contractor_bill",
+                      voucherNumber: r.bill_number,
+                      date: r.bill_date,
+                      statusBadge: r.status,
+                      partyLabel: "Contractor / Subcontractor",
+                      partyName: contractorName(r.contractor_id),
+                      projectName: projectName(r.project_id),
+                      grossAmount: Number(r.gross_amount || 0),
+                      tdsAmount: Number(r.deductions || 0),
+                      amount: Number(r.net_amount || 0),
+                      notes: r.remarks,
+                    })
+                  }
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -434,8 +514,35 @@ function ContractorsPage() {
     },
     {
       header: "Contractor",
-      cell: (r) => contractorName(r.contractor_id),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setContractor360Id(r.contractor_id)}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Contractor 360° Ledger & Statement PDF"
+        >
+          {contractorName(r.contractor_id)}
+        </button>
+      ),
       value: (r) => contractorName(r.contractor_id),
+    },
+    {
+      header: "Against Bill / Status",
+      cell: (r) => {
+        if (r.bill_id) {
+          const b = bills.data?.find((x) => x.id === r.bill_id);
+          return <span className="font-mono font-medium">{b?.bill_number ?? "—"}</span>;
+        }
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-800 border-amber-300 text-[10px]"
+          >
+            Advance / Unused Credit
+          </Badge>
+        );
+      },
+      value: (r) => r.bill_id || "Advance",
     },
     {
       header: "Source",
@@ -483,9 +590,41 @@ function ContractorsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-32",
             cell: (r: Payment) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Payment Made Voucher PDF"
+                  onClick={() => {
+                    const linkedBill = bills.data?.find((b) => b.id === r.bill_id);
+                    setVoucherModalData({
+                      type: "contractor_payment",
+                      voucherNumber:
+                        r.reference_number || `CPAY-${r.id.slice(0, 6).toUpperCase()}`,
+                      date: r.payment_date,
+                      statusBadge: linkedBill ? "Paid" : "Advance",
+                      statusTone: linkedBill ? "emerald" : "amber",
+                      partyLabel: "Paid To (Contractor)",
+                      partyName: contractorName(r.contractor_id),
+                      projectName: projectName(r.project_id),
+                      paymentMode: r.payment_method || (r as any).payment_mode,
+                      paymentSource: (r as any).payment_source,
+                      referenceNumber: r.reference_number,
+                      linkedDocLabel: linkedBill ? "Contractor Bill #" : null,
+                      linkedDocNumber: linkedBill?.bill_number ?? null,
+                      linkedDocDate: linkedBill?.bill_date ?? null,
+                      linkedDocTotal: linkedBill ? Number(linkedBill.net_amount || 0) : null,
+                      amount: Number(r.amount || 0),
+                      overPaymentAmount: !linkedBill ? Number(r.amount || 0) : null,
+                      notes: r.remarks,
+                    });
+                  }}
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1127,7 +1266,14 @@ function ContractorsPage() {
                 header: "Contractor (Party)",
                 cell: (r) => (
                   <div>
-                    <span className="font-semibold">{contractorName(r.contractor_id)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setContractor360Id(r.contractor_id)}
+                      className="font-semibold text-primary hover:underline text-left"
+                      title="Open Contractor 360° Ledger & Statement PDF"
+                    >
+                      {contractorName(r.contractor_id)}
+                    </button>
                     <span className="block text-[11px] text-muted-foreground font-mono">
                       {r.bill_number}
                     </span>
@@ -1675,6 +1821,24 @@ function ContractorsPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Zoho Books Contractor 360° Workspace & Statement PDF Dialog */}
+      {contractor360Id && (
+        <Party360Dialog
+          open={!!contractor360Id}
+          onOpenChange={(v) => !v && setContractor360Id(null)}
+          partyType="contractor"
+          partyId={contractor360Id}
+          initialTab="statement"
+        />
+      )}
+
+      {/* Zoho Books Printable A4 Document & Payment Voucher Modal */}
+      <PrintableVoucherDialog
+        open={!!voucherModalData}
+        onOpenChange={(v) => !v && setVoucherModalData(null)}
+        data={voucherModalData}
+      />
     </div>
     </RequirePermission>
   );

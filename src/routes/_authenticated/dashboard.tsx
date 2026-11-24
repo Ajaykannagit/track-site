@@ -754,6 +754,35 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Zoho Books Quick Financial Shortcuts Bar (MD & Finance) */}
+      {permissions.canViewCompanyFinancials && (
+        <div className="mt-4 rounded-lg border bg-card p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5 text-xs">
+            <Badge variant="default" className="text-[10px]">
+              Zoho Books 360°
+            </Badge>
+            <span className="font-medium text-foreground">
+              Receivables Due: <strong className="font-mono text-amber-700">{currency(pendingReceivables)}</strong>
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="font-medium text-foreground">
+              Pending Contractor Bills: <strong className="font-mono text-destructive">{pendingBills.length}</strong>
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+              <Link to="/masters">Buyer & Vendor 360° Statements</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+              <Link to="/accounts">Multi-Wallet Passbook</Link>
+            </Button>
+            <Button asChild size="sm" variant="default" className="h-7 text-xs">
+              <Link to="/reports">Zoho Balance & Cash Flow Reports</Link>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Lists Section */}
       <div className={`mt-4 grid gap-4 ${isViewer ? "grid-cols-1" : "lg:grid-cols-3"}`}>
         <Card className={isViewer ? "col-span-1" : "lg:col-span-2"}>

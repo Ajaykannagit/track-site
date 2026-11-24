@@ -6,6 +6,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Party360Dialog } from "@/components/Party360Dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -61,6 +62,7 @@ function ProjectsPage() {
 
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [client360Id, setClient360Id] = useState<string | null>(null);
 
   const projects = useRows<Project>("projects_view", { order: { col: "created_at", asc: false } });
   const clients = useRows<{ id: string; name: string }>("clients", { select: "id,name" });
@@ -148,7 +150,22 @@ function ProjectsPage() {
     { header: "Code", cell: (r) => r.project_code, value: (r) => r.project_code },
     {
       header: "Client",
-      cell: (r) => clientName(r.client_id),
+      cell: (r) =>
+        r.client_id ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setClient360Id(r.client_id);
+            }}
+            className="text-left font-semibold text-primary hover:underline"
+            title="Open Buyer 360° Ledger & Statement PDF"
+          >
+            {clientName(r.client_id)}
+          </button>
+        ) : (
+          "—"
+        ),
       value: (r) => clientName(r.client_id),
     },
     { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
@@ -369,6 +386,16 @@ function ProjectsPage() {
         }}
         empty={statusFilter === "all" ? "No projects yet." : `No ${statusFilter} projects.`}
       />
+
+      {client360Id && (
+        <Party360Dialog
+          open={!!client360Id}
+          onOpenChange={(v) => !v && setClient360Id(null)}
+          partyType="client"
+          partyId={client360Id}
+          initialTab="statement"
+        />
+      )}
     </div>
   );
 }

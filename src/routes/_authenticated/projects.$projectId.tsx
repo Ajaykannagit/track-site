@@ -22,6 +22,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { VoidToggle, VoidBadge } from "@/components/VoidControls";
+import { Party360Dialog } from "@/components/Party360Dialog";
+import { PrintableVoucherDialog, type PrintableVoucherData } from "@/components/PrintableVoucherDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -111,6 +113,10 @@ function ProjectDetail() {
   const [editingMilestone, setEditingMilestone] = useState<PaymentMilestone | null>(null);
   const [deletingMilestone, setDeletingMilestone] = useState<PaymentMilestone | null>(null);
   const [milestoneFormOpen, setMilestoneFormOpen] = useState(false);
+
+  // Zoho Books Buyer 360° Workspace & Printable A4 Voucher Dialog states
+  const [buyer360Open, setBuyer360Open] = useState(false);
+  const [voucherModalData, setVoucherModalData] = useState<PrintableVoucherData | null>(null);
 
   // Client Payments Filter States
   const [payCategoryFilter, setPayCategoryFilter] = useState<string>("all");
@@ -423,10 +429,25 @@ function ProjectDetail() {
       {/* Header with Print / PDF and + Quotation button */}
       <PageHeader
         title={p?.name ?? "Project"}
-        description={p ? `${p.project_code} · ${p.site_address ?? "No site address"}` : "Loading…"}
+        description={
+          p
+            ? `${p.project_code} · Buyer: ${clientName} · ${p.site_address ?? "No site address"}`
+            : "Loading…"
+        }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {p ? <StatusBadge status={p.status} /> : null}
+            {p?.client_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="no-print gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={() => setBuyer360Open(true)}
+                title="Open Buyer 360° Ledger & Statement of Accounts PDF"
+              >
+                <Printer className="size-3.5" /> Buyer 360° Statement PDF
+              </Button>
+            )}
 
             {/* Update 4: + Button inside Project to add mid-project quotation */}
             {permissions.canManageQuotations && (
@@ -821,24 +842,46 @@ function ProjectDetail() {
                   value: (r) => r.amount,
                   className: "text-right font-mono font-semibold",
                 },
-                ...((isMD || permissions.canManageQuotations)
-                  ? [
-                      {
-                        header: "Actions",
-                        className: "text-right w-16",
-                        cell: (r: ProjectQuotation) => (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:text-destructive"
-                            onClick={() => setDeletingQuotation(r)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        ),
-                      },
-                    ]
-                  : []),
+                {
+                  header: "Actions",
+                  className: "text-right w-24",
+                  cell: (r: ProjectQuotation) => (
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-slate-700 hover:text-primary"
+                        title="Print Quotation A4 PDF"
+                        onClick={() =>
+                          setVoucherModalData({
+                            type: "quotation",
+                            voucherNumber: r.quotation_number || `QTN-${r.id.slice(0, 6).toUpperCase()}`,
+                            date: r.quotation_date,
+                            statusBadge: r.status,
+                            partyLabel: "Customer / Buyer",
+                            partyName: clientName,
+                            projectName: p?.name,
+                            projectCode: p?.project_code,
+                            amount: Number(r.amount || 0),
+                            notes: `${r.title}${r.description ? ` — ${r.description}` : ""}`,
+                          })
+                        }
+                      >
+                        <Printer className="size-3.5" />
+                      </Button>
+                      {(isMD || permissions.canManageQuotations) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeletingQuotation(r)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ),
+                },
               ]}
               empty="No supplementary quotations added yet. Click '+ Add Quotation' to add mid-project scope variations."
             />
@@ -1087,7 +1130,18 @@ function ProjectDetail() {
                     },
                     {
                       header: "Client / Payer",
-                      cell: () => clientName,
+                      cell: () =>
+                        p?.client_id ? (
+                          <button
+                            type="button"
+                            onClick={() => setBuyer360Open(true)}
+                            className="text-left font-semibold text-primary hover:underline"
+                          >
+                            {clientName}
+                          </button>
+                        ) : (
+                          clientName
+                        ),
                       value: () => clientName,
                     },
                     {
@@ -1144,41 +1198,74 @@ function ProjectDetail() {
                       value: (r) => r.amount,
                       className: "text-right",
                     },
-                    ...(permissions.canManageQuotations
-                      ? [
-                          {
-                            header: "Actions",
-                            className: "text-right w-24",
-                            cell: (r: ClientPayment) => (
-                              <div className="flex items-center justify-end gap-1">
-                                {r.payment_category !== "reversal" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                    title="Create Authorized Reversal / Refund"
-                                    onClick={() => {
-                                      setReversingPayment(r);
-                                      setReversalReason("");
-                                    }}
-                                  >
-                                    <RotateCcw className="size-3.5" />
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 text-destructive hover:text-destructive"
-                                  title="Delete Record (MD only)"
-                                  onClick={() => setDeletingPayment(r)}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              </div>
-                            ),
-                          },
-                        ]
-                      : []),
+                    {
+                      header: "Actions",
+                      className: "text-right w-32",
+                      cell: (r: ClientPayment) => (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-slate-700 hover:text-primary"
+                            title="Print Client Payment Receipt Voucher PDF"
+                            onClick={() =>
+                              setVoucherModalData({
+                                type: "client_receipt",
+                                voucherNumber: r.receipt_number,
+                                date: r.payment_date,
+                                statusBadge:
+                                  r.payment_category === "advance" ? "Advance" : "Received",
+                                statusTone:
+                                  r.payment_category === "advance" ? "blue" : "emerald",
+                                partyLabel: "Received From (Buyer)",
+                                partyName: clientName,
+                                projectName: p?.name,
+                                projectCode: p?.project_code,
+                                paymentMode: r.payment_method,
+                                paymentSource: (r as any).payment_source || r.account_type,
+                                referenceNumber: r.reference_number,
+                                linkedDocLabel: "Invoice / Milestone Ref",
+                                linkedDocNumber: r.invoice_reference,
+                                amount: Number(r.amount || 0),
+                                tdsAmount: Number((r as any).tds_amount || 0),
+                                overPaymentAmount:
+                                  r.payment_category === "advance"
+                                    ? Number(r.amount || 0)
+                                    : null,
+                                notes: r.notes,
+                              })
+                            }
+                          >
+                            <Printer className="size-3.5" />
+                          </Button>
+                          {permissions.canManageQuotations && r.payment_category !== "reversal" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                              title="Create Authorized Reversal / Refund"
+                              onClick={() => {
+                                setReversingPayment(r);
+                                setReversalReason("");
+                              }}
+                            >
+                              <RotateCcw className="size-3.5" />
+                            </Button>
+                          )}
+                          {permissions.canManageQuotations && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive hover:text-destructive"
+                              title="Delete Record (MD only)"
+                              onClick={() => setDeletingPayment(r)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ),
+                    },
                   ]}
                 />
               </CardContent>
@@ -1571,6 +1658,24 @@ function ProjectDetail() {
           }}
         />
       )}
+
+      {/* Buyer 360° Workspace & Statement of Accounts PDF Dialog */}
+      {buyer360Open && p?.client_id && (
+        <Party360Dialog
+          open={buyer360Open}
+          onOpenChange={setBuyer360Open}
+          partyType="client"
+          partyId={p.client_id}
+          initialTab="statement"
+        />
+      )}
+
+      {/* Printable A4 Document & Payment Voucher Modal */}
+      <PrintableVoucherDialog
+        open={!!voucherModalData}
+        onOpenChange={(v) => !v && setVoucherModalData(null)}
+        data={voucherModalData}
+      />
     </div>
   );
 }

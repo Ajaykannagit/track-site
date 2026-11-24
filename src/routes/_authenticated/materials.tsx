@@ -8,12 +8,14 @@ import { SupplierGroupPaymentDialog } from "@/components/SupplierGroupPaymentDia
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { History, ListPlus, Pencil, Plus, RotateCcw, Trash2, Truck } from "lucide-react";
+import { History, ListPlus, Pencil, Plus, Printer, RotateCcw, Sparkles, Trash2, Truck } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { DataTable, StatCard, type Column } from "@/components/DataTable";
 import { FormDialog, type Field } from "@/components/FormDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Party360Dialog } from "@/components/Party360Dialog";
+import { PrintableVoucherDialog, type PrintableVoucherData } from "@/components/PrintableVoucherDialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -132,6 +134,10 @@ function MaterialsPage() {
 
   const [editingPayment, setEditingPayment] = useState<SupplierPayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SupplierPayment | null>(null);
+
+  // Zoho Books Supplier 360° Workspace & Printable A4 Voucher Dialog states
+  const [supplier360Id, setSupplier360Id] = useState<string | null>(null);
+  const [voucherModalData, setVoucherModalData] = useState<PrintableVoucherData | null>(null);
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const projectIds = useMemo(() => (projects.data ?? []).map((p) => p.id), [projects.data]);
@@ -270,9 +276,30 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-36",
+            className: "text-right w-40",
             cell: (r: Request) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Material Indent A4 PDF"
+                  onClick={() =>
+                    setVoucherModalData({
+                      type: "material_indent",
+                      voucherNumber: r.request_number,
+                      date: r.request_date,
+                      statusBadge: r.status,
+                      partyLabel: "Project / Requesting Site",
+                      partyName: projectName(r.project_id),
+                      projectName: projectName(r.project_id),
+                      amount: Number(r.total_amount || 0),
+                      notes: `${r.material_name ? `Items: ${r.material_name}. ` : ""}${r.remarks || ""}`,
+                    })
+                  }
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -349,11 +376,45 @@ function MaterialsPage() {
     },
     {
       header: "Supplier",
-      cell: (r) => supplierName(r.supplier_id),
+      cell: (r) =>
+        r.supplier_id ? (
+          <button
+            type="button"
+            onClick={() => setSupplier360Id(r.supplier_id)}
+            className="text-left font-semibold text-primary hover:underline"
+            title="Open Supplier 360° Ledger & Statement PDF"
+          >
+            {supplierName(r.supplier_id)}
+          </button>
+        ) : (
+          "—"
+        ),
       value: (r) => supplierName(r.supplier_id),
     },
     { header: "Date", className: "whitespace-nowrap", cell: (r) => <span className="whitespace-nowrap">{dateFmt(r.po_date)}</span>, value: (r) => r.po_date },
-    { header: "Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
+    { header: "Order Status", cell: (r) => <StatusBadge status={r.status} />, value: (r) => r.status },
+    {
+      header: "Billed Status",
+      cell: (r) => {
+        const hasGrn = (receipts.data ?? []).some((g) => g.po_id === r.id);
+        const isBilled = (r as any).billed_status === "billed" || hasGrn;
+        return (
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+              isBilled
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+                : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+            }`}
+          >
+            {isBilled ? "Billed (GRN)" : "Yet To Be Billed"}
+          </span>
+        );
+      },
+      value: (r) => {
+        const hasGrn = (receipts.data ?? []).some((g) => g.po_id === r.id);
+        return (r as any).billed_status === "billed" || hasGrn ? "Billed" : "Yet To Be Billed";
+      },
+    },
     {
       header: "Items",
       cell: (r) => (
@@ -422,9 +483,36 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-36",
+            className: "text-right w-40",
             cell: (r: Po) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Purchase Order A4 PDF"
+                  onClick={() => {
+                    const hasGrn = (receipts.data ?? []).some((g) => g.po_id === r.id);
+                    const isBilled = (r as any).billed_status === "billed" || hasGrn;
+                    setVoucherModalData({
+                      type: "purchase_order",
+                      voucherNumber: r.po_number,
+                      date: r.po_date,
+                      statusBadge: isBilled ? "Billed" : "Yet To Be Billed",
+                      statusTone: isBilled ? "emerald" : "amber",
+                      partyLabel: "Supplier / Vendor",
+                      partyName: supplierName(r.supplier_id),
+                      projectName: projectName(r.project_id),
+                      grossAmount: Number(r.subtotal || 0),
+                      taxAmount: Number(r.tax_amount || 0),
+                      travelCharges: Number(r.travel_charges || 0),
+                      amount: Number(r.total_amount || 0),
+                      notes: r.terms,
+                    });
+                  }}
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -503,7 +591,19 @@ function MaterialsPage() {
     },
     {
       header: "Supplier",
-      cell: (r) => supplierName(r.supplier_id),
+      cell: (r) =>
+        r.supplier_id ? (
+          <button
+            type="button"
+            onClick={() => setSupplier360Id(r.supplier_id)}
+            className="text-left font-semibold text-primary hover:underline"
+            title="Open Supplier 360° Ledger & Statement PDF"
+          >
+            {supplierName(r.supplier_id)}
+          </button>
+        ) : (
+          "—"
+        ),
       value: (r) => supplierName(r.supplier_id),
     },
     { header: "Date", cell: (r) => dateFmt(r.receipt_date), value: (r) => r.receipt_date },
@@ -533,9 +633,30 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-28",
+            className: "text-right w-36",
             cell: (r: Receipt) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Goods Receipt (GRN / Bill) A4 PDF"
+                  onClick={() =>
+                    setVoucherModalData({
+                      type: "grn_bill",
+                      voucherNumber: r.receipt_number,
+                      date: r.receipt_date,
+                      statusBadge: "Billed",
+                      partyLabel: "Supplier / Vendor",
+                      partyName: supplierName(r.supplier_id),
+                      projectName: projectName(r.project_id),
+                      amount: Number(r.total_amount || 0),
+                      notes: r.remarks,
+                    })
+                  }
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -585,13 +706,35 @@ function MaterialsPage() {
     },
     {
       header: "Supplier",
-      cell: (r) => supplierName(r.supplier_id),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setSupplier360Id(r.supplier_id)}
+          className="text-left font-semibold text-primary hover:underline"
+          title="Open Supplier 360° Ledger & Statement PDF"
+        >
+          {supplierName(r.supplier_id)}
+        </button>
+      ),
       value: (r) => supplierName(r.supplier_id),
     },
     {
-      header: "Against PO",
-      cell: (r) => (r.po_id ? (pos.data?.find((p) => p.id === r.po_id)?.po_number ?? "—") : "—"),
-      value: (r) => r.po_id,
+      header: "Against PO / Status",
+      cell: (r) => {
+        if (r.po_id) {
+          const po = pos.data?.find((p) => p.id === r.po_id);
+          return <span className="font-mono font-medium">{po?.po_number ?? "—"}</span>;
+        }
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-800 border-amber-300 text-[10px]"
+          >
+            Advance / Unused Credit
+          </Badge>
+        );
+      },
+      value: (r) => r.po_id || "Advance",
     },
     {
       header: "Source",
@@ -639,9 +782,41 @@ function MaterialsPage() {
       ? [
           {
             header: "Actions",
-            className: "text-right w-24",
+            className: "text-right w-32",
             cell: (r: SupplierPayment) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Payment Made Voucher PDF"
+                  onClick={() => {
+                    const linkedPo = pos.data?.find((p) => p.id === r.po_id);
+                    setVoucherModalData({
+                      type: "supplier_payment",
+                      voucherNumber:
+                        r.reference_number || `PAY-${r.id.slice(0, 6).toUpperCase()}`,
+                      date: r.payment_date,
+                      statusBadge: linkedPo ? "Paid" : "Advance",
+                      statusTone: linkedPo ? "emerald" : "amber",
+                      partyLabel: "Paid To (Supplier)",
+                      partyName: supplierName(r.supplier_id),
+                      projectName: projectName(r.project_id),
+                      paymentMode: r.payment_method || (r as any).payment_mode,
+                      paymentSource: (r as any).payment_source,
+                      referenceNumber: r.reference_number,
+                      linkedDocLabel: linkedPo ? "Purchase Order #" : null,
+                      linkedDocNumber: linkedPo?.po_number ?? null,
+                      linkedDocDate: linkedPo?.po_date ?? null,
+                      linkedDocTotal: linkedPo ? Number(linkedPo.total_amount || 0) : null,
+                      amount: Number(r.amount || 0),
+                      overPaymentAmount: !linkedPo ? Number(r.amount || 0) : null,
+                      notes: r.remarks,
+                    });
+                  }}
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <ChangeHistoryDialog
                   tableName="supplier_payments"
                   recordId={r.id}
@@ -1001,7 +1176,14 @@ function MaterialsPage() {
                 header: "Supplier (Party)",
                 cell: (r) => (
                   <div>
-                    <span className="font-semibold">{supplierName(r.supplier_id)}</span>
+                    <button
+                      type="button"
+                      onClick={() => r.supplier_id && setSupplier360Id(r.supplier_id)}
+                      className="font-semibold text-primary hover:underline text-left"
+                      title="Open Supplier 360° Ledger & Statement PDF"
+                    >
+                      {supplierName(r.supplier_id)}
+                    </button>
                     <span className="block text-[11px] text-muted-foreground font-mono">
                       {r.po_number}
                     </span>
@@ -1377,6 +1559,24 @@ function MaterialsPage() {
           label={voidingTarget.label}
         />
       )}
+
+      {/* Zoho Books Supplier 360° Workspace & Statement PDF Dialog */}
+      {supplier360Id && (
+        <Party360Dialog
+          open={!!supplier360Id}
+          onOpenChange={(v) => !v && setSupplier360Id(null)}
+          partyType="supplier"
+          partyId={supplier360Id}
+          initialTab="statement"
+        />
+      )}
+
+      {/* Zoho Books Printable A4 Document & Payment Voucher Modal */}
+      <PrintableVoucherDialog
+        open={!!voucherModalData}
+        onOpenChange={(v) => !v && setVoucherModalData(null)}
+        data={voucherModalData}
+      />
     </div>
     </RequirePermission>
   );

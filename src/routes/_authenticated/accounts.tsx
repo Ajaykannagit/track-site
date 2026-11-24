@@ -35,6 +35,9 @@ import { ChangeHistoryDialog } from "@/components/ChangeHistoryDialog";
 import { logAuditEntry, logRecordFieldDiffs } from "@/lib/audit";
 import { MultiExpenseDialog } from "@/components/MultiExpenseDialog";
 import { AccountSummaryTab, type AccountHeadTransaction } from "@/components/AccountSummaryTab";
+import { PassbookLedgerTab, type RawPassbookEvent } from "@/components/PassbookLedgerTab";
+import { Party360Dialog, type Party360Type } from "@/components/Party360Dialog";
+import { PrintableVoucherDialog, type PrintableVoucherData } from "@/components/PrintableVoucherDialog";
 import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
@@ -242,6 +245,8 @@ function AccountsPage() {
   const [showVoided, setShowVoided] = useState(false);
   const [addPaymentOpen, setAddPaymentOpen] = useState(false);
   const [printingPayment, setPrintingPayment] = useState<PrintableReceiptData | null>(null);
+  const [party360Target, setParty360Target] = useState<{ type: Party360Type; id: string } | null>(null);
+  const [voucherModalData, setVoucherModalData] = useState<PrintableVoucherData | null>(null);
 
   const projects = useRows<{ id: string; name: string }>("projects_view", { select: "id,name" });
   const projectIds = useMemo(() => (projects.data ?? []).map((p) => p.id), [projects.data]);
@@ -885,6 +890,262 @@ const mapToAccountHead = (category: string): string => {
     employeeName,
   ]);
 
+  // Zoho Banking Passbook Events (includes Bank <-> Petty Cash contra transfers + all inflows/outflows)
+  const passbookEvents = useMemo<RawPassbookEvent[]>(() => {
+    const events: RawPassbookEvent[] = [];
+    const defaultWallet = (src: "bank" | "petty_cash", custom?: string | null) =>
+      custom ||
+      (src === "bank"
+        ? "Brickweld Private Limited (xxxx5909)"
+        : "Kodak- Petty Cash");
+
+    // 1. MD Investments & Drawings
+    for (const inv of mdInvestments.data ?? []) {
+      if ((inv as any).is_void || (inv as any).deleted_at) continue;
+      const isDrawing = (inv as any).transaction_type === "drawing";
+      const src: "bank" | "petty_cash" =
+        inv.payment_source === "petty_cash" ? "petty_cash" : "bank";
+      events.push({
+        id: `mdi-${inv.id}`,
+        date: inv.investment_date,
+        refNumber: inv.reference_number || "EQUITY",
+        type: isDrawing ? "Owner Drawing" : "Owner Contribution",
+        subLabel: isDrawing
+          ? "To Account: Drawings (Managing Director)"
+          : "From Account: Investments (Managing Director)",
+        projectName: "Corporate / Equity",
+        projectId: null,
+        accountSource: src,
+        walletName: defaultWallet(src, (inv as any).wallet_name),
+        deposit: isDrawing ? 0 : Number(inv.amount || 0),
+        withdrawal: isDrawing ? Number(inv.amount || 0) : 0,
+      });
+    }
+
+    // 2. Contra Account Transfers (Bank <-> Petty Cash)
+    for (const tr of transfers.data ?? []) {
+      if ((tr as any).is_void || (tr as any).deleted_at) continue;
+      const fromSrc: "bank" | "petty_cash" =
+        tr.from_account === "petty_cash" ? "petty_cash" : "bank";
+      const toSrc: "bank" | "petty_cash" =
+        tr.to_account === "petty_cash" ? "petty_cash" : "bank";
+      const fromWallet = defaultWallet(fromSrc, (tr as any).from_wallet);
+      const toWallet = defaultWallet(toSrc, (tr as any).to_wallet);
+
+      // Outflow leg from source wallet
+      events.push({
+        id: `tr-out-${tr.id}`,
+        date: tr.transfer_date,
+        refNumber: tr.reference_number || "CONTRA",
+        type: "Transfer To Another Account",
+        subLabel: `To Account: ${toWallet}${tr.remarks ? ` · ${tr.remarks}` : ""}`,
+        projectName: tr.project_id ? projectName(tr.project_id) : "Corporate / Contra",
+        projectId: tr.project_id,
+        accountSource: fromSrc,
+        walletName: fromWallet,
+        deposit: 0,
+        withdrawal: Number(tr.amount || 0),
+      });
+
+      // Inflow leg into destination wallet
+      events.push({
+        id: `tr-in-${tr.id}`,
+        date: tr.transfer_date,
+        refNumber: tr.reference_number || "CONTRA",
+        type: "Transfer From Another Account",
+        subLabel: `From Account: ${fromWallet}${tr.remarks ? ` · ${tr.remarks}` : ""}`,
+        projectName: tr.project_id ? projectName(tr.project_id) : "Corporate / Contra",
+        projectId: tr.project_id,
+        accountSource: toSrc,
+        walletName: toWallet,
+        deposit: Number(tr.amount || 0),
+        withdrawal: 0,
+      });
+    }
+
+    // 3. Client Receipts (Customer Payment)
+    for (const cp of clientPayments.data ?? []) {
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
+      const isRev = cp.payment_category === "reversal";
+      const src: "bank" | "petty_cash" =
+        (cp.payment_source || cp.account_type || "bank").toLowerCase() === "petty_cash"
+          ? "petty_cash"
+          : "bank";
+      events.push({
+        id: `cp-${cp.id}`,
+        date: cp.payment_date,
+        refNumber: cp.receipt_number || cp.reference_number || "RCP",
+        type: isRev
+          ? "Customer Payment Reversal"
+          : cp.payment_category === "advance"
+          ? "Customer Advance"
+          : "Customer Payment",
+        subLabel: `Customer / Project: ${projectName(cp.project_id)}`,
+        projectName: projectName(cp.project_id),
+        projectId: cp.project_id,
+        accountSource: src,
+        walletName: defaultWallet(src, (cp as any).wallet_name),
+        deposit: isRev ? 0 : Number(cp.amount || 0),
+        withdrawal: isRev ? Number(cp.amount || 0) : 0,
+        partyType: cp.client_id ? "client" : null,
+        partyId: cp.client_id,
+      });
+    }
+
+    // 4. Supplier Payments (Vendor Payment)
+    for (const sp of supplierPayments.data ?? []) {
+      if ((sp as any).is_void || (sp as any).deleted_at) continue;
+      const src: "bank" | "petty_cash" =
+        ((sp as any).payment_source || "bank").toLowerCase() === "petty_cash"
+          ? "petty_cash"
+          : "bank";
+      events.push({
+        id: `sp-${sp.id}`,
+        date: sp.payment_date,
+        refNumber: sp.reference_number || "VPAY",
+        type: !(sp as any).po_id ? "Vendor Advance" : "Vendor Payment",
+        subLabel: `Vendor: ${supplierName(sp.supplier_id)}`,
+        projectName: projectName(sp.project_id),
+        projectId: sp.project_id,
+        accountSource: src,
+        walletName: defaultWallet(src, (sp as any).wallet_name),
+        deposit: 0,
+        withdrawal: Number(sp.amount || 0),
+        partyType: "supplier",
+        partyId: sp.supplier_id,
+      });
+    }
+
+    // 5. Contractor Payments (Vendor Payment)
+    for (const cp of contractorPayments.data ?? []) {
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
+      const src: "bank" | "petty_cash" =
+        ((cp as any).payment_source || "bank").toLowerCase() === "petty_cash"
+          ? "petty_cash"
+          : "bank";
+      events.push({
+        id: `conp-${cp.id}`,
+        date: cp.payment_date,
+        refNumber: cp.reference_number || "CPAY",
+        type: !(cp as any).bill_id ? "Contractor Advance" : "Vendor Payment (Contractor)",
+        subLabel: `Vendor: ${contractorName(cp.contractor_id)}`,
+        projectName: projectName(cp.project_id),
+        projectId: cp.project_id,
+        accountSource: src,
+        walletName: defaultWallet(src, (cp as any).wallet_name),
+        deposit: 0,
+        withdrawal: Number(cp.amount || 0),
+        partyType: "contractor",
+        partyId: cp.contractor_id,
+      });
+    }
+
+    // 6. Subcontractor Payments
+    for (const scp of subcontractorPayments.data ?? []) {
+      if ((scp as any).is_void || (scp as any).deleted_at) continue;
+      const src: "bank" | "petty_cash" =
+        ((scp as any).payment_source || "bank").toLowerCase() === "petty_cash"
+          ? "petty_cash"
+          : "bank";
+      events.push({
+        id: `subp-${scp.id}`,
+        date: scp.payment_date,
+        refNumber: scp.reference_number || "SUB",
+        type: "Subcontractor Expense",
+        subLabel: `Vendor: ${scp.name}`,
+        projectName: projectName(scp.project_id),
+        projectId: scp.project_id,
+        accountSource: src,
+        walletName: defaultWallet(src, null),
+        deposit: 0,
+        withdrawal: Number(scp.amount || 0),
+      });
+    }
+
+    // 7. Site & Office Expenses
+    for (const exp of expenses.data ?? []) {
+      if ((exp as any).is_void || (exp as any).deleted_at) continue;
+      const src: "bank" | "petty_cash" =
+        ((exp as any).payment_source || "petty_cash").toLowerCase() === "bank"
+          ? "bank"
+          : "petty_cash";
+      events.push({
+        id: `exp-${exp.id}`,
+        date: exp.expense_date,
+        refNumber: (exp as any).receipt_path || "EXP",
+        type: `Expense (${exp.category})`,
+        subLabel: exp.description || exp.material_name || exp.category,
+        projectName: exp.project_id ? projectName(exp.project_id) : "Corporate / Head Office",
+        projectId: exp.project_id,
+        accountSource: src,
+        walletName: defaultWallet(src, (exp as any).wallet_name),
+        deposit: 0,
+        withdrawal: Number(exp.amount || 0),
+      });
+    }
+
+    // 8. Wage Payments & Labour Advances
+    for (const wp of wagePayments.data ?? []) {
+      if ((wp as any).is_void || (wp as any).deleted_at) continue;
+      const src: "bank" | "petty_cash" =
+        ((wp as any).payment_source || "bank").toLowerCase() === "petty_cash"
+          ? "petty_cash"
+          : "bank";
+      events.push({
+        id: `wp-${wp.id}`,
+        date: wp.payment_date,
+        refNumber: wp.reference_number || "PAYROLL",
+        type: "Expense (Salaries & Employee Wages)",
+        subLabel: `Team: ${teamName(wp.team_id)}`,
+        projectName: "Labour Payroll",
+        projectId: null,
+        accountSource: src,
+        walletName: defaultWallet(src, null),
+        deposit: 0,
+        withdrawal: Number(wp.amount || 0),
+      });
+    }
+    for (const wa of wageAdvances.data ?? []) {
+      if ((wa as any).is_void || (wa as any).deleted_at) continue;
+      if (Number(wa.advance_paid || 0) > 0) {
+        const src: "bank" | "petty_cash" =
+          ((wa as any).payment_source || "petty_cash").toLowerCase() === "bank"
+            ? "bank"
+            : "petty_cash";
+        events.push({
+          id: `wa-${wa.id}`,
+          date: wa.week_start_date,
+          refNumber: wa.reference_number || "ADV",
+          type: "Employee Advance",
+          subLabel: `Worker: ${employeeName(wa.employee_id)}`,
+          projectName: "Labour Payroll",
+          projectId: null,
+          accountSource: src,
+          walletName: defaultWallet(src, null),
+          deposit: 0,
+          withdrawal: Number(wa.advance_paid),
+        });
+      }
+    }
+
+    return events;
+  }, [
+    mdInvestments.data,
+    transfers.data,
+    clientPayments.data,
+    supplierPayments.data,
+    contractorPayments.data,
+    subcontractorPayments.data,
+    expenses.data,
+    wagePayments.data,
+    wageAdvances.data,
+    projectName,
+    supplierName,
+    contractorName,
+    teamName,
+    employeeName,
+  ]);
+
   const filteredLedger = useMemo(() => {
     let list = rawLedgerTransactions;
     if (ledgerProjectFilter !== "all") {
@@ -1216,9 +1477,32 @@ const mapToAccountHead = (category: string): string => {
       ? [
           {
             header: "Actions",
-            className: "text-right w-28",
+            className: "text-right w-36",
             cell: (r: Expense) => (
               <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-slate-700 hover:text-primary"
+                  title="Print Expense Voucher A4 PDF"
+                  onClick={() =>
+                    setVoucherModalData({
+                      type: "expense_voucher",
+                      voucherNumber: `EXP-${r.id.slice(0, 6).toUpperCase()}`,
+                      date: r.expense_date,
+                      statusBadge: "Paid",
+                      partyLabel: "Expense Category / Head",
+                      partyName: r.category,
+                      projectName: r.project_id ? projectName(r.project_id) : "Corporate / Head Office",
+                      paymentMode: r.payment_method,
+                      paymentSource: (r as any).payment_source,
+                      amount: Number(r.amount || 0),
+                      notes: `${r.material_name ? `Material: ${r.material_name}. ` : ""}${r.description || ""}`,
+                    })
+                  }
+                >
+                  <Printer className="size-3.5" />
+                </Button>
                 <ChangeHistoryDialog
                   tableName="expenses"
                   recordId={r.id}
@@ -1628,9 +1912,12 @@ const mapToAccountHead = (category: string): string => {
         />
       </div>
 
-      <Tabs defaultValue="ledger">
+      <Tabs defaultValue="passbook">
         <div className="no-print overflow-x-auto pb-1">
           <TabsList className="w-max min-w-full">
+            <TabsTrigger value="passbook">
+              <Landmark className="mr-1.5 size-3.5 text-primary" /> Passbook (Zoho Banking)
+            </TabsTrigger>
             <TabsTrigger value="summary">
               <BarChart3 className="mr-1.5 size-3.5" /> Account Summary
             </TabsTrigger>
@@ -1653,6 +1940,20 @@ const mapToAccountHead = (category: string): string => {
             )}
           </TabsList>
         </div>
+
+        {/* ================= PASSBOOK (ZOHO BANKING RUNNING LEDGER) ================= */}
+        <TabsContent value="passbook" className="mt-4 space-y-4">
+          <PassbookLedgerTab
+            events={passbookEvents}
+            openingBalances={{
+              bank: liveBalances?.bank?.opening ?? 0,
+              petty_cash: liveBalances?.petty_cash?.opening ?? 0,
+            }}
+            projectOptions={projectOptions}
+            onOpenParty360={(type, id) => setParty360Target({ type, id })}
+            onOpenMdCapitalModal={isMD || canWriteFinance ? () => setMdInvestmentOpen(true) : undefined}
+          />
+        </TabsContent>
 
         {/* ================= ACCOUNT SUMMARY / TRIAL BALANCE ================= */}
         <TabsContent value="summary" className="mt-4 space-y-4">
@@ -2565,8 +2866,29 @@ const mapToAccountHead = (category: string): string => {
                 { header: "Reference", cell: (r: any) => r.reference_number || "—", value: (r: any) => r.reference_number },
                 { header: "Remarks", cell: (r: any) => r.remarks || "—", value: (r: any) => r.remarks },
                 {
+                  header: "Type",
+                  cell: (r: any) => (
+                    <Badge variant={r.transaction_type === "drawing" ? "destructive" : "default"}>
+                      {r.transaction_type === "drawing"
+                        ? "Owner Drawing (Outflow)"
+                        : "Owner Contribution (Inflow)"}
+                    </Badge>
+                  ),
+                  value: (r: any) =>
+                    r.transaction_type === "drawing" ? "Owner Drawing" : "Owner Contribution",
+                },
+                {
                   header: "Amount",
-                  cell: (r: any) => <span className="font-mono font-bold text-emerald-700">+{currency(r.amount)}</span>,
+                  cell: (r: any) =>
+                    r.transaction_type === "drawing" ? (
+                      <span className="font-mono font-bold text-destructive">
+                        -{currency(r.amount)}
+                      </span>
+                    ) : (
+                      <span className="font-mono font-bold text-emerald-700">
+                        +{currency(r.amount)}
+                      </span>
+                    ),
                   value: (r: any) => r.amount,
                   className: "text-right",
                 },
@@ -2595,6 +2917,24 @@ const mapToAccountHead = (category: string): string => {
           label={voidingTarget.label}
         />
       )}
+
+      {/* Universal Zoho Buyer & Vendor 360° Workspace Dialog */}
+      {party360Target && (
+        <Party360Dialog
+          open={!!party360Target}
+          onOpenChange={(v) => !v && setParty360Target(null)}
+          partyType={party360Target.type}
+          partyId={party360Target.id}
+          initialTab="statement"
+        />
+      )}
+
+      {/* Printable A4 Expense & Document Voucher Modal */}
+      <PrintableVoucherDialog
+        open={!!voucherModalData}
+        onOpenChange={(v) => !v && setVoucherModalData(null)}
+        data={voucherModalData}
+      />
     </div>
     </RequirePermission>
   );
