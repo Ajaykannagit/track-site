@@ -44,7 +44,7 @@ export type NotificationSeverity = "critical" | "warning" | "restore" | "normal"
 export function getNotificationSeverity(notif: NotificationItem): NotificationSeverity {
   const type = (notif.type || "").toLowerCase();
   const title = (notif.title || "").toLowerCase();
-  const deletedCount = Number((notif.details as Record<string, unknown> | undefined)?.deleted_count ?? 0);
+  const deletedCount = Number((notif.details as Record<string, unknown> | undefined)?.["deleted_count"] ?? 0);
 
   // Red (Critical): Hard delete, bulk delete, or deleting multiple records at once
   if (

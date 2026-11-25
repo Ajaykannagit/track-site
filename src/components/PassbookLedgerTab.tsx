@@ -99,9 +99,9 @@ interface PassbookLedgerTabProps {
     petty_cash: number;
   };
   projectOptions: { value: string; label: string }[];
-  onOpenParty360?: (partyType: "client" | "supplier" | "contractor", partyId: string) => void;
-  onOpenTransferModal?: () => void;
-  onOpenMdCapitalModal?: () => void;
+  onOpenParty360?: ((partyType: "client" | "supplier" | "contractor", partyId: string) => void) | undefined;
+  onOpenTransferModal?: (() => void) | undefined;
+  onOpenMdCapitalModal?: (() => void) | undefined;
 }
 
 export function PassbookLedgerTab({

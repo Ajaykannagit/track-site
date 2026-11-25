@@ -23,9 +23,9 @@ export type VoucherDocumentType =
 
 export interface VoucherLineItem {
   description: string;
-  unit?: string | null;
-  quantity?: number | null;
-  rate?: number | null;
+  unit?: string | null | undefined;
+  quantity?: number | null | undefined;
+  rate?: number | null | undefined;
   amount: number;
 }
 
@@ -33,33 +33,33 @@ export interface PrintableVoucherData {
   type: VoucherDocumentType;
   voucherNumber: string;
   date: string;
-  statusBadge?: string; // e.g., "Paid", "Advance", "Approved", "Billed"
-  statusTone?: "emerald" | "blue" | "amber" | "slate";
+  statusBadge?: string | undefined; // e.g., "Paid", "Advance", "Approved", "Billed"
+  statusTone?: "emerald" | "blue" | "amber" | "slate" | undefined;
   partyLabel: string; // e.g., "Paid To", "Received From", "Vendor / Supplier", "Contractor", "Customer / Buyer"
   partyName: string;
-  partyAddress?: string | null;
-  partyPhone?: string | null;
-  partyGstin?: string | null;
-  partyCode?: string | null;
-  projectName?: string | null;
-  projectCode?: string | null;
-  paymentMode?: string | null;
-  paymentSource?: string | null;
-  walletName?: string | null;
-  referenceNumber?: string | null;
-  linkedDocLabel?: string | null; // e.g. "Bill / PO Number", "Milestone / Invoice"
-  linkedDocNumber?: string | null;
-  linkedDocDate?: string | null;
-  linkedDocTotal?: number | null;
+  partyAddress?: string | null | undefined;
+  partyPhone?: string | null | undefined;
+  partyGstin?: string | null | undefined;
+  partyCode?: string | null | undefined;
+  projectName?: string | null | undefined;
+  projectCode?: string | null | undefined;
+  paymentMode?: string | null | undefined;
+  paymentSource?: string | null | undefined;
+  walletName?: string | null | undefined;
+  referenceNumber?: string | null | undefined;
+  linkedDocLabel?: string | null | undefined; // e.g. "Bill / PO Number", "Milestone / Invoice"
+  linkedDocNumber?: string | null | undefined;
+  linkedDocDate?: string | null | undefined;
+  linkedDocTotal?: number | null | undefined;
   amount: number; // Main amount paid / received / billed
-  grossAmount?: number | null;
-  taxAmount?: number | null;
-  travelCharges?: number | null;
-  tdsAmount?: number | null;
-  retentionAmount?: number | null;
-  overPaymentAmount?: number | null; // Zoho orange "Over payment / Unused Advance" box
-  notes?: string | null;
-  lineItems?: VoucherLineItem[];
+  grossAmount?: number | null | undefined;
+  taxAmount?: number | null | undefined;
+  travelCharges?: number | null | undefined;
+  tdsAmount?: number | null | undefined;
+  retentionAmount?: number | null | undefined;
+  overPaymentAmount?: number | null | undefined; // Zoho orange "Over payment / Unused Advance" box
+  notes?: string | null | undefined;
+  lineItems?: VoucherLineItem[] | undefined;
 }
 
 interface PrintableVoucherDialogProps {

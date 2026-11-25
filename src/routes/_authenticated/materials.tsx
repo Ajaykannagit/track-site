@@ -953,9 +953,10 @@ function MaterialsPage() {
             Pending supplier payments
             {(() => {
               const pendingCount = (pos.data ?? []).filter((p) => {
-                if ((p as any).is_void) return false;
+                if ((p as any).is_void || (p as any).deleted_at) return false;
+                if (poProjectFilter !== "all" && p.project_id !== poProjectFilter) return false;
                 const paid = (payments.data ?? [])
-                  .filter((pay) => pay.po_id === p.id && !(pay as any).is_void)
+                  .filter((pay) => pay.po_id === p.id && !(pay as any).is_void && !(pay as any).deleted_at)
                   .reduce((sum, pay) => sum + (pay.amount || 0), 0);
                 return p.total_amount - paid > 0;
               }).length;
@@ -1168,9 +1169,10 @@ function MaterialsPage() {
             rows={(() => {
               const todayTime = new Date().getTime();
               return filteredPos
+                .filter((po) => !(po as any).is_void && !(po as any).deleted_at)
                 .map((po) => {
                   const paid = (payments.data ?? [])
-                    .filter((p) => p.po_id === po.id)
+                    .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
                     .reduce((sum, p) => sum + (p.amount || 0), 0);
                   const balanceDue = po.total_amount - paid;
                   const poTime = new Date(po.po_date).getTime();
@@ -1548,103 +1550,110 @@ function MaterialsPage() {
 
         {/* ================= FLOW TRACKER ================= */}
         <TabsContent value="flow" className="mt-4">
-          <div className="rounded-lg border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/50">
-                <tr>
-                  <th className="p-3 text-left font-medium">Purchase Order</th>
-                  <th className="p-3 text-left font-medium">Project</th>
-                  <th className="p-3 text-left font-medium">Supplier</th>
-                  <th className="p-3 text-right font-medium">PO Value</th>
-                  <th className="p-3 text-right font-medium">Received (GRN)</th>
-                  <th className="p-3 text-right font-medium">Paid</th>
-                  <th className="p-3 text-right font-medium">Outstanding</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredPos.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                      No purchase orders found. Add purchase orders to see the materials flow.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPos.map((po) => {
-                    const poReceipts = (receipts.data ?? []).filter((r) => r.po_id === po.id && !(r as any).deleted_at);
-                    const poPaid = (payments.data ?? [])
-                      .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
-                      .reduce((sum, p) => sum + (p.amount || 0), 0);
-                    const receivedTotal = poReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0);
-                    const outstanding = po.total_amount - poPaid;
-                    return (
-                      <tr key={po.id} className="hover:bg-muted/30">
-                        <td className="p-3 font-mono text-xs font-semibold">{po.po_number}</td>
-                        <td className="p-3">{projectName(po.project_id)}</td>
-                        <td className="p-3">
-                          {po.supplier_id ? (
-                            <button
-                              type="button"
-                              onClick={() => setSupplier360Id(po.supplier_id)}
-                              className="font-medium text-primary hover:underline text-left"
-                              title="Open Supplier 360°"
-                            >
-                              {supplierName(po.supplier_id)}
-                            </button>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="p-3 text-right tabular-nums">{currency(po.total_amount)}</td>
-                        <td className="p-3 text-right tabular-nums">{currency(receivedTotal)}</td>
-                        <td className="p-3 text-right tabular-nums text-emerald-700">{currency(poPaid)}</td>
-                        <td className={`p-3 text-right tabular-nums font-medium ${outstanding > 0 ? "text-destructive" : outstanding < 0 ? "text-purple-700" : "text-muted-foreground"}`}>
-                          {outstanding < 0 ? `Overpaid (${currency(Math.abs(outstanding))})` : currency(outstanding)}
+          {(() => {
+            const activeFlowPos = filteredPos.filter(
+              (po) => !(po as any).is_void && !(po as any).deleted_at
+            );
+            return (
+              <div className="rounded-lg border bg-card overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/50">
+                    <tr>
+                      <th className="p-3 text-left font-medium">Purchase Order</th>
+                      <th className="p-3 text-left font-medium">Project</th>
+                      <th className="p-3 text-left font-medium">Supplier</th>
+                      <th className="p-3 text-right font-medium">PO Value</th>
+                      <th className="p-3 text-right font-medium">Received (GRN)</th>
+                      <th className="p-3 text-right font-medium">Paid</th>
+                      <th className="p-3 text-right font-medium">Outstanding</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {activeFlowPos.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                          No purchase orders found. Add purchase orders to see the materials flow.
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-              {filteredPos.length > 0 && (
-                <tfoot className="border-t bg-muted/50 font-semibold">
-                  <tr>
-                    <td colSpan={3} className="p-3">Total</td>
-                    <td className="p-3 text-right tabular-nums">
-                      {currency(filteredPos.reduce((a, p) => a + (p.total_amount || 0), 0))}
-                    </td>
-                    <td className="p-3 text-right tabular-nums">
-                      {currency(
-                        filteredPos.reduce((a, po) => {
-                          const poReceipts = (receipts.data ?? []).filter((r) => r.po_id === po.id && !(r as any).deleted_at);
-                          return a + poReceipts.reduce((s, r) => s + (r.total_amount || 0), 0);
-                        }, 0)
-                      )}
-                    </td>
-                    <td className="p-3 text-right tabular-nums text-emerald-700">
-                      {currency(
-                        filteredPos.reduce((a, po) => {
-                          const poPaid = (payments.data ?? [])
-                            .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
-                            .reduce((s, p) => s + (p.amount || 0), 0);
-                          return a + poPaid;
-                        }, 0)
-                      )}
-                    </td>
-                    <td className="p-3 text-right tabular-nums">
-                      {currency(
-                        filteredPos.reduce((a, po) => {
-                          const poPaid = (payments.data ?? [])
-                            .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
-                            .reduce((s, p) => s + (p.amount || 0), 0);
-                          return a + (po.total_amount - poPaid);
-                        }, 0)
-                      )}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+                    ) : (
+                      activeFlowPos.map((po) => {
+                        const poReceipts = (receipts.data ?? []).filter((r) => r.po_id === po.id && !(r as any).deleted_at);
+                        const poPaid = (payments.data ?? [])
+                          .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
+                          .reduce((sum, p) => sum + (p.amount || 0), 0);
+                        const receivedTotal = poReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0);
+                        const outstanding = po.total_amount - poPaid;
+                        return (
+                          <tr key={po.id} className="hover:bg-muted/30">
+                            <td className="p-3 font-mono text-xs font-semibold">{po.po_number}</td>
+                            <td className="p-3">{projectName(po.project_id)}</td>
+                            <td className="p-3">
+                              {po.supplier_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSupplier360Id(po.supplier_id)}
+                                  className="font-medium text-primary hover:underline text-left"
+                                  title="Open Supplier 360°"
+                                >
+                                  {supplierName(po.supplier_id)}
+                                </button>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="p-3 text-right tabular-nums">{currency(po.total_amount)}</td>
+                            <td className="p-3 text-right tabular-nums">{currency(receivedTotal)}</td>
+                            <td className="p-3 text-right tabular-nums text-emerald-700">{currency(poPaid)}</td>
+                            <td className={`p-3 text-right tabular-nums font-medium ${outstanding > 0 ? "text-destructive" : outstanding < 0 ? "text-purple-700" : "text-muted-foreground"}`}>
+                              {outstanding < 0 ? `Overpaid (${currency(Math.abs(outstanding))})` : currency(outstanding)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                  {activeFlowPos.length > 0 && (
+                    <tfoot className="border-t bg-muted/50 font-semibold">
+                      <tr>
+                        <td colSpan={3} className="p-3">Total</td>
+                        <td className="p-3 text-right tabular-nums">
+                          {currency(activeFlowPos.reduce((a, p) => a + (p.total_amount || 0), 0))}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          {currency(
+                            activeFlowPos.reduce((a, po) => {
+                              const poReceipts = (receipts.data ?? []).filter((r) => r.po_id === po.id && !(r as any).deleted_at);
+                              return a + poReceipts.reduce((s, r) => s + (r.total_amount || 0), 0);
+                            }, 0)
+                          )}
+                        </td>
+                        <td className="p-3 text-right tabular-nums text-emerald-700">
+                          {currency(
+                            activeFlowPos.reduce((a, po) => {
+                              const poPaid = (payments.data ?? [])
+                                .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
+                                .reduce((s, p) => s + (p.amount || 0), 0);
+                              return a + poPaid;
+                            }, 0)
+                          )}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          {currency(
+                            activeFlowPos.reduce((a, po) => {
+                              const poPaid = (payments.data ?? [])
+                                .filter((p) => p.po_id === po.id && !(p as any).is_void && !(p as any).deleted_at)
+                                .reduce((s, p) => s + (p.amount || 0), 0);
+                              return a + (po.total_amount - poPaid);
+                            }, 0)
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            );
+          })()}
         </TabsContent>
       </Tabs>
 

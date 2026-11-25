@@ -177,7 +177,13 @@ export function Party360Dialog({
   const [customTo, setCustomTo] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [voucherModalData, setVoucherModalData] = useState<PrintableVoucherData | null>(null);
-  const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
+  const [openAccordions, setOpenAccordions] = useState<{
+    sec1: boolean;
+    sec2: boolean;
+    sec3: boolean;
+    sec4: boolean;
+    sec5: boolean;
+  }>({
     sec1: true,
     sec2: true,
     sec3: true,
@@ -210,7 +216,7 @@ export function Party360Dialog({
     order: { col: "created_at", asc: true },
     enabled: open && partyType === "client",
   });
-  const milestones = useRows<any>("project_payment_milestones", {
+  const milestones = useRows<any>("payment_milestones", {
     order: { col: "due_date", asc: true },
     enabled: open && partyType === "client",
   });
@@ -233,11 +239,11 @@ export function Party360Dialog({
   });
 
   const workOrders = useRows<any>("work_orders", {
-    order: { col: "issue_date", asc: true },
+    order: { col: "wo_date", asc: true },
     enabled: open && partyType === "contractor",
   });
   const mbs = useRows<any>("measurement_books", {
-    order: { col: "measurement_date", asc: true },
+    order: { col: "mb_date", asc: true },
     enabled: open && partyType === "contractor",
   });
   const contractorBills = useRows<any>("contractor_bills", {
@@ -827,13 +833,13 @@ export function Party360Dialog({
         w.contractor_id === currentParty.id &&
         !w.is_void &&
         !w.deleted_at &&
-        inDateAndProject(w.issue_date, w.project_id)
+        inDateAndProject(w.wo_date, w.project_id)
     );
     const contractorMbs = (contractorWos.length >= 0 ? mbs.data ?? [] : []).filter(
       (m: any) =>
         m.contractor_id === currentParty.id &&
         !m.deleted_at &&
-        inDateAndProject(m.measurement_date, m.project_id)
+        inDateAndProject(m.mb_date, m.project_id)
     );
     const contractorBillsList = (contractorBills.data ?? []).filter(
       (b: any) =>
@@ -1106,7 +1112,7 @@ export function Party360Dialog({
     URL.revokeObjectURL(url);
   };
 
-  const toggleAccordion = (key: string) =>
+  const toggleAccordion = (key: "sec1" | "sec2" | "sec3" | "sec4" | "sec5") =>
     setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const roleTitle =
@@ -1384,20 +1390,24 @@ export function Party360Dialog({
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={() =>
-                              handleApplyAdvanceToDocument(
-                                partyData.unappliedAdvancesList[0].id,
-                                partyData.openDocumentsToApply[0].id
-                              )
-                            }
-                          >
-                            Apply {currency(partyData.unappliedAdvancesList[0].amount)} to{" "}
-                            {partyData.openDocumentsToApply[0].docNumber}
-                          </Button>
+                          {partyData.unappliedAdvancesList[0] &&
+                            partyData.openDocumentsToApply[0] && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => {
+                                  const adv = partyData.unappliedAdvancesList[0];
+                                  const doc = partyData.openDocumentsToApply[0];
+                                  if (adv && doc) {
+                                    handleApplyAdvanceToDocument(adv.id, doc.id);
+                                  }
+                                }}
+                              >
+                                Apply {currency(partyData.unappliedAdvancesList[0].amount)} to{" "}
+                                {partyData.openDocumentsToApply[0].docNumber}
+                              </Button>
+                            )}
                         </div>
                       </div>
                     )}
@@ -2181,7 +2191,7 @@ export function Party360Dialog({
                                   Total Work Orders:{" "}
                                   {currency(
                                     sum(partyData.contractorWos, (w: any) =>
-                                      Number(w.total_amount || 0)
+                                      Number(w.contract_amount ?? w.total_amount ?? 0)
                                     )
                                   )}
                                 </span>
@@ -2204,16 +2214,16 @@ export function Party360Dialog({
                                       {partyData.contractorWos.map((wo: any) => (
                                         <tr key={wo.id}>
                                           <td className="py-2 font-mono font-semibold">
-                                            {wo.wo_number}
+                                            {wo.work_order_number || wo.wo_number}
                                           </td>
-                                          <td className="py-2">{dateFmt(wo.issue_date)}</td>
+                                          <td className="py-2">{dateFmt(wo.wo_date || wo.issue_date)}</td>
                                           <td className="py-2">{projectName(wo.project_id)}</td>
                                           <td className="py-2">{wo.work_description}</td>
                                           <td className="py-2">
                                             <StatusBadge status={wo.status} />
                                           </td>
                                           <td className="py-2 text-right font-mono font-semibold">
-                                            {currency(wo.total_amount)}
+                                            {currency(wo.contract_amount ?? wo.total_amount ?? 0)}
                                           </td>
                                           <td className="py-2 text-right">
                                             <Button
@@ -2223,8 +2233,8 @@ export function Party360Dialog({
                                               onClick={() =>
                                                 setVoucherModalData({
                                                   type: "work_order",
-                                                  voucherNumber: wo.wo_number,
-                                                  date: wo.issue_date,
+                                                  voucherNumber: wo.work_order_number || wo.wo_number,
+                                                  date: wo.wo_date || wo.issue_date,
                                                   statusBadge: wo.status,
                                                   partyLabel: "Contractor",
                                                   partyName: currentParty.name,
@@ -2232,7 +2242,7 @@ export function Party360Dialog({
                                                   partyAddress: currentParty.address,
                                                   partyPhone: currentParty.phone,
                                                   projectName: projectName(wo.project_id),
-                                                  amount: Number(wo.total_amount || 0),
+                                                  amount: Number(wo.contract_amount ?? wo.total_amount ?? 0),
                                                   notes: wo.work_description,
                                                 })
                                               }

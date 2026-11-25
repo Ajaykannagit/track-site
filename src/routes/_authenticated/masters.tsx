@@ -164,7 +164,7 @@ function MastersPage() {
 
   // Financial & Project linkage queries for live Zoho balance columns
   const quotations = useRows<any>("project_quotations", {
-    select: "project_id,amount,status,is_void,deleted_at",
+    select: "project_id,amount,status,deleted_at",
   });
   const clientPayments = useRows<any>("client_payments", {
     select: "client_id,project_id,amount,tds_amount,payment_category,is_void,deleted_at",
@@ -173,13 +173,13 @@ function MastersPage() {
     select: "id,supplier_id,project_id,total_amount,is_void,deleted_at",
   });
   const receipts = useRows<any>("material_receipts_view", {
-    select: "id,supplier_id,project_id,po_id,total_amount,deleted_at",
+    select: "id,supplier_id,project_id,po_id,total_amount",
   });
   const supplierPayments = useRows<any>("supplier_payments", {
     select: "id,supplier_id,project_id,po_id,amount,is_void,deleted_at",
   });
   const workOrders = useRows<any>("work_orders", {
-    select: "id,contractor_id,project_id,total_amount,is_void,deleted_at",
+    select: "id,contractor_id,project_id,contract_amount,deleted_at",
   });
   const contractorBills = useRows<any>("contractor_bills", {
     select: "id,contractor_id,project_id,net_amount,status,is_void,deleted_at",

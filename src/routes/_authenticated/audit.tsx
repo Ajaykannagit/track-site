@@ -500,7 +500,7 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
   };
 
   const recordTitle =
-    (log.details as Record<string, unknown> | null)?.record_title as string | undefined;
+    (log.details as Record<string, unknown> | null)?.["record_title"] as string | undefined;
 
   return (
     <tr className="hover:bg-muted/30">
@@ -521,7 +521,7 @@ function DeletedItemRow({ log, onRestored }: { log: AuditLog; onRestored: () => 
         })}
       </td>
       <td className="p-2.5 font-mono text-[10px] text-muted-foreground">
-        {((log.details as Record<string, unknown> | null)?.performer_email as string | undefined) ??
+        {((log.details as Record<string, unknown> | null)?.["performer_email"] as string | undefined) ??
           (log.performed_by ? log.performed_by.slice(0, 12) + "…" : "—")}
       </td>
       <td className="p-2.5 text-muted-foreground italic">{log.reason ?? "—"}</td>

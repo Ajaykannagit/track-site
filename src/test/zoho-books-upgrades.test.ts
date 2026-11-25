@@ -26,7 +26,7 @@ describe("Zoho Books 50 Upgrades — Party 360° Statement & Running Passbook Ma
     expect(result.closingBalance).toBe(-24725);
     expect(result.unusedAdvance).toBe(24725);
     expect(result.netPayableOrReceivable).toBe(0);
-    expect(result.rows[0].runningBalance).toBe(-24725);
+    expect(result.rows[0]?.runningBalance).toBe(-24725);
   });
 
   it("nets advance payments against subsequent contractor bills in chronological order (like Nagaraj Centring Work - Kolar)", () => {
@@ -127,6 +127,6 @@ describe("Zoho Books 50 Upgrades — Party 360° Statement & Running Passbook Ma
     expect(passbook.totalWithdrawals).toBe(40000);
     expect(passbook.closingBalance).toBe(110000);
     // rowsDesc has latest transaction first
-    expect(passbook.rowsDesc[0].runningBalance).toBe(110000);
+    expect(passbook.rowsDesc[0]?.runningBalance).toBe(110000);
   });
 });

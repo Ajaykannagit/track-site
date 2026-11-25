@@ -890,6 +890,7 @@ function ContractorsPage() {
             onClick={() => {
               setProjectFilter("all");
               setContractorFilter("all");
+              setJobTypeFilter("all");
             }}
             className="h-8 px-2 text-xs"
           >
@@ -1473,10 +1474,23 @@ function ContractorsPage() {
                   </tr>
                 ) : (
                   filteredWos.map((wo) => {
-                    const woMbs = (mbs.data ?? []).filter((m) => m.work_order_id === wo.id);
-                    const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                    const woMbs = (mbs.data ?? []).filter(
+                      (m) => m.work_order_id === wo.id && !(m as any).deleted_at && !(m as any).is_void
+                    );
+                    const woBills = (bills.data ?? []).filter(
+                      (b) =>
+                        b.work_order_id === wo.id &&
+                        !(b as any).deleted_at &&
+                        !(b as any).is_void &&
+                        b.status !== "rejected"
+                    );
                     const woPaid = (payments.data ?? [])
-                      .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                      .filter(
+                        (p) =>
+                          !(p as any).deleted_at &&
+                          !(p as any).is_void &&
+                          (woBills.some((b) => b.id === p.bill_id) || (p as any).work_order_id === wo.id)
+                      )
                       .reduce((acc, p) => acc + p.amount, 0);
                     const mbTotal = woMbs.reduce((acc, m) => acc + m.total_amount, 0);
                     const billTotal = woBills.reduce((acc, b) => acc + b.net_amount, 0);
@@ -1490,8 +1504,8 @@ function ContractorsPage() {
                         <td className="p-3 text-right tabular-nums">{currency(mbTotal)}</td>
                         <td className="p-3 text-right tabular-nums">{currency(billTotal)}</td>
                         <td className="p-3 text-right tabular-nums text-emerald-700">{currency(woPaid)}</td>
-                        <td className={`p-3 text-right tabular-nums font-medium ${outstanding > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                          {currency(outstanding)}
+                        <td className={`p-3 text-right tabular-nums font-medium ${outstanding > 0 ? "text-destructive" : outstanding < 0 ? "text-purple-700" : "text-muted-foreground"}`}>
+                          {outstanding < 0 ? `Overpaid (${currency(Math.abs(outstanding))})` : currency(outstanding)}
                         </td>
                       </tr>
                     );
@@ -1508,7 +1522,9 @@ function ContractorsPage() {
                     <td className="p-3 text-right tabular-nums">
                       {currency(
                         filteredWos.reduce((a, wo) => {
-                          const woMbs = (mbs.data ?? []).filter((m) => m.work_order_id === wo.id);
+                          const woMbs = (mbs.data ?? []).filter(
+                            (m) => m.work_order_id === wo.id && !(m as any).deleted_at && !(m as any).is_void
+                          );
                           return a + woMbs.reduce((s, m) => s + m.total_amount, 0);
                         }, 0)
                       )}
@@ -1516,7 +1532,13 @@ function ContractorsPage() {
                     <td className="p-3 text-right tabular-nums">
                       {currency(
                         filteredWos.reduce((a, wo) => {
-                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          const woBills = (bills.data ?? []).filter(
+                            (b) =>
+                              b.work_order_id === wo.id &&
+                              !(b as any).deleted_at &&
+                              !(b as any).is_void &&
+                              b.status !== "rejected"
+                          );
                           return a + woBills.reduce((s, b) => s + b.net_amount, 0);
                         }, 0)
                       )}
@@ -1524,9 +1546,20 @@ function ContractorsPage() {
                     <td className="p-3 text-right tabular-nums text-emerald-700">
                       {currency(
                         filteredWos.reduce((a, wo) => {
-                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          const woBills = (bills.data ?? []).filter(
+                            (b) =>
+                              b.work_order_id === wo.id &&
+                              !(b as any).deleted_at &&
+                              !(b as any).is_void &&
+                              b.status !== "rejected"
+                          );
                           const woPaid = (payments.data ?? [])
-                            .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                            .filter(
+                              (p) =>
+                                !(p as any).deleted_at &&
+                                !(p as any).is_void &&
+                                (woBills.some((b) => b.id === p.bill_id) || (p as any).work_order_id === wo.id)
+                            )
                             .reduce((s, p) => s + p.amount, 0);
                           return a + woPaid;
                         }, 0)
@@ -1535,10 +1568,21 @@ function ContractorsPage() {
                     <td className="p-3 text-right tabular-nums text-destructive">
                       {currency(
                         filteredWos.reduce((a, wo) => {
-                          const woBills = (bills.data ?? []).filter((b) => b.work_order_id === wo.id);
+                          const woBills = (bills.data ?? []).filter(
+                            (b) =>
+                              b.work_order_id === wo.id &&
+                              !(b as any).deleted_at &&
+                              !(b as any).is_void &&
+                              b.status !== "rejected"
+                          );
                           const billTotal = woBills.reduce((s, b) => s + b.net_amount, 0);
                           const woPaid = (payments.data ?? [])
-                            .filter((p) => woBills.some((b) => b.id === p.bill_id))
+                            .filter(
+                              (p) =>
+                                !(p as any).deleted_at &&
+                                !(p as any).is_void &&
+                                (woBills.some((b) => b.id === p.bill_id) || (p as any).work_order_id === wo.id)
+                            )
                             .reduce((s, p) => s + p.amount, 0);
                           return a + (billTotal - woPaid);
                         }, 0)
