@@ -1890,7 +1890,7 @@ const mapToAccountHead = (category: string): string => {
             )
           )}
           tone="destructive"
-          hint={showVoided ? "Active expenses (voided excluded from total)" : undefined}
+          {...(showVoided ? { hint: "Active expenses (voided excluded from total)" } : {})}
         />
         <StatCard
           label="Money received"

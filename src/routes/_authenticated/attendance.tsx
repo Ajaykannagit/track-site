@@ -328,6 +328,11 @@ function AttendanceWeeklySheetPage() {
     order: { col: "name", asc: true },
   });
 
+  const projects = useRows<{ id: string; name: string }>("projects_view", {
+    select: "id,name",
+    order: { col: "name", asc: true },
+  });
+
   // Combined Site & Project Location Options for Attendance
   const locationOptions = useMemo(() => {
     const list: { id: string; name: string; group?: string }[] = [];
