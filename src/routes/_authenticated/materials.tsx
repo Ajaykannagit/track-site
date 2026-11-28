@@ -189,38 +189,40 @@ function MaterialsPage() {
       value: r.id,
       label: `${r.request_number} — ${projectName(r.project_id)} (${currency(r.total_amount)})`,
     }));
-  const poOptions = (pos.data ?? []).map((p) => ({
-    value: p.id,
-    label: `${p.po_number} — ${supplierName(p.supplier_id)} (${currency(p.total_amount)})`,
-  }));
+  const poOptions = (pos.data ?? [])
+    .filter((p) => !(p as any).is_void && !(p as any).deleted_at)
+    .map((p) => ({
+      value: p.id,
+      label: `${p.po_number} — ${supplierName(p.supplier_id)} (${currency(p.total_amount)})`,
+    }));
 
   // Permissions
   const canModifySite = canWriteSite || isMD;
   const canModifyFinance = canWriteFinance || isMD;
 
-  // Filtered lists (excluding voided records unless showVoided is toggled on)
+  // Filtered lists (excluding voided records unless showVoided is toggled on; always excludes soft-deleted)
   const filteredRequests = useMemo(() => {
-    let list = requests.data ?? [];
+    let list = (requests.data ?? []).filter((r) => !(r as any).deleted_at);
     if (!showVoided) list = list.filter((r) => !(r as any).is_void);
     if (reqProjectFilter !== "all") list = list.filter((r) => r.project_id === reqProjectFilter);
     return list;
   }, [requests.data, reqProjectFilter, showVoided]);
 
   const filteredPos = useMemo(() => {
-    let list = pos.data ?? [];
+    let list = (pos.data ?? []).filter((p) => !(p as any).deleted_at);
     if (!showVoided) list = list.filter((p) => !(p as any).is_void);
     if (poProjectFilter !== "all") list = list.filter((p) => p.project_id === poProjectFilter);
     return list;
   }, [pos.data, poProjectFilter, showVoided]);
 
   const filteredReceipts = useMemo(() => {
-    let list = receipts.data ?? [];
+    let list = (receipts.data ?? []).filter((r) => !(r as any).deleted_at && !(r as any).is_void);
     if (grnProjectFilter !== "all") list = list.filter((r) => r.project_id === grnProjectFilter);
     return list;
   }, [receipts.data, grnProjectFilter]);
 
   const filteredPayments = useMemo(() => {
-    let list = payments.data ?? [];
+    let list = (payments.data ?? []).filter((p) => !(p as any).deleted_at);
     if (!showVoided) list = list.filter((p) => !(p as any).is_void);
     if (payProjectFilter !== "all") list = list.filter((p) => p.project_id === payProjectFilter);
     if (paySupplierFilter !== "all") list = list.filter((p) => p.supplier_id === paySupplierFilter);
@@ -891,7 +893,9 @@ function MaterialsPage() {
       name: "po_id",
       label: "Against PO (optional)",
       type: "select",
-      options: (pos.data ?? []).map((p) => ({ value: p.id, label: `${p.po_number} (${currency(p.total_amount)})` })),
+      options: (pos.data ?? [])
+        .filter((p) => !(p as any).is_void && !(p as any).deleted_at)
+        .map((p) => ({ value: p.id, label: `${p.po_number} (${currency(p.total_amount)})` })),
     },
     {
       name: "payment_source",

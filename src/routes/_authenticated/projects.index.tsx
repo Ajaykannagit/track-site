@@ -326,16 +326,25 @@ function ProjectsPage() {
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>
           <TabsList className="no-print flex-wrap">
-            <TabsTrigger value="all">All ({(projects.data ?? []).length})</TabsTrigger>
-            <TabsTrigger value="active">
-              Active ({(projects.data ?? []).filter((p) => p.status === "active").length})
-            </TabsTrigger>
-            <TabsTrigger value="planning">
-              Planning ({(projects.data ?? []).filter((p) => p.status === "planning").length})
-            </TabsTrigger>
-            <TabsTrigger value="completed">
-              Completed ({(projects.data ?? []).filter((p) => p.status === "completed").length})
-            </TabsTrigger>
+            {(() => {
+              const baseList = clientFilter === "all"
+                ? (projects.data ?? [])
+                : (projects.data ?? []).filter((p) => p.client_id === clientFilter);
+              return (
+                <>
+                  <TabsTrigger value="all">All ({baseList.length})</TabsTrigger>
+                  <TabsTrigger value="active">
+                    Active ({baseList.filter((p) => p.status === "active").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="planning">
+                    Planning ({baseList.filter((p) => p.status === "planning").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="completed">
+                    Completed ({baseList.filter((p) => p.status === "completed").length})
+                  </TabsTrigger>
+                </>
+              );
+            })()}
           </TabsList>
         </Tabs>
 

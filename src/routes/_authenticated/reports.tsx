@@ -649,7 +649,7 @@ function ReportsPage() {
           value={currency(totalProfit)}
           tone={totalProfit >= 0 ? "success" : "destructive"}
           hint={
-            totalValue
+            totalValue && !isNaN(totalProfit / totalValue) && isFinite(totalProfit / totalValue)
               ? `${((totalProfit / totalValue) * 100).toFixed(1)}% profit margin`
               : "No contract value"
           }

@@ -524,9 +524,9 @@ const mapToAccountHead = (category: string): string => {
   const rawLedgerTransactions = useMemo<LedgerTransaction[]>(() => {
     const list: LedgerTransaction[] = [];
 
-    // 0. MD Investments & Drawings (excludes voided)
+    // 0. MD Investments & Drawings (excludes voided & soft-deleted)
     for (const inv of mdInvestments.data ?? []) {
-      if ((inv as any).is_void) continue;
+      if ((inv as any).is_void || (inv as any).deleted_at) continue;
       const isDrawing = (inv as any).transaction_type === "drawing";
       list.push({
         id: `mdi-${inv.id}`,
@@ -564,9 +564,9 @@ const mapToAccountHead = (category: string): string => {
       });
     }
 
-    // 2. Supplier Payments (Outflow - excludes voided)
+    // 2. Supplier Payments (Outflow - excludes voided & soft-deleted)
     for (const sp of supplierPayments.data ?? []) {
-      if ((sp as any).is_void) continue;
+      if ((sp as any).is_void || (sp as any).deleted_at) continue;
       list.push({
         id: `sp-${sp.id}`,
         date: sp.payment_date,
@@ -709,7 +709,7 @@ const mapToAccountHead = (category: string): string => {
 
     // 1. MD Investments & Drawings -> Equity: Investments / Drawings
     for (const inv of mdInvestments.data ?? []) {
-      if ((inv as any).is_void) continue;
+      if ((inv as any).is_void || (inv as any).deleted_at) continue;
       const isDrawing = (inv as any).transaction_type === "drawing";
       list.push({
         id: `mdi-${inv.id}`,
@@ -764,7 +764,7 @@ const mapToAccountHead = (category: string): string => {
 
     // 3. Supplier Payments -> Expense: Raw Materials and Consumables
     for (const sp of supplierPayments.data ?? []) {
-      if ((sp as any).is_void) continue;
+      if ((sp as any).is_void || (sp as any).deleted_at) continue;
       const src = (sp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
       list.push({
         id: `sp-${sp.id}`,
@@ -783,7 +783,7 @@ const mapToAccountHead = (category: string): string => {
 
     // 4. Contractor & Subcontractor Payments -> Expense: Subcontractor
     for (const cp of contractorPayments.data ?? []) {
-      if ((cp as any).is_void) continue;
+      if ((cp as any).is_void || (cp as any).deleted_at) continue;
       const src = (cp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
       list.push({
         id: `conp-${cp.id}`,
@@ -800,7 +800,7 @@ const mapToAccountHead = (category: string): string => {
       });
     }
     for (const scp of subcontractorPayments.data ?? []) {
-      if ((scp as any).is_void) continue;
+      if ((scp as any).is_void || (scp as any).deleted_at) continue;
       const src = (scp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
       list.push({
         id: `subp-${scp.id}`,
@@ -819,7 +819,7 @@ const mapToAccountHead = (category: string): string => {
 
     // 5. Wage Payments & Advances -> Expense: Salaries and Employee Wages
     for (const wp of wagePayments.data ?? []) {
-      if ((wp as any).is_void) continue;
+      if ((wp as any).is_void || (wp as any).deleted_at) continue;
       const src = (wp.payment_source || "bank").toLowerCase() === "petty_cash" ? "petty_cash" : "bank";
       list.push({
         id: `wp-${wp.id}`,
@@ -836,6 +836,7 @@ const mapToAccountHead = (category: string): string => {
       });
     }
     for (const wa of wageAdvances.data ?? []) {
+      if ((wa as any).is_void || (wa as any).deleted_at) continue;
       if (Number(wa.advance_paid || 0) > 0) {
         const src = ((wa as any).payment_source || "petty_cash").toLowerCase() === "bank" ? "bank" : "petty_cash";
         list.push({
@@ -1936,12 +1937,12 @@ const mapToAccountHead = (category: string): string => {
             <TabsTrigger value="ledger">
               <BookOpen className="mr-1.5 size-3.5" /> Unified Ledger ({filteredLedger.length})
             </TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="expenses">Expenses ({filteredExpenses.length})</TabsTrigger>
             <TabsTrigger value="client_receipts">
-              <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({(clientPayments.data ?? []).length})
+              <HandCoins className="mr-1.5 size-3.5" /> Client Receipts ({filteredClientPayments.length})
             </TabsTrigger>
-            <TabsTrigger value="cash">Cash closing</TabsTrigger>
-            <TabsTrigger value="transfers">Transfers (Contra)</TabsTrigger>
+            <TabsTrigger value="cash">Cash closing ({filteredClosings.length})</TabsTrigger>
+            <TabsTrigger value="transfers">Transfers (Contra) ({filteredTransfers.length})</TabsTrigger>
             {(isMD || canWriteFinance) && (
               <TabsTrigger value="md_investments">
                 <Landmark className="mr-1.5 size-3.5" /> MD Investments & Drawings ({(mdInvestments.data ?? []).length})
@@ -1981,7 +1982,7 @@ const mapToAccountHead = (category: string): string => {
             onToChange={setTo}
             projectOptions={projectOptions}
             transactions={accountSummaryTransactions}
-            transfers={transfers.data ?? []}
+            transfers={(transfers.data ?? []).filter((t) => !(t as any).is_void && !(t as any).deleted_at)}
             openingBalances={{
               bank: liveBalances?.bank?.opening ?? 0,
               petty_cash: liveBalances?.petty_cash?.opening ?? 0,

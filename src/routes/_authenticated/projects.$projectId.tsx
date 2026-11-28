@@ -262,9 +262,9 @@ function ProjectDetail() {
   );
   const pendingReceivables = Math.max(0, totalContractValue - totalReceived);
 
-  const labourWage = sum(attendance.data ?? [], (a) => a.calculated_wage);
-  const materialCost = sum(receipts.data ?? [], (r) => r.total_amount);
-  const contractorCost = sum(bills.data ?? [], (b) => b.net_amount);
+  const labourWage = sum((attendance.data ?? []).filter((a) => !(a as any).is_void && !(a as any).deleted_at), (a) => a.calculated_wage);
+  const materialCost = sum((receipts.data ?? []).filter((r) => !(r as any).is_void && !(r as any).deleted_at), (r) => r.total_amount);
+  const contractorCost = sum((bills.data ?? []).filter((b) => !(b as any).is_void && !(b as any).deleted_at && b.status !== 'rejected'), (b) => b.net_amount);
   const validExpenses = useMemo(
     () => (expenses.data ?? []).filter((e) => !(e as any).is_void && !(e as any).deleted_at),
     [expenses.data]
@@ -285,7 +285,7 @@ function ProjectDetail() {
 
   // Filtered Client Payments
   const filteredPayments = useMemo(() => {
-    let list = paymentsList;
+    let list = paymentsList.filter((cp) => !(cp as any).is_void && !(cp as any).deleted_at);
     if (payCategoryFilter !== "all") {
       list = list.filter((cp) => cp.payment_category === payCategoryFilter);
     }

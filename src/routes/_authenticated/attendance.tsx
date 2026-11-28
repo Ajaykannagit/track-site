@@ -860,7 +860,9 @@ function AttendanceWeeklySheetPage() {
 
       for (const d of weekDates) {
         const iso = formatDateISO(d);
-        const rec = attList.find((a) => a.employee_id === emp.id && a.attendance_date === iso);
+        const rec = attList.find(
+          (a) => a.employee_id === emp.id && a.attendance_date === iso && !(a as any).is_void && !(a as any).deleted_at
+        );
         dailyMap[iso] = rec;
         if (rec && !rec.is_leave) {
           const val = Number(rec.day_value ?? 0);
@@ -899,7 +901,7 @@ function AttendanceWeeklySheetPage() {
 
       // Labour wage payments recorded for this week for this employee
       const weekWagePayments = (allWagePayments.data ?? []).filter(
-        (p) => p.employee_id === emp.id && p.week_start_date === weekStartISO,
+        (p) => p.employee_id === emp.id && p.week_start_date === weekStartISO && !(p as any).is_void && !(p as any).deleted_at,
       );
       const totalPaidThisWeek = weekWagePayments.reduce((s, p) => s + Number(p.amount_paid), 0);
 
@@ -994,7 +996,9 @@ function AttendanceWeeklySheetPage() {
     const numDays = monthDates.length || 30;
 
     return empList.map((emp, idx) => {
-      const workerRecords = attList.filter((a) => a.employee_id === emp.id);
+      const workerRecords = attList.filter(
+        (a) => a.employee_id === emp.id && !(a as any).is_void && !(a as any).deleted_at
+      );
 
       let daysPresent = 0;
       let halfDays = 0;

@@ -413,13 +413,13 @@ function ContractorsPage() {
       header: "Paid",
       cell: (r) => {
         const paidForBill = (payments.data ?? [])
-          .filter((p) => p.bill_id === r.id)
+          .filter((p) => p.bill_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         return currency(paidForBill);
       },
       value: (r) => {
         return (payments.data ?? [])
-          .filter((p) => p.bill_id === r.id)
+          .filter((p) => p.bill_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
       },
       className: "text-right tabular-nums text-emerald-700",
@@ -428,10 +428,20 @@ function ContractorsPage() {
       header: "Balance due",
       cell: (r) => {
         const paidForBill = (payments.data ?? [])
-          .filter((p) => p.bill_id === r.id)
+          .filter((p) => p.bill_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         const bal = r.net_amount - paidForBill;
-        if (bal <= 0) {
+        if (bal < 0) {
+          return (
+            <span
+              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800 dark:bg-purple-950/50 dark:text-purple-300"
+              title={`Paid ₹${paidForBill.toLocaleString()} exceeds Bill value ₹${r.net_amount.toLocaleString()}`}
+            >
+              Overpaid ({currency(Math.abs(bal))})
+            </span>
+          );
+        }
+        if (bal === 0) {
           return (
             <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
               Paid
@@ -446,7 +456,7 @@ function ContractorsPage() {
       },
       value: (r) => {
         const paidForBill = (payments.data ?? [])
-          .filter((p) => p.bill_id === r.id)
+          .filter((p) => p.bill_id === r.id && !(p as any).is_void && !(p as any).deleted_at)
           .reduce((sum, p) => sum + (p.amount || 0), 0);
         return r.net_amount - paidForBill;
       },
@@ -707,7 +717,9 @@ function ContractorsPage() {
       name: "work_order_id",
       label: "Against work order",
       type: "select",
-      options: (wos.data ?? []).map((w) => ({ value: w.id, label: w.work_order_number })),
+      options: (wos.data ?? [])
+        .filter((w) => !(w as any).is_void && !(w as any).deleted_at)
+        .map((w) => ({ value: w.id, label: w.work_order_number })),
     },
     { name: "mb_date", label: "MB date", type: "date", required: true },
     { name: "total_amount", label: "Measured value (₹)", type: "number" },
@@ -743,7 +755,9 @@ function ContractorsPage() {
       name: "work_order_id",
       label: "Against work order",
       type: "select",
-      options: (wos.data ?? []).map((w) => ({ value: w.id, label: w.work_order_number })),
+      options: (wos.data ?? [])
+        .filter((w) => !(w as any).is_void && !(w as any).deleted_at)
+        .map((w) => ({ value: w.id, label: w.work_order_number })),
     },
     { name: "bill_date", label: "Bill date", type: "date", required: true },
     { name: "gross_amount", label: "Gross amount (₹)", type: "number", required: true },
@@ -785,7 +799,9 @@ function ContractorsPage() {
       name: "bill_id",
       label: "Against bill",
       type: "select",
-      options: (bills.data ?? []).map((b) => ({ value: b.id, label: b.bill_number })),
+      options: (bills.data ?? [])
+        .filter((b) => !(b as any).is_void && !(b as any).deleted_at && b.status !== "rejected")
+        .map((b) => ({ value: b.id, label: b.bill_number })),
     },
     { name: "payment_date", label: "Payment date", type: "date", required: true },
     { name: "amount", label: "Amount (₹)", type: "number", required: true },
@@ -1245,7 +1261,7 @@ function ContractorsPage() {
               return filteredBills
                 .map((bill) => {
                   const paid = (payments.data ?? [])
-                    .filter((p) => p.bill_id === bill.id)
+                    .filter((p) => p.bill_id === bill.id && !(p as any).is_void && !(p as any).deleted_at)
                     .reduce((sum, p) => sum + (p.amount || 0), 0);
                   const balanceDue = bill.net_amount - paid;
                   const billTime = new Date(bill.bill_date).getTime();
