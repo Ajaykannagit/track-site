@@ -1257,7 +1257,7 @@ const mapToAccountHead = (category: string): string => {
       label: "Project *",
       type: "select",
       required: true,
-      options: (projects.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+      options: projectOptions,
     },
     { name: "payment_date", label: "Receipt Date *", type: "date", required: true },
     {

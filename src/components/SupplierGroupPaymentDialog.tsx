@@ -90,12 +90,12 @@ export function SupplierGroupPaymentDialog({
     const items: PayableItem[] = [];
 
     purchaseOrders.forEach((po) => {
-      if (po.deleted_at) return;
+      if (po.deleted_at || (po as any).is_void) return;
       if (po.supplier_id !== supplierId) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(po.project_id)) return;
 
       const paidAgainstPo = existingPayments
-        .filter((p) => !p.is_void && p.po_id === po.id)
+        .filter((p) => !p.is_void && !p.deleted_at && p.po_id === po.id)
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const poTotal = Number(po.total_amount) || 0;

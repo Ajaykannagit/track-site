@@ -103,16 +103,16 @@ export function GroupPaymentDialog({
     if (!contractorId) return [];
     const items: PayableItem[] = [];
 
-    // 1. Unbilled or ongoing Work Orders for this contractor (exclude soft-deleted)
+    // 1. Unbilled or ongoing Work Orders for this contractor (exclude soft-deleted & voided)
     workOrders.forEach((wo) => {
-      if (wo.deleted_at) return;
+      if (wo.deleted_at || (wo as any).is_void) return;
       if (wo.contractor_id !== contractorId) return;
       if (jobTypeFilter !== "all" && wo.job_type_id !== jobTypeFilter) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(wo.project_id)) return;
 
-      // Paid against this WO (either directly or via bills)
+      // Paid against this WO (either directly or via bills - excludes voided & deleted payments)
       const paidAgainstWo = existingPayments
-        .filter((p) => !p.is_void && (p.work_order_id === wo.id || (p.bill_id && bills.find((b) => b.id === p.bill_id)?.work_order_id === wo.id)))
+        .filter((p) => !p.is_void && !p.deleted_at && (p.work_order_id === wo.id || (p.bill_id && bills.find((b) => b.id === p.bill_id)?.work_order_id === wo.id)))
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const contractAmount = Number(wo.contract_amount) || 0;
@@ -137,14 +137,14 @@ export function GroupPaymentDialog({
       }
     });
 
-    // 2. Verified/Approved Contractor Bills (exclude soft-deleted)
+    // 2. Verified/Approved Contractor Bills (exclude soft-deleted, voided & rejected)
     bills.forEach((bill) => {
-      if (bill.deleted_at) return;
+      if (bill.deleted_at || (bill as any).is_void || bill.status === "rejected") return;
       if (bill.contractor_id !== contractorId) return;
       if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(bill.project_id)) return;
 
       const paidAgainstBill = existingPayments
-        .filter((p) => !p.is_void && p.bill_id === bill.id)
+        .filter((p) => !p.is_void && !p.deleted_at && p.bill_id === bill.id)
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const netAmount = Number(bill.net_amount) || 0;
